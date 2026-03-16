@@ -119,12 +119,15 @@ export default function AdminPanel() {
   const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem("isAdmin", isAuthenticated.toString());
     if (isAuthenticated) {
       fetchStats();
       fetchStudents();
       fetchNotices();
-      fetchSettings();
     }
   }, [isAuthenticated]);
 
@@ -133,13 +136,19 @@ export default function AdminPanel() {
   }, [activeTab]);
 
   const fetchSettings = async () => {
-    const res = await fetch("/api/site-settings");
-    const data = await res.json();
-    if (!data.smtp_user) data.smtp_user = "banglaedite@gmail.com";
-    if (!data.sender_email) data.sender_email = "banglaedite@gmail.com";
-    if (!data.smtp_host) data.smtp_host = "smtp.gmail.com";
-    if (!data.smtp_port) data.smtp_port = 587;
-    setSettings(data);
+    try {
+      const res = await fetch("/api/site-settings");
+      const data = await res.json();
+      if (!data.title) data.title = "আল হেরা মাদরাসা";
+      if (!data.smtp_user) data.smtp_user = "banglaedite@gmail.com";
+      if (!data.sender_email) data.sender_email = "banglaedite@gmail.com";
+      if (!data.smtp_host) data.smtp_host = "smtp.gmail.com";
+      if (!data.smtp_port) data.smtp_port = 587;
+      setSettings(data);
+    } catch (error) {
+      console.error("Fetch settings error:", error);
+      setSettings({ title: "আল হেরা মাদরাসা" });
+    }
   };
 
   const [showPassword, setShowPassword] = useState(false);
@@ -147,30 +156,49 @@ export default function AdminPanel() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const p = password.trim();
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
+    const adminPassword = "1234";
     if (p === adminPassword || p === "১২৩৪") { // Simple secret password
       setIsAuthenticated(true);
+      addToast("সফলভাবে লগইন হয়েছে", "success");
     } else {
       addToast("ভুল পাসওয়ার্ড!", "error");
     }
   };
 
   const fetchStats = async () => {
-    const res = await fetch("/api/admin/stats");
-    setStats(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/stats");
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      setStats(await res.json());
+    } catch (error) {
+      console.error("Fetch stats error:", error);
+      addToast("পরিসংখ্যান লোড করতে সমস্যা হয়েছে।", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchStudents = async () => {
-    const res = await fetch("/api/students");
-    const data = await res.json();
-    if (Array.isArray(data)) setStudents(data);
+    try {
+      const res = await fetch("/api/students");
+      if (!res.ok) throw new Error("Failed to fetch students");
+      const data = await res.json();
+      if (Array.isArray(data)) setStudents(data);
+    } catch (error) {
+      console.error("Fetch students error:", error);
+      addToast("ছাত্রদের তালিকা লোড করতে সমস্যা হয়েছে।", "error");
+    }
   };
 
   const fetchNotices = async () => {
-    const res = await fetch("/api/notices");
-    const data = await res.json();
-    if (Array.isArray(data)) setNotices(data);
+    try {
+      const res = await fetch("/api/notices");
+      if (!res.ok) throw new Error("Failed to fetch notices");
+      const data = await res.json();
+      if (Array.isArray(data)) setNotices(data);
+    } catch (error) {
+      console.error("Fetch notices error:", error);
+    }
   };
 
   const tabs = [
@@ -197,17 +225,17 @@ export default function AdminPanel() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="bg-white p-10 rounded-[2.5rem] shadow-2xl border border-slate-100 w-full max-w-md text-center"
         >
-          <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
+          <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
             <Lock className="w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">এডমিন লগইন</h2>
-          <p className="text-slate-500 mb-8">গোপন পাসওয়ার্ডটি প্রদান করুন</p>
+          <h2 className="text-2xl font-black text-slate-900 mb-1">{settings?.title || "মাদরাসা ম্যানেজমেন্ট"}</h2>
+          <p className="text-slate-500 font-bold mb-8">এডমিন প্যানেলে প্রবেশের জন্য পাসওয়ার্ড দিন</p>
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div className="relative">
               <input 
@@ -215,7 +243,8 @@ export default function AdminPanel() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="পাসওয়ার্ড"
-                className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
+                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
+                autoFocus
               />
               <button 
                 type="button"
@@ -225,7 +254,7 @@ export default function AdminPanel() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <button className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-all">
+            <button className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-black hover:bg-emerald-800 transition-all shadow-lg shadow-emerald-900/20">
               প্রবেশ করুন
             </button>
           </form>

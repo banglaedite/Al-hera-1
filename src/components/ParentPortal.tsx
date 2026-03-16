@@ -54,6 +54,8 @@ export default function ParentPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           studentId: student.id,
+          studentName: student.name,
+          studentEmail: student.email || `${student.student_code}@madrasa.com`,
           months: selectedPayMonths,
           year: selectedYear,
           amount,
@@ -61,10 +63,15 @@ export default function ParentPortal() {
         })
       });
       const data = await res.json();
-      if (data.payment_url) {
+      
+      if (method === "udyoktapay" && data.payment_url) {
         window.location.href = data.payment_url;
       } else if (data.success) {
         setPaymentMessage(data.message);
+        // Refresh fees after manual payment instruction
+        const profileRes = await fetch(`/api/students/${student.id}/full-profile`);
+        const profileData = await profileRes.json();
+        setFees(profileData.fees || []);
       } else {
         alert(data.error || "পেমেন্ট ব্যর্থ হয়েছে");
       }

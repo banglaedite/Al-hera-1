@@ -8,8 +8,17 @@ import admin from 'firebase-admin';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Import the Firebase configuration
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
+// Firebase configuration
+let firebaseConfig: any = {};
+try {
+  firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
+} catch (e) {
+  // Fallback to env vars if file not found
+  firebaseConfig = {
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
+    firestoreDatabaseId: "(default)"
+  };
+}
 
 // Initialize Firebase Admin
 let serviceAccount: any = null;
@@ -33,17 +42,19 @@ if (!admin.apps.length) {
       }),
       storageBucket: `${projectId}.appspot.com`
     });
-  } else {
-    // Fallback for local development or if env vars are missing
+  } else if (projectId) {
+    // Fallback for local development or if full credentials are missing
     admin.initializeApp({
-      projectId: firebaseConfig.projectId,
+      projectId: projectId,
     });
-    console.warn("Firebase Admin initialized with limited credentials.");
+    console.warn("Firebase Admin initialized with limited credentials (projectId only).");
+  } else {
+    console.error("Firebase Admin could not be initialized. Missing credentials.");
   }
 }
 const firestoreOptions: any = {
   projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId,
-  databaseId: firebaseConfig.firestoreDatabaseId,
+  databaseId: firebaseConfig.firestoreDatabaseId || "(default)",
 };
 
 if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
@@ -55,9 +66,8 @@ if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
-const app = express();
-
 async function startServer() {
+  const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
@@ -2531,23 +2541,19 @@ async function startServer() {
     });
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 
-    server.on('error', (e: any) => {
-      if (e.code === 'EADDRINUSE') {
-        console.log('Address in use, retrying...');
-        setTimeout(() => {
-          server.close();
-          server.listen(PORT, "0.0.0.0");
-        }, 1000);
-      }
-    });
-  }
+  server.on('error', (e: any) => {
+    if (e.code === 'EADDRINUSE') {
+      console.log('Address in use, retrying...');
+      setTimeout(() => {
+        server.close();
+        server.listen(PORT, "0.0.0.0");
+      }, 1000);
+    }
+  });
 }
 
 startServer();
-
-export default app;

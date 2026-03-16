@@ -64,26 +64,17 @@ export default function AdmissionForm() {
       const submissionData = { ...formData, status: 'pending', applied_date: new Date().toISOString() };
 
       // Save to local SQLite backend
-      await fetch("/api/admission", {
+      const res = await fetch("/api/admission", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submissionData)
       });
 
-      // Call bKash Payment API
-      const bkashRes = await fetch("/api/bkash/create-payment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 500, reference: formData.phone })
-      });
-      const bkashData = await bkashRes.json();
-
-      if (bkashData.success && bkashData.bkashURL) {
-        // Redirect to bKash payment gateway
-        window.location.href = bkashData.bkashURL;
-      } else {
+      if (res.ok) {
         setSubmitted({ success: true });
-        setStep(4);
+        setStep(3);
+      } else {
+        throw new Error("Failed to submit");
       }
     } catch (error) {
       console.error("Admission failed", error);
@@ -93,7 +84,7 @@ export default function AdmissionForm() {
     }
   };
 
-  if (step === 4 && submitted) {
+  if (step === 3 && submitted) {
     return (
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
@@ -272,39 +263,8 @@ export default function AdmissionForm() {
             </div>
             <div className="flex gap-4">
               <button type="button" onClick={() => setStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-colors">পূর্ববর্তী</button>
-              <button type="button" onClick={() => setStep(3)} className="flex-1 py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors">পরবর্তী ধাপ</button>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 3 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <CreditCard className="text-emerald-600" /> ভর্তি ফি পেমেন্ট
-            </h3>
-            <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-slate-600">ভর্তি ফি</span>
-                <span className="text-2xl font-bold text-emerald-900">৳ ৫০০.০০</span>
-              </div>
-              <div className="border-t border-emerald-100 pt-4 text-sm text-emerald-700">
-                * পেমেন্ট সফল হওয়ার পর স্বয়ংক্রিয়ভাবে আবেদন সাবমিট হবে।
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4">
-              {['Bkash', 'Nagad', 'Rocket'].map((method) => (
-                <div key={method} className="p-4 border-2 border-slate-100 rounded-2xl flex flex-col items-center gap-2 hover:border-emerald-500 cursor-pointer transition-all bg-slate-50">
-                  <div className="w-12 h-12 bg-white rounded-full shadow-sm" />
-                  <span className="text-xs font-bold text-slate-600">{method}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-4">
-              <button type="button" onClick={() => setStep(2)} className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-colors">পূর্ববর্তী</button>
               <LoadingButton loading={loading} type="submit" className="flex-1 py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors">
-                পেমেন্ট ও সাবমিট
+                আবেদন জমা দিন
               </LoadingButton>
             </div>
           </motion.div>
