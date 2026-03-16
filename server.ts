@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -9,11 +8,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Import the Firebase configuration
-let firebaseConfig: any;
+let firebaseConfig: any = {};
 try {
   firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8'));
 } catch (e) {
-  firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
+  try {
+    firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
+  } catch (err) {
+    console.warn("firebase-applet-config.json not found");
+  }
 }
 
 // Initialize Firebase Admin
@@ -45,15 +48,17 @@ if (!admin.apps.length) {
   } else {
     // Fallback for local development or if env vars are missing
     admin.initializeApp({
-      projectId: firebaseConfig.projectId,
+      projectId: firebaseConfig.projectId || "demo-project",
     });
     console.warn("Firebase Admin initialized with limited credentials.");
   }
 }
 const firestoreOptions: any = {
-  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId,
-  databaseId: firebaseConfig.firestoreDatabaseId,
+  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId || "demo-project",
 };
+if (firebaseConfig.firestoreDatabaseId) {
+  firestoreOptions.databaseId = firebaseConfig.firestoreDatabaseId;
+}
 
 if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
   firestoreOptions.credentials = {
@@ -2521,6 +2526,7 @@ export async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,
