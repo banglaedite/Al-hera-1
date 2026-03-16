@@ -2574,7 +2574,7 @@ async function setupServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.NETLIFY) {
     try {
       const importVite = new Function('return import("vite")');
       const { createServer: createViteServer } = await importVite();
@@ -2599,7 +2599,7 @@ async function setupServer() {
     });
   }
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.NETLIFY) {
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
