@@ -150,6 +150,7 @@ export default function AdminPanel() {
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
     
     console.log("Login attempt...");
+    console.log("Is using default password (1234):", adminPassword === "1234");
     console.log("Entered password length:", p.length);
     console.log("Expected password length:", adminPassword.length);
 

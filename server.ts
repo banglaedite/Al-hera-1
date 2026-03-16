@@ -1,8 +1,10 @@
 import express from "express";
+import "dotenv/config";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { firebaseAdminConfig } from './src/config.js';
 import admin from 'firebase-admin';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,9 +31,9 @@ try {
 }
 
 if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.VITE_FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
-  let privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.VITE_FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
+  const projectId = firebaseAdminConfig.project_id;
+  const clientEmail = firebaseAdminConfig.client_email;
+  let privateKey = firebaseAdminConfig.private_key;
 
   console.log("Initializing Firebase Admin...");
   console.log("Project ID:", projectId);
@@ -80,8 +82,9 @@ if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
-async function startServer() {
-  const app = express();
+export const app = express();
+
+async function setupServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
@@ -2573,4 +2576,13 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only start the server if we're not on Vercel
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  setupServer().catch(console.error);
+} else {
+  // On Vercel, we still need to run setupServer to attach routes, 
+  // but we don't call app.listen()
+  setupServer().catch(console.error);
+}
+
+export default app;
