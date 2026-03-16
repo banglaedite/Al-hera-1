@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
+import { db } from "../firebase";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 
 function TypingTitle({ text }: { text: string }) {
   const [filledLength, setFilledLength] = useState(0);
@@ -113,54 +115,40 @@ const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/site-settings")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch settings");
-        return res.json();
-      })
-      .then(setSettings)
-      .catch((err) => {
-        console.error("Failed to load settings:", err);
-        setSettings({
-          title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
-          description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
-          hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
-          contact_phone: '01700000000',
-          whatsapp_number: '01700000000',
-          facebook_url: '#',
-          announcement: 'স্বাগতম',
-          logo_url: null
-        });
-      });
-
-    fetch("/api/features")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setFeatures(data.filter((f: any) => f.is_active !== 0));
-        } else {
-          console.error("Failed to load features:", data);
+    const fetchData = async () => {
+      try {
+        // Fetch settings
+        const settingsSnap = await getDoc(doc(db, "site_settings", "main"));
+        if (settingsSnap.exists()) setSettings(settingsSnap.data());
+        else {
+          setSettings({
+            title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
+            description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
+            hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
+            contact_phone: '01700000000',
+            whatsapp_number: '01700000000',
+            facebook_url: '#',
+            announcement: 'স্বাগতম',
+            logo_url: null
+          });
         }
-      })
-      .catch((err) => console.error("Failed to load features:", err));
 
-    fetch("/api/food-menu")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setFoodMenu(data);
-        }
-      })
-      .catch((err) => console.error("Failed to load food menu:", err));
+        // Fetch features
+        const featuresSnap = await getDocs(collection(db, "features"));
+        setFeatures(featuresSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((f: any) => f.is_active !== 0));
 
-    fetch("/api/showcase-items")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setShowcaseItems(data);
-        }
-      })
-      .catch((err) => console.error("Failed to load showcase items:", err));
+        // Fetch food menu
+        const foodSnap = await getDocs(collection(db, "food_menu"));
+        setFoodMenu(foodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        // Fetch showcase items
+        const showcaseSnap = await getDocs(collection(db, "slider_images"));
+        setShowcaseItems(showcaseSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Failed to load data:", err);
+      }
+    };
+    fetchData();
   }, []);
 
   if (!settings) return (

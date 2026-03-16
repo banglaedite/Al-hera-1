@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
+import { db } from "./firebase";
+import { collection, getDocs, getDoc, doc } from "firebase/firestore";
 import { 
   Home, 
   UserPlus, 
@@ -31,16 +33,15 @@ const NoticeBoard = () => {
   const [notices, setNotices] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/notices")
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setNotices(data);
-        } else {
-          console.error("Failed to load notices:", data);
-        }
-      })
-      .catch(console.error);
+    const fetchNotices = async () => {
+      try {
+        const noticesSnap = await getDocs(collection(db, "notices"));
+        setNotices(noticesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Failed to load notices:", err);
+      }
+    };
+    fetchNotices();
   }, []);
 
   if (notices.length === 0) return null;
@@ -70,7 +71,15 @@ const Navbar = () => {
   const location = useLocation();
 
   useEffect(() => {
-    fetch("/api/site-settings").then(res => res.json()).then(setSettings);
+    const fetchSettings = async () => {
+      try {
+        const settingsSnap = await getDoc(doc(db, "site_settings", "main"));
+        if (settingsSnap.exists()) setSettings(settingsSnap.data());
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
+    };
+    fetchSettings();
   }, []);
 
   if (location.pathname === "/") return null;

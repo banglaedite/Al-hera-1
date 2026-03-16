@@ -65,7 +65,7 @@ service cloud.firestore {
 
     // Notices
     match /notices/{noticeId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
@@ -101,7 +101,7 @@ service cloud.firestore {
 
     // Site Settings
     match /site_settings/{settingId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
@@ -137,13 +137,13 @@ service cloud.firestore {
 
     // Features
     match /features/{featureId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
     // Slider Images
     match /slider_images/{sliderImageId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
   }
