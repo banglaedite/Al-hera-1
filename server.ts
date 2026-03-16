@@ -69,14 +69,17 @@ if (!admin.apps.length) {
   }
 }
 const firestoreOptions: any = {
-  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId,
+  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseAdminConfig?.project_id || firebaseConfig.projectId,
   databaseId: firebaseConfig.firestoreDatabaseId || "(default)",
 };
 
-if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email || firebaseAdminConfig?.client_email;
+const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key || firebaseAdminConfig?.private_key;
+
+if (clientEmail && privateKey) {
   firestoreOptions.credentials = {
-    client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
-    private_key: (process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key).replace(/\\n/g, '\n'),
+    client_email: clientEmail,
+    private_key: privateKey.replace(/\\n/g, '\n').replace(/^"|"$/g, ''),
   };
 }
 
@@ -2573,8 +2576,8 @@ async function setupServer() {
 
   if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     try {
-      const viteModule = "vite";
-      const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
+      const importVite = new Function('return import("vite")');
+      const { createServer: createViteServer } = await importVite();
       const vite = await createViteServer({
         server: { 
           middlewareMode: true,
@@ -2596,28 +2599,24 @@ async function setupServer() {
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
 
-  server.on('error', (e: any) => {
-    if (e.code === 'EADDRINUSE') {
-      console.log('Address in use, retrying...');
-      setTimeout(() => {
-        server.close();
-        server.listen(PORT, "0.0.0.0");
-      }, 1000);
-    }
-  });
+    server.on('error', (e: any) => {
+      if (e.code === 'EADDRINUSE') {
+        console.log('Address in use, retrying...');
+        setTimeout(() => {
+          server.close();
+          server.listen(PORT, "0.0.0.0");
+        }, 1000);
+      }
+    });
+  }
 }
 
-// Only start the server if we're not on Vercel
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  setupServer().catch(console.error);
-} else {
-  // On Vercel, we still need to run setupServer to attach routes, 
-  // but we don't call app.listen()
-  setupServer().catch(console.error);
-}
+// Start the server
+setupServer().catch(console.error);
 
 export default app;
