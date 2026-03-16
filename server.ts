@@ -2571,19 +2571,24 @@ async function setupServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { 
-        middlewareMode: true,
-        hmr: {
-          port: 0,
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    try {
+      const viteModule = "vite";
+      const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          hmr: {
+            port: 0,
+          },
+          watch: null
         },
-        watch: null
-      },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn("Vite not found, skipping dev middleware");
+    }
   } else {
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => {
