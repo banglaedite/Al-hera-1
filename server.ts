@@ -29,27 +29,41 @@ try {
 }
 
 if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.VITE_FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.VITE_FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
+
+  console.log("Initializing Firebase Admin...");
+  console.log("Project ID:", projectId);
+  console.log("Client Email:", clientEmail ? "Found" : "Missing");
+  console.log("Private Key:", privateKey ? "Found" : "Missing");
 
   if (projectId && clientEmail && privateKey) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: privateKey.replace(/\\n/g, '\n'),
-      }),
-      storageBucket: `${projectId}.appspot.com`
-    });
+    try {
+      // Clean up private key: handle escaped newlines and potential quotes from env vars
+      const formattedKey = privateKey.replace(/\\n/g, '\n').replace(/^"|"$/g, '');
+      
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey: formattedKey,
+        }),
+        storageBucket: `${projectId}.appspot.com`
+      });
+      console.log("Firebase Admin initialized successfully with full credentials.");
+    } catch (error) {
+      console.error("Error initializing Firebase Admin with credentials:", error);
+      // Fallback
+      admin.initializeApp({ projectId });
+    }
   } else if (projectId) {
-    // Fallback for local development or if full credentials are missing
     admin.initializeApp({
       projectId: projectId,
     });
-    console.warn("Firebase Admin initialized with limited credentials (projectId only).");
+    console.warn("Firebase Admin initialized with limited credentials (projectId only). This may fail on Vercel.");
   } else {
-    console.error("Firebase Admin could not be initialized. Missing credentials.");
+    console.error("Firebase Admin could not be initialized. Missing all credentials.");
   }
 }
 const firestoreOptions: any = {
@@ -249,8 +263,11 @@ async function startServer() {
 
   app.delete("/api/admin/all-history/:type/:id", async (req, res) => {
     const { password } = req.body;
-    const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
+    const adminPassword = process.env.VITE_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || "1234";
+    
+    console.log("Delete history attempt...");
     if (password !== adminPassword && password !== "১২৩৪") {
+      console.error("Delete history failed: Invalid password.");
       return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
     }
     const { type, id } = req.params;
