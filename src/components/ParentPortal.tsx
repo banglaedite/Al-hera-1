@@ -1,0 +1,599 @@
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { 
+  LayoutDashboard, 
+  Phone, 
+  ArrowRight, 
+  Loader2, 
+  Bell, 
+  BookOpen, 
+  CreditCard, 
+  CheckCircle2,
+  AlertCircle,
+  LogOut,
+  GraduationCap,
+  User,
+  History
+} from "lucide-react";
+import { cn } from "../lib/utils";
+
+export default function ParentPortal() {
+  const [identifier, setIdentifier] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [student, setStudent] = useState<any>(null);
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [deviceHistory, setDeviceHistory] = useState<any[]>([]);
+  const [results, setResults] = useState<any[]>([]);
+  const [hifzRecords, setHifzRecords] = useState<any[]>([]);
+  const [fees, setFees] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedPayMonths, setSelectedPayMonths] = useState<string[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState("");
+
+  const monthsList = [
+    "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+    "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
+  ];
+
+  const handlePayment = async (method: string) => {
+    if (selectedPayMonths.length === 0) {
+      alert("অন্তত একটি মাস নির্বাচন করুন");
+      return;
+    }
+    setPaying(true);
+    setPaymentMessage("");
+    try {
+      const amount = selectedPayMonths.length * (student.monthly_fee || 500);
+      const res = await fetch("/api/parent/pay-fee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: student.id,
+          months: selectedPayMonths,
+          year: selectedYear,
+          amount,
+          method
+        })
+      });
+      const data = await res.json();
+      if (data.payment_url) {
+        window.location.href = data.payment_url;
+      } else if (data.success) {
+        setPaymentMessage(data.message);
+      } else {
+        alert(data.error || "পেমেন্ট ব্যর্থ হয়েছে");
+      }
+    } catch (err) {
+      alert("পেমেন্ট ব্যর্থ হয়েছে");
+    }
+    setPaying(false);
+  };
+
+  useEffect(() => {
+    fetch("/api/site-settings").then(res => res.json()).then(setSettings);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!identifier) return;
+    
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/parent-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier })
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড সঠিক নয়");
+      }
+      const data = await response.json();
+      setStudent(data);
+      
+      // Fetch related data
+      const [attRes, resRes, hifzRes, profileRes, deviceRes] = await Promise.all([
+        fetch(`/api/attendance/${data.id}`),
+        fetch(`/api/results/${data.id}`),
+        fetch(`/api/hifz/${data.id}`),
+        fetch(`/api/students/${data.id}/full-profile`),
+        fetch(`/api/parent/device-history/${data.id}`)
+      ]);
+      
+      setAttendance(await attRes.json());
+      setResults(await resRes.json());
+      setHifzRecords(await hifzRes.json());
+      setDeviceHistory(await deviceRes.json());
+      const profileData = await profileRes.json();
+      setFees(profileData.fees || []);
+      
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setStudent(null);
+    setIdentifier("");
+  };
+
+  if (student) {
+    return (
+      <div className="max-w-6xl mx-auto relative">
+        {/* Payment Modal removed */}
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
+          <div>
+            <h1 className="text-4xl font-bold text-slate-900 mb-2">ছাত্র/অভিভাবক পোর্টাল</h1>
+            <p className="text-slate-500">আপনার সন্তানের সব আপডেট এখানে দেখুন</p>
+          </div>
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-6 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-rose-50 hover:text-rose-600 transition-colors self-start"
+          >
+            <LogOut className="w-4 h-4" /> লগ আউট
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex overflow-x-auto gap-2 mb-8 pb-2 scrollbar-hide">
+          {[
+            { id: "overview", label: "একনজরে", icon: LayoutDashboard },
+            { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
+            { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
+            { id: "results", label: "রেজাল্ট", icon: BookOpen },
+            { id: "payment", label: "পেমেন্ট", icon: CreditCard },
+            student.is_hifz ? { id: "hifz", label: "হিফজ ট্র্যাকিং", icon: GraduationCap } : null
+          ].filter(Boolean).map((tab: any) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all whitespace-nowrap",
+                activeTab === tab.id 
+                  ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20" 
+                  : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"
+              )}
+            >
+              <tab.icon className="w-5 h-5" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Student Profile Card (Left) */}
+          <div className="lg:col-span-1">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 sticky top-24">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-lg bg-slate-100 mb-6">
+                  <img 
+                    src={student.photo_url || `https://picsum.photos/seed/${student.id}/200`} 
+                    alt={student.name} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-1">{student.name}</h3>
+                <p className="text-emerald-700 font-bold mb-6">{student.class} শ্রেণী | রোল: {student.roll}</p>
+                
+                <div className="w-full space-y-3 pt-6 border-t border-slate-100">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">স্টুডেন্ট আইডি</span>
+                    <span className="font-bold text-slate-700">{student.id}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">স্টুডেন্ট কোড</span>
+                    <span className="font-bold text-emerald-700">{student.student_code}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">রক্তের গ্রুপ</span>
+                    <span className="font-bold text-rose-600">{student.blood_group}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content Area (Right) */}
+          <div className="lg:col-span-2 space-y-8">
+            <AnimatePresence mode="wait">
+              {activeTab === "overview" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
+                      <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">উপস্থিতি</p>
+                        <p className="text-xl font-bold text-slate-900">
+                          {attendance.length > 0 ? Math.round((attendance.filter(a => a.status === 'present').length / attendance.length) * 100) : 0}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Personal Info Section */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                      <User className="w-5 h-5 text-emerald-600" /> ব্যক্তিগত তথ্য
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-400 font-bold uppercase">পিতার নাম</p>
+                        <p className="font-bold text-slate-900">{student.father_name || "-"}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-400 font-bold uppercase">মাতার নাম</p>
+                        <p className="font-bold text-slate-900">{student.mother_name || "-"}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-400 font-bold uppercase">ফোন</p>
+                        <p className="font-bold text-slate-900">{student.phone || "-"}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-400 font-bold uppercase">ঠিকানা</p>
+                        <p className="font-bold text-slate-900">{student.address || "-"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                      <Bell className="w-5 h-5 text-emerald-600" /> সাম্প্রতিক আপডেট
+                    </h3>
+                    <div className="space-y-4">
+                      {results.length > 0 ? (
+                        <div className="p-4 border border-emerald-50 bg-emerald-50/30 rounded-2xl flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                              <BookOpen className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-800 text-sm">নতুন রেজাল্ট প্রকাশিত</h4>
+                              <p className="text-xs text-slate-400">{results[results.length-1].exam_name}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => setActiveTab("results")} className="text-emerald-600 font-bold text-xs">দেখুন</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "attendance" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                    <h3 className="text-2xl font-bold text-slate-900">হাজিরা রিপোর্ট</h3>
+                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-2xl border border-slate-100">
+                      <input 
+                        type="month" 
+                        value={selectedMonth} 
+                        onChange={async (e) => {
+                          setSelectedMonth(e.target.value);
+                          const res = await fetch(`/api/attendance/student/${student.id}/month/${e.target.value}`);
+                          setAttendance(await res.json());
+                        }}
+                        className="bg-transparent border-none focus:ring-0 font-bold text-slate-600 px-4 py-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {(() => {
+                      const [year, month] = selectedMonth.split('-').map(Number);
+                      const now = new Date();
+                      const isCurrentMonth = now.getFullYear() === year && (now.getMonth() + 1) === month;
+                      
+                      const daysInMonth = new Date(year, month, 0).getDate();
+                      const daysToShow = isCurrentMonth ? now.getDate() : daysInMonth;
+
+                      const days = [];
+                      for (let d = 1; d <= daysToShow; d++) {
+                        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const record = attendance.find(a => a.date === dateStr);
+                        
+                        days.push(
+                          <div key={d} className={cn(
+                            "p-4 rounded-2xl border flex flex-col items-center justify-center transition-all",
+                            record?.status === 'present' 
+                              ? "bg-emerald-50 border-emerald-100 text-emerald-700" 
+                              : record?.status === 'absent'
+                                ? "bg-rose-50 border-rose-100 text-rose-700"
+                                : "bg-slate-50 border-slate-100 text-slate-400"
+                          )}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider mb-1">
+                              {new Date(dateStr).toLocaleDateString('bn-BD', { weekday: 'short' })}
+                            </span>
+                            <span className="text-xl font-black">{d}</span>
+                            <span className="text-[10px] font-bold mt-1">
+                              {record?.status === 'present' ? 'উপস্থিত' : record?.status === 'absent' ? 'অনুপস্থিত' : 'তথ্য নেই'}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return days;
+                    })()}
+                  </div>
+
+                  <div className="mt-8 pt-8 border-t border-slate-100 flex flex-wrap gap-6 justify-center">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                      <span className="text-xs font-bold text-slate-500">উপস্থিত</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                      <span className="text-xs font-bold text-slate-500">অনুপস্থিত</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-slate-300"></div>
+                      <span className="text-xs font-bold text-slate-500">তথ্য নেই</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "device-history" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-2xl font-bold text-slate-900">স্মার্ট হাজিরা লগ</h3>
+                    <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold">
+                      ডিভাইস এন্ট্রি (প্রবেশ ও প্রস্থান)
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {deviceHistory.length > 0 ? deviceHistory.map((log, i) => (
+                      <div key={log.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "w-12 h-12 rounded-xl flex items-center justify-center font-black",
+                            log.action === 'check_in' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                          )}>
+                            {log.action === 'check_in' ? "IN" : "OUT"}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900">{log.action === 'check_in' ? "মাদরাসায় প্রবেশ" : "মাদরাসা থেকে প্রস্থান"}</h4>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                              {new Date(log.timestamp).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-slate-900 text-lg">{log.time}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">ডিভাইস আইডি: {log.id.slice(-4)}</p>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="text-center py-20">
+                        <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">এখনো কোন স্মার্ট হাজিরা লগ পাওয়া যায়নি</p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "results" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-8">পরীক্ষার ফলাফল</h3>
+                  <div className="space-y-6">
+                    {results.length > 0 ? results.map((res, i) => (
+                      <div key={i} className="p-6 bg-slate-50 rounded-3xl flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">{res.exam_name}</p>
+                          <h4 className="text-lg font-bold text-slate-900">{res.subject}</h4>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-emerald-700">{res.marks}</p>
+                          <p className="text-sm font-bold text-slate-500">গ্রেড: {res.grade}</p>
+                        </div>
+                      </div>
+                    )) : (
+                      <p className="text-center text-slate-400 py-12">কোন রেজাল্ট পাওয়া যায়নি</p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "payment" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-2xl font-bold text-slate-900">বাকি মাসের পেমেন্ট</h3>
+                    <select 
+                      value={selectedYear} 
+                      onChange={(e) => { setSelectedYear(e.target.value); setSelectedPayMonths([]); }}
+                      className="p-2 border rounded-xl font-bold text-slate-700"
+                    >
+                      {[...Array(5)].map((_, i) => {
+                        const y = new Date().getFullYear() - 2 + i;
+                        return <option key={y} value={y}>{y}</option>;
+                      })}
+                    </select>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {monthsList.map((month) => {
+                      const isPaid = fees.some(f => f.month === month && f.year === selectedYear && f.status === "paid");
+                      return (
+                        <label key={month} className={cn(
+                          "flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer transition-all border",
+                          isPaid ? "bg-emerald-50 border-emerald-200 opacity-50 cursor-not-allowed" : 
+                          selectedPayMonths.includes(month) ? "bg-emerald-100 border-emerald-500 shadow-sm" : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                        )}>
+                          <input 
+                            type="checkbox" 
+                            className="hidden"
+                            disabled={isPaid}
+                            checked={selectedPayMonths.includes(month)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPayMonths([...selectedPayMonths, month]);
+                              } else {
+                                setSelectedPayMonths(selectedPayMonths.filter(m => m !== month));
+                              }
+                            }}
+                          />
+                          <span className="font-bold text-slate-700">{month}</span>
+                          {isPaid ? (
+                            <span className="text-xs font-bold text-emerald-600">পরিশোধিত</span>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-500">৳{student.monthly_fee || 500}</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  
+                  {selectedPayMonths.length > 0 && (
+                    <div className="mt-8 p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="font-bold text-slate-700">মোট পরিমাণ:</span>
+                        <span className="text-2xl font-black text-emerald-700">৳{selectedPayMonths.length * (student.monthly_fee || 500)}</span>
+                      </div>
+                      
+                      {paymentMessage && (
+                        <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-xl font-bold text-center">
+                          {paymentMessage}
+                        </div>
+                      )}
+
+                      <h4 className="font-bold text-slate-900 mb-4">পেমেন্ট মেথড নির্বাচন করুন</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        {settings?.udyoktapay_api_key && settings?.udyoktapay_api_url && (
+                          <button 
+                            disabled={paying}
+                            onClick={() => handlePayment("udyoktapay")}
+                            className="p-4 border rounded-2xl font-bold text-emerald-700 border-emerald-200 bg-emerald-100 hover:bg-emerald-200 transition-colors flex justify-center items-center gap-2"
+                          >
+                            {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : "Udyokta Pay"}
+                          </button>
+                        )}
+                        {settings?.enable_bkash ? (
+                          <button 
+                            disabled={paying}
+                            onClick={() => handlePayment("bkash")}
+                            className="p-4 border rounded-2xl font-bold text-pink-600 border-pink-100 bg-pink-50 hover:bg-pink-100 transition-colors flex flex-col items-center gap-1"
+                          >
+                            <span>বিকাশ</span>
+                            <span className="text-xs opacity-70">{settings.bkash_number}</span>
+                          </button>
+                        ) : null}
+                        {settings?.enable_nagad ? (
+                          <button 
+                            disabled={paying}
+                            onClick={() => handlePayment("nagad")}
+                            className="p-4 border rounded-2xl font-bold text-orange-600 border-orange-100 bg-orange-50 hover:bg-orange-100 transition-colors flex flex-col items-center gap-1"
+                          >
+                            <span>নগদ</span>
+                            <span className="text-xs opacity-70">{settings.nagad_number}</span>
+                          </button>
+                        ) : null}
+                        {settings?.enable_rocket ? (
+                          <button 
+                            disabled={paying}
+                            onClick={() => handlePayment("rocket")}
+                            className="p-4 border rounded-2xl font-bold text-purple-600 border-purple-100 bg-purple-50 hover:bg-purple-100 transition-colors flex flex-col items-center gap-1"
+                          >
+                            <span>রকেট</span>
+                            <span className="text-xs opacity-70">{settings.rocket_number}</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {activeTab === "hifz" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-8">হিফজ ট্র্যাকিং</h3>
+                  <div className="space-y-6">
+                    {hifzRecords.length > 0 ? hifzRecords.map((rec, i) => (
+                      <div key={i} className="p-6 border border-slate-100 rounded-3xl space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-4">
+                          <span className="font-bold text-slate-900">{new Date(rec.date).toLocaleDateString()}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সবক</p>
+                            <p className="font-bold text-emerald-700">{rec.sabak}</p>
+                          </div>
+                          <div className="text-center border-x border-slate-100">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সবকি</p>
+                            <p className="font-bold text-emerald-700">{rec.sabki}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">মঞ্জিল</p>
+                            <p className="font-bold text-emerald-700">{rec.manzil}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )) : (
+                      <p className="text-center text-slate-400 py-12">কোন হিফজ রেকর্ড পাওয়া যায়নি</p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto py-12">
+      <div className="text-center mb-12">
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+          <LayoutDashboard className="w-10 h-10" />
+        </div>
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">লগইন করুন</h1>
+        <p className="text-slate-500">আপনার মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড দিন</p>
+      </div>
+
+      <form onSubmit={handleLogin} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড</label>
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input 
+                required
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="017XXXXXXXX অথবা example@email.com" 
+                className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+          {error && <p className="text-rose-500 text-sm font-medium text-center">{error}</p>}
+          <button 
+            disabled={loading}
+            className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "লগইন করুন"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const ChevronRight = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="9 5l7 7-7 7" />
+  </svg>
+);

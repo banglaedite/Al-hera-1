@@ -1,0 +1,371 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Represents a student in the madrasa.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique student ID" },
+        "name": { "type": "string", "description": "Student name" },
+        "class": { "type": "string", "description": "Class name" },
+        "roll": { "type": "string", "description": "Roll number" },
+        "whatsapp": { "type": "string", "description": "WhatsApp number" },
+        "photo_url": { "type": "string", "description": "URL of the student photo" },
+        "father_name": { "type": "string" },
+        "mother_name": { "type": "string" },
+        "dob": { "type": "string" },
+        "blood_group": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "is_hifz": { "type": "number" },
+        "admission_date": { "type": "string" },
+        "monthly_fee": { "type": "number" },
+        "deleted_at": { "type": "string" }
+      },
+      "required": ["id", "name", "class", "roll"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Represents a fee payment transaction.",
+      "type": "object",
+      "properties": {
+        "transaction_id": { "type": "string", "description": "Unique transaction ID" },
+        "student_id": { "type": "string", "description": "ID of the student" },
+        "student_name": { "type": "string", "description": "Name of the student" },
+        "student_class": { "type": "string", "description": "Class of the student" },
+        "student_roll": { "type": "string", "description": "Roll of the student" },
+        "category": { "type": "string", "description": "Fee category" },
+        "amount": { "type": "number", "description": "Amount paid" },
+        "paid_date": { "type": "string", "format": "date-time", "description": "Date of payment" }
+      },
+      "required": ["transaction_id", "student_id", "amount", "paid_date"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Represents an exam.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Represents student attendance.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "student_id", "date", "status"]
+    },
+    "Donation": {
+      "title": "Donation",
+      "description": "Represents a donation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "donor_name": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "transaction_id": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "donor_name", "amount"]
+    },
+    "Result": {
+      "title": "Result",
+      "description": "Represents a student result.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "exam_name": { "type": "string" },
+        "subject": { "type": "string" },
+        "marks": { "type": "number" },
+        "grade": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "student_id", "exam_name", "subject", "marks"]
+    },
+    "HifzRecord": {
+      "title": "HifzRecord",
+      "description": "Represents a hifz record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "date": { "type": "string" },
+        "sabak": { "type": "string" },
+        "sabki": { "type": "string" },
+        "manzil": { "type": "string" }
+      },
+      "required": ["id", "student_id", "date"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Represents a subject.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "class": { "type": "string" },
+        "name": { "type": "string" },
+        "full_marks": { "type": "number" }
+      },
+      "required": ["id", "class", "name"]
+    },
+    "Notice": {
+      "title": "Notice",
+      "description": "Represents a notice.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string" },
+        "is_active": { "type": "number" }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Represents an expense.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "purpose": { "type": "string" }
+      },
+      "required": ["id", "category", "amount"]
+    },
+    "Income": {
+      "title": "Income",
+      "description": "Represents an income.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "purpose": { "type": "string" }
+      },
+      "required": ["id", "category", "amount"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Represents a teacher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "qualification": { "type": "string" },
+        "photo_url": { "type": "string" },
+        "salary": { "type": "number" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "dob": { "type": "string" },
+        "join_date": { "type": "string" },
+        "nid": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "TeacherAttendance": {
+      "title": "TeacherAttendance",
+      "description": "Represents teacher attendance.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacher_id": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "teacher_id", "date", "status"]
+    },
+    "FoodMenu": {
+      "title": "FoodMenu",
+      "description": "Represents a food menu.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "image_url": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Represents site settings.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "hero_image": { "type": "string" },
+        "logo_url": { "type": "string" },
+        "contact_phone": { "type": "string" },
+        "whatsapp_number": { "type": "string" },
+        "facebook_url": { "type": "string" },
+        "announcement": { "type": "string" },
+        "bkash_number": { "type": "string" },
+        "nagad_number": { "type": "string" },
+        "smtp_host": { "type": "string" },
+        "smtp_port": { "type": "number" },
+        "smtp_user": { "type": "string" },
+        "smtp_pass": { "type": "string" },
+        "sender_email": { "type": "string" },
+        "enable_recruitment": { "type": "number" },
+        "address": { "type": "string" },
+        "firebase_service_account": { "type": "string" },
+        "show_features_as_buttons": { "type": "number" },
+        "show_food_as_buttons": { "type": "number" },
+        "show_showcase_as_buttons": { "type": "number" },
+        "showcase_content": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "Admission": {
+      "title": "Admission",
+      "description": "Represents an admission application.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "father_name": { "type": "string" },
+        "mother_name": { "type": "string" },
+        "dob": { "type": "string" },
+        "blood_group": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "email": { "type": "string" },
+        "class": { "type": "string" },
+        "is_hifz": { "type": "number" },
+        "status": { "type": "string" },
+        "applied_date": { "type": "string" },
+        "photo_url": { "type": "string" }
+      },
+      "required": ["id", "name", "class"]
+    },
+    "TeacherSalary": {
+      "title": "TeacherSalary",
+      "description": "Represents a teacher salary payment.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacher_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "month": { "type": "string" },
+        "date": { "type": "string" },
+        "given_by": { "type": "string" }
+      },
+      "required": ["id", "teacher_id", "amount", "month"]
+    },
+    "FeeSetup": {
+      "title": "FeeSetup",
+      "description": "Represents a fee setup.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "className": { "type": "string" },
+        "amount": { "type": "number" },
+        "month": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "name", "amount"]
+    },
+    "DeleteHistory": {
+      "title": "DeleteHistory",
+      "description": "Represents delete history.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "details": { "type": "string" },
+        "deleted_at": { "type": "string" },
+        "deleted_by": { "type": "string" }
+      },
+      "required": ["id", "type", "deleted_at"]
+    },
+    "JobApplication": {
+      "title": "JobApplication",
+      "description": "Represents a job application.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "cv_url": { "type": "string" },
+        "status": { "type": "string" },
+        "applied_date": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Feature": {
+      "title": "Feature",
+      "description": "Represents a feature.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "image_url": { "type": "string" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
+    "SliderImage": {
+      "title": "SliderImage",
+      "description": "Represents a slider image.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "image_url": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "is_active": { "type": "number" },
+        "link_url": { "type": "string" }
+      },
+      "required": ["id", "image_url"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": { "schema": { "$ref": "Student" }, "description": "Collection of students." },
+    "/transactions/{transactionId}": { "schema": { "$ref": "Transaction" }, "description": "Collection of payment transactions." },
+    "/exams/{examId}": { "schema": { "$ref": "Exam" }, "description": "Collection of exams." },
+    "/attendance/{attendanceId}": { "schema": { "$ref": "Attendance" }, "description": "Collection of attendance records." },
+    "/donations/{donationId}": { "schema": { "$ref": "Donation" }, "description": "Collection of donations." },
+    "/results/{resultId}": { "schema": { "$ref": "Result" }, "description": "Collection of results." },
+    "/hifz_records/{hifzRecordId}": { "schema": { "$ref": "HifzRecord" }, "description": "Collection of hifz records." },
+    "/subjects/{subjectId}": { "schema": { "$ref": "Subject" }, "description": "Collection of subjects." },
+    "/notices/{noticeId}": { "schema": { "$ref": "Notice" }, "description": "Collection of notices." },
+    "/expenses/{expenseId}": { "schema": { "$ref": "Expense" }, "description": "Collection of expenses." },
+    "/income/{incomeId}": { "schema": { "$ref": "Income" }, "description": "Collection of income." },
+    "/teachers/{teacherId}": { "schema": { "$ref": "Teacher" }, "description": "Collection of teachers." },
+    "/teacher_attendance/{teacherAttendanceId}": { "schema": { "$ref": "TeacherAttendance" }, "description": "Collection of teacher attendance." },
+    "/food_menu/{foodMenuId}": { "schema": { "$ref": "FoodMenu" }, "description": "Collection of food menu items." },
+    "/site_settings/{settingId}": { "schema": { "$ref": "SiteSettings" }, "description": "Collection of site settings." },
+    "/admissions/{admissionId}": { "schema": { "$ref": "Admission" }, "description": "Collection of admissions." },
+    "/teacher_salaries/{teacherSalaryId}": { "schema": { "$ref": "TeacherSalary" }, "description": "Collection of teacher salaries." },
+    "/fee_setups/{feeSetupId}": { "schema": { "$ref": "FeeSetup" }, "description": "Collection of fee setups." },
+    "/delete_history/{deleteHistoryId}": { "schema": { "$ref": "DeleteHistory" }, "description": "Collection of delete history." },
+    "/job_applications/{jobApplicationId}": { "schema": { "$ref": "JobApplication" }, "description": "Collection of job applications." },
+    "/features/{featureId}": { "schema": { "$ref": "Feature" }, "description": "Collection of features." },
+    "/slider_images/{sliderImageId}": { "schema": { "$ref": "SliderImage" }, "description": "Collection of slider images." }
+  }
+}
+
