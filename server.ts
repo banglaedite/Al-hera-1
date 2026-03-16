@@ -55,8 +55,9 @@ if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
+const app = express();
+
 async function startServer() {
-  const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
@@ -2530,19 +2531,23 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
 
-  server.on('error', (e: any) => {
-    if (e.code === 'EADDRINUSE') {
-      console.log('Address in use, retrying...');
-      setTimeout(() => {
-        server.close();
-        server.listen(PORT, "0.0.0.0");
-      }, 1000);
-    }
-  });
+    server.on('error', (e: any) => {
+      if (e.code === 'EADDRINUSE') {
+        console.log('Address in use, retrying...');
+        setTimeout(() => {
+          server.close();
+          server.listen(PORT, "0.0.0.0");
+        }, 1000);
+      }
+    });
+  }
 }
 
 startServer();
+
+export default app;
