@@ -1,11 +1,10 @@
 {
-  "apiKey": "AIzaSyDySiewR8fortI2dWkpODCZJ0Oc_iq_NMg",
-  "authDomain": "al-hera-f4f7d.firebaseapp.com",
-  "databaseURL": "https://al-hera-f4f7d-default-rtdb.firebaseio.com",
-  "projectId": "al-hera-f4f7d",
-  "storageBucket": "al-hera-f4f7d.firebasestorage.app",
-  "messagingSenderId": "101331236415",
-  "appId": "1:101331236415:web:5530b12a87ef4de8596a8a",
-  "measurementId": "G-W3RSQH474X",
-  "firestoreDatabaseId": "(default)"
+  "projectId": "gen-lang-client-0211459159",
+  "appId": "1:336790104298:web:2af0f25aec99c4aa4b4f93",
+  "apiKey": "AIzaSyBN2OAkT9jMxF_nDddB74Op6slG49Ixs7U",
+  "authDomain": "gen-lang-client-0211459159.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-33b34602-5f96-45d5-a8e6-8a40657fb6d5",
+  "storageBucket": "gen-lang-client-0211459159.firebasestorage.app",
+  "messagingSenderId": "336790104298",
+  "measurementId": ""
 }

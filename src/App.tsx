@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
 import { db } from "./firebase";
-import { collection, getDocs, getDoc, doc } from "firebase/firestore";
 import { 
   Home, 
   UserPlus, 
@@ -35,8 +34,11 @@ const NoticeBoard = () => {
   useEffect(() => {
     const fetchNotices = async () => {
       try {
-        const noticesSnap = await getDocs(collection(db, "notices"));
-        setNotices(noticesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const res = await fetch("/api/notices");
+        if (res.ok) {
+          const data = await res.json();
+          setNotices(data);
+        }
       } catch (err) {
         console.error("Failed to load notices:", err);
       }
@@ -73,8 +75,11 @@ const Navbar = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const settingsSnap = await getDoc(doc(db, "site_settings", "main"));
-        if (settingsSnap.exists()) setSettings(settingsSnap.data());
+        const res = await fetch("/api/site-settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (Object.keys(data).length > 0) setSettings(data);
+        }
       } catch (err) {
         console.error("Failed to load settings:", err);
       }

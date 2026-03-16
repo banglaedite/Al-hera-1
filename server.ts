@@ -1,11 +1,11 @@
 import express from "express";
 import "dotenv/config";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { firebaseAdminConfig } from './src/config.js';
 import admin from 'firebase-admin';
+import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +89,35 @@ async function setupServer() {
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Email Transporter
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: "newdrshahidul@gmail.com",
+      pass: "inztindrvvwxmmen",
+    },
+  });
+
+  app.post("/api/send-email", async (req, res) => {
+    const { to, subject, text, html, attachments } = req.body;
+    try {
+      await transporter.sendMail({
+        from: '"Al Hera Madrasa" <newdrshahidul@gmail.com>',
+        to,
+        subject,
+        text,
+        html,
+        attachments
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Email sending error:", error);
+      res.status(500).json({ error: "Failed to send email" });
+    }
+  });
 
   // Hardcoded SMTP Settings
   process.env.SMTP_HOST = "smtp.gmail.com";
@@ -2543,6 +2572,7 @@ async function setupServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,

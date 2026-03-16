@@ -13,9 +13,8 @@ import {
   ArrowRight,
   Calendar
 } from "lucide-react";
-import { jsPDF } from "jspdf";
-import "jspdf-autotable";
 import { cn } from "../lib/utils";
+import { generateMonthlyReceipt, generateReceipt } from "../utils/pdfGenerator";
 
 const MONTHS = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
@@ -102,7 +101,7 @@ export default function FeeManagement() {
           months: selectedMonths,
           year: selectedYear,
           amount: totalAmount
-        });
+        }, student, sendEmail, addToast);
       }
     } catch (err) {
       console.error("Payment failed", err);
@@ -124,6 +123,35 @@ export default function FeeManagement() {
       }
     } catch (err) {
       console.error("Payment failed", err);
+    }
+  };
+
+  const sendEmail = async (pdfData: string, filename: string, studentEmail: string, addToast: any) => {
+    try {
+      const response = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: studentEmail,
+          subject: "আপনার ফি রসিদ",
+          text: "আপনার ফি রসিদটি সংযুক্ত করা হলো।",
+          attachments: [
+            {
+              filename: filename,
+              content: pdfData.split(',')[1],
+              encoding: 'base64'
+            }
+          ]
+        })
+      });
+      if (response.ok) {
+        addToast("ইমেইল সফলভাবে পাঠানো হয়েছে!", "success");
+      } else {
+        addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
+      }
+    } catch (error) {
+      console.error("Email error:", error);
+      addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
     }
   };
 
@@ -169,7 +197,15 @@ export default function FeeManagement() {
     doc.setTextColor(150, 150, 150);
     doc.text("This is a computer-generated receipt. No signature required.", 105, 280, { align: "center" });
 
-    doc.save(`Receipt_${student.id}_${data.transaction_id}.pdf`);
+    const pdfData = doc.output('datauristring');
+    const filename = `Receipt_${student.id}_${data.transaction_id}.pdf`;
+    doc.save(filename);
+    
+    if (student.email) {
+      sendEmail(pdfData, filename, student.email);
+    } else {
+      alert("ছাত্রের ইমেইল অ্যাড্রেস নেই!");
+    }
   };
 
   const generateReceipt = (fee: any) => {
@@ -214,7 +250,15 @@ export default function FeeManagement() {
     doc.setTextColor(150, 150, 150);
     doc.text("This is a computer-generated receipt. No signature required.", 105, 280, { align: "center" });
 
-    doc.save(`Receipt_${student.id}_${fee.id}.pdf`);
+    const pdfData = doc.output('datauristring');
+    const filename = `Receipt_${student.id}_${fee.id}.pdf`;
+    doc.save(filename);
+    
+    if (student.email) {
+      sendEmail(pdfData, filename, student.email);
+    } else {
+      alert("ছাত্রের ইমেইল অ্যাড্রেস নেই!");
+    }
   };
 
   const paidMonthsThisYear = fees

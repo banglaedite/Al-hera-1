@@ -26,7 +26,6 @@ import {
 import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
 import { db } from "../firebase";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 
 function TypingTitle({ text }: { text: string }) {
   const [filledLength, setFilledLength] = useState(0);
@@ -118,32 +117,44 @@ const LandingPage = () => {
     const fetchData = async () => {
       try {
         // Fetch settings
-        const settingsSnap = await getDoc(doc(db, "site_settings", "main"));
-        if (settingsSnap.exists()) setSettings(settingsSnap.data());
-        else {
-          setSettings({
-            title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
-            description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
-            hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
-            contact_phone: '01700000000',
-            whatsapp_number: '01700000000',
-            facebook_url: '#',
-            announcement: 'স্বাগতম',
-            logo_url: null
-          });
+        const settingsRes = await fetch("/api/site-settings");
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          if (Object.keys(data).length > 0) setSettings(data);
+          else {
+            setSettings({
+              title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
+              description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
+              hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
+              contact_phone: '01700000000',
+              whatsapp_number: '01700000000',
+              facebook_url: '#',
+              announcement: 'স্বাগতম',
+              logo_url: null
+            });
+          }
         }
 
         // Fetch features
-        const featuresSnap = await getDocs(collection(db, "features"));
-        setFeatures(featuresSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((f: any) => f.is_active !== 0));
+        const featuresRes = await fetch("/api/features");
+        if (featuresRes.ok) {
+          const data = await featuresRes.json();
+          setFeatures(data);
+        }
 
         // Fetch food menu
-        const foodSnap = await getDocs(collection(db, "food_menu"));
-        setFoodMenu(foodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const foodRes = await fetch("/api/food-menu");
+        if (foodRes.ok) {
+          const data = await foodRes.json();
+          setFoodMenu(data);
+        }
 
         // Fetch showcase items
-        const showcaseSnap = await getDocs(collection(db, "slider_images"));
-        setShowcaseItems(showcaseSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const showcaseRes = await fetch("/api/showcase-items");
+        if (showcaseRes.ok) {
+          const data = await showcaseRes.json();
+          setShowcaseItems(data);
+        }
       } catch (err) {
         console.error("Failed to load data:", err);
       }
