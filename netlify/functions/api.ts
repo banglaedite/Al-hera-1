@@ -1,4 +1,13 @@
 import serverless from 'serverless-http';
-import app from '../../server.ts';
+import { startServer } from '../../server';
 
-export const handler = serverless(app);
+let appHandler: any;
+
+export const handler = async (event: any, context: any) => {
+  process.env.NETLIFY = "true";
+  if (!appHandler) {
+    const app = await startServer();
+    appHandler = serverless(app, { basePath: '/.netlify/functions/api' });
+  }
+  return appHandler(event, context);
+};

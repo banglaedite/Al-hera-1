@@ -1,126 +1,75 @@
 import express from "express";
-import "dotenv/config";
+import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { firebaseAdminConfig } from './src/config.js';
 import admin from 'firebase-admin';
-import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Firebase configuration
-let firebaseConfig: any = {};
+// Import the Firebase configuration
+let firebaseConfig: any;
 try {
-  firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
+  firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8'));
 } catch (e) {
-  // Fallback to env vars if file not found
-  firebaseConfig = {
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
-    firestoreDatabaseId: "(default)"
-  };
+  firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
 }
 
 // Initialize Firebase Admin
 let serviceAccount: any = null;
 try {
-  serviceAccount = JSON.parse(fs.readFileSync(path.join(__dirname, 'service-account.json'), 'utf8'));
+  serviceAccount = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'service-account.json'), 'utf8'));
 } catch (e) {
-  // Ignore if not found
+  try {
+    serviceAccount = JSON.parse(fs.readFileSync(path.join(__dirname, 'service-account.json'), 'utf8'));
+  } catch (err) {
+    // Ignore if not found
+  }
 }
 
 if (!admin.apps.length) {
-  const projectId = firebaseAdminConfig.project_id;
-  const clientEmail = firebaseAdminConfig.client_email;
-  let privateKey = firebaseAdminConfig.private_key;
-
-  console.log("Initializing Firebase Admin...");
-  console.log("Project ID:", projectId);
-  console.log("Client Email:", clientEmail ? "Found" : "Missing");
-  console.log("Private Key:", privateKey ? "Found" : "Missing");
+  const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
 
   if (projectId && clientEmail && privateKey) {
-    try {
-      // Clean up private key: handle escaped newlines and potential quotes from env vars
-      const formattedKey = privateKey.replace(/\\n/g, '\n').replace(/^"|"$/g, '');
-      
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId,
-          clientEmail,
-          privateKey: formattedKey,
-        }),
-        storageBucket: `${projectId}.appspot.com`
-      });
-      console.log("Firebase Admin initialized successfully with full credentials.");
-    } catch (error) {
-      console.error("Error initializing Firebase Admin with credentials:", error);
-      // Fallback
-      admin.initializeApp({ projectId });
-    }
-  } else if (projectId) {
     admin.initializeApp({
-      projectId: projectId,
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey: privateKey.replace(/\\n/g, '\n'),
+      }),
+      storageBucket: `${projectId}.appspot.com`
     });
-    console.warn("Firebase Admin initialized with limited credentials (projectId only). This may fail on Vercel.");
   } else {
-    console.error("Firebase Admin could not be initialized. Missing all credentials.");
+    // Fallback for local development or if env vars are missing
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+    console.warn("Firebase Admin initialized with limited credentials.");
   }
 }
 const firestoreOptions: any = {
-  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseAdminConfig?.project_id || firebaseConfig.projectId,
-  databaseId: firebaseConfig.firestoreDatabaseId || "(default)",
+  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId,
+  databaseId: firebaseConfig.firestoreDatabaseId,
 };
 
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email || firebaseAdminConfig?.client_email;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key || firebaseAdminConfig?.private_key;
-
-if (clientEmail && privateKey) {
+if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
   firestoreOptions.credentials = {
-    client_email: clientEmail,
-    private_key: privateKey.replace(/\\n/g, '\n').replace(/^"|"$/g, ''),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
+    private_key: (process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key).replace(/\\n/g, '\n'),
   };
 }
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
-export const app = express();
-
-async function setupServer() {
+export async function startServer() {
+  const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-  // Email Transporter
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: "newdrshahidul@gmail.com",
-      pass: "inztindrvvwxmmen",
-    },
-  });
-
-  app.post("/api/send-email", async (req, res) => {
-    const { to, subject, text, html, attachments } = req.body;
-    try {
-      await transporter.sendMail({
-        from: '"Al Hera Madrasa" <newdrshahidul@gmail.com>',
-        to,
-        subject,
-        text,
-        html,
-        attachments
-      });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Email sending error:", error);
-      res.status(500).json({ error: "Failed to send email" });
-    }
-  });
 
   // Hardcoded SMTP Settings
   process.env.SMTP_HOST = "smtp.gmail.com";
@@ -298,11 +247,8 @@ async function setupServer() {
 
   app.delete("/api/admin/all-history/:type/:id", async (req, res) => {
     const { password } = req.body;
-    const adminPassword = process.env.VITE_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || "1234";
-    
-    console.log("Delete history attempt...");
+    const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
     if (password !== adminPassword && password !== "১২৩৪") {
-      console.error("Delete history failed: Invalid password.");
       return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
     }
     const { type, id } = req.params;
@@ -2574,49 +2520,46 @@ async function setupServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.NETLIFY) {
-    try {
-      const importVite = new Function('return import("vite")');
-      const { createServer: createViteServer } = await importVite();
-      const vite = await createViteServer({
-        server: { 
-          middlewareMode: true,
-          hmr: {
-            port: 0,
-          },
-          watch: null
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { 
+        middlewareMode: true,
+        hmr: {
+          port: 0,
         },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
-    } catch (e) {
-      console.warn("Vite not found, skipping dev middleware");
-    }
-  } else {
+        watch: null
+      },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.NETLIFY) {
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-
-    server.on('error', (e: any) => {
-      if (e.code === 'EADDRINUSE') {
-        console.log('Address in use, retrying...');
-        setTimeout(() => {
-          server.close();
-          server.listen(PORT, "0.0.0.0");
-        }, 1000);
-      }
-    });
+  if (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return app;
   }
+
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  server.on('error', (e: any) => {
+    if (e.code === 'EADDRINUSE') {
+      console.log('Address in use, retrying...');
+      setTimeout(() => {
+        server.close();
+        server.listen(PORT, "0.0.0.0");
+      }, 1000);
+    }
+  });
+
+  return app;
 }
 
-// Start the server
-setupServer().catch(console.error);
-
-export default app;
+if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  startServer();
+}
