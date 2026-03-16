@@ -2525,8 +2525,9 @@ export async function startServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
+  if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,

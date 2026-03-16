@@ -7,6 +7,7 @@
 
 [functions]
   included_files = ["firebase-applet-config.json", "service-account.json"]
+  external_node_modules = ["vite", "esbuild", "lightningcss", "@tailwindcss/vite"]
 
 [[redirects]]
   from = "/api/*"
