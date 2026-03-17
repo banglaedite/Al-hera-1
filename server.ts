@@ -69,7 +69,7 @@ if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
-export async function startServer() {
+export async function startServer(isDevServer = false) {
   const app = express();
   const PORT = 3000;
 
@@ -2525,21 +2525,11 @@ export async function startServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    const viteModule = "vite";
-    const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
-    const vite = await createViteServer({
-      server: { 
-        middlewareMode: true,
-        hmr: {
-          port: 0,
-        },
-        watch: null
-      },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  if (isDevServer) {
+    return app;
+  }
+
+  if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
@@ -2567,6 +2557,6 @@ export async function startServer() {
   return app;
 }
 
-if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME && process.argv[1] === fileURLToPath(import.meta.url)) {
   startServer();
 }
