@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -8,27 +9,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Import the Firebase configuration
-let firebaseConfig: any = {};
-try {
-  firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8'));
-} catch (e) {
-  try {
-    firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
-  } catch (err) {
-    console.warn("firebase-applet-config.json not found");
-  }
-}
+const firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
 
 // Initialize Firebase Admin
 let serviceAccount: any = null;
 try {
-  serviceAccount = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'service-account.json'), 'utf8'));
+  serviceAccount = JSON.parse(fs.readFileSync(path.join(__dirname, 'service-account.json'), 'utf8'));
 } catch (e) {
-  try {
-    serviceAccount = JSON.parse(fs.readFileSync(path.join(__dirname, 'service-account.json'), 'utf8'));
-  } catch (err) {
-    // Ignore if not found
-  }
+  // Ignore if not found
 }
 
 if (!admin.apps.length) {
@@ -36,57 +24,40 @@ if (!admin.apps.length) {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
 
-  console.log("Initializing Firebase Admin with Project ID:", projectId);
-
   if (projectId && clientEmail && privateKey) {
-    try {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId,
-          clientEmail,
-          privateKey: privateKey.replace(/\\n/g, '\n'),
-        }),
-        storageBucket: `${projectId}.appspot.com`
-      });
-      console.log("Firebase Admin initialized with service account.");
-    } catch (err) {
-      console.error("Failed to initialize Firebase Admin with cert:", err);
-      admin.initializeApp({ projectId });
-    }
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey: privateKey.replace(/\\n/g, '\n'),
+      }),
+      storageBucket: `${projectId}.appspot.com`
+    });
   } else {
     // Fallback for local development or if env vars are missing
     admin.initializeApp({
-      projectId: projectId || "demo-project",
+      projectId: firebaseConfig.projectId,
     });
-    console.warn("Firebase Admin initialized with limited credentials (fallback).");
+    console.warn("Firebase Admin initialized with limited credentials.");
   }
 }
-
 const firestoreOptions: any = {
-  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId || "demo-project",
+  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId,
+  databaseId: firebaseConfig.firestoreDatabaseId,
 };
 
-// Ensure databaseId is set correctly
-if (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)") {
-  firestoreOptions.databaseId = firebaseConfig.firestoreDatabaseId;
-}
-
 if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
-  const pKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
-  if (pKey) {
-    firestoreOptions.credentials = {
-      client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
-      private_key: pKey.replace(/\\n/g, '\n'),
-    };
-  }
+  firestoreOptions.credentials = {
+    client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
+    private_key: (process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key).replace(/\\n/g, '\n'),
+  };
 }
-
-console.log("Firestore Options:", JSON.stringify({ ...firestoreOptions, credentials: firestoreOptions.credentials ? "[HIDDEN]" : "NONE" }));
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
-export async function startServer(isDevServer = false) {
-  const app = express();
+const app = express();
+
+async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
@@ -2541,38 +2512,40 @@ export async function startServer(isDevServer = false) {
     }
   });
 
-  if (isDevServer) {
-    return app;
-  }
-
-  if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { 
+        middlewareMode: true,
+        hmr: false,
+        watch: null
+      },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
 
-  if (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    return app;
+  if (process.env.NODE_ENV !== "production") {
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+
+    server.on('error', (e: any) => {
+      if (e.code === 'EADDRINUSE') {
+        console.log('Address in use, retrying...');
+        setTimeout(() => {
+          server.close();
+          server.listen(PORT, "0.0.0.0");
+        }, 1000);
+      }
+    });
   }
-
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-
-  server.on('error', (e: any) => {
-    if (e.code === 'EADDRINUSE') {
-      console.log('Address in use, retrying...');
-      setTimeout(() => {
-        server.close();
-        server.listen(PORT, "0.0.0.0");
-      }, 1000);
-    }
-  });
-
-  return app;
 }
 
-if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME && process.argv[1] === fileURLToPath(import.meta.url)) {
-  startServer();
-}
+startServer();
+
+export default app;
