@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { generateMonthlyReceipt, generateReceipt } from "../utils/pdfGenerator";
+import { useToast } from "./ToastContext";
 
 const MONTHS = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
 export default function FeeManagement() {
+  const { addToast } = useToast();
   const [studentId, setStudentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [student, setStudent] = useState<any>(null);
@@ -71,61 +73,6 @@ export default function FeeManagement() {
     );
   };
 
-  const handlePayMonthlyFees = async () => {
-    if (selectedMonths.length === 0) return;
-    setIsPaying(true);
-    const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    
-    try {
-      const response = await fetch("/api/pay-monthly-fees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          student_id: student.id,
-          student_name: student.name,
-          year: selectedYear,
-          months: selectedMonths,
-          total_amount: totalAmount,
-          transaction_id: transactionId 
-        })
-      });
-      
-      if (response.ok) {
-        setSelectedMonths([]);
-        await fetchFees(student.id);
-        
-        // Generate receipt automatically
-        generateMonthlyReceipt({
-          transaction_id: transactionId,
-          paid_date: new Date().toISOString(),
-          months: selectedMonths,
-          year: selectedYear,
-          amount: totalAmount
-        }, student, sendEmail, addToast);
-      }
-    } catch (err) {
-      console.error("Payment failed", err);
-    } finally {
-      setIsPaying(false);
-    }
-  };
-
-  const handlePay = async (fee: any) => {
-    const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    try {
-      const response = await fetch("/api/pay-fee", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feeId: fee.id, transactionId })
-      });
-      if (response.ok) {
-        await fetchFees(student.id);
-      }
-    } catch (err) {
-      console.error("Payment failed", err);
-    }
-  };
-
   const sendEmail = async (pdfData: string, filename: string, studentEmail: string, addToast: any) => {
     try {
       const response = await fetch("/api/send-email", {
@@ -155,109 +102,66 @@ export default function FeeManagement() {
     }
   };
 
-  const generateMonthlyReceipt = (data: any) => {
-    const doc = new jsPDF();
-    doc.setFillColor(6, 78, 59);
-    doc.rect(0, 0, 210, 40, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.text("AL HERA MADRASA", 105, 25, { align: "center" });
-    doc.setFontSize(10);
-    doc.text("Monthly Fee Receipt", 105, 32, { align: "center" });
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.text(`Receipt No: ${data.transaction_id}`, 20, 55);
-    doc.text(`Date: ${new Date(data.paid_date).toLocaleDateString()}`, 150, 55);
-
-    doc.setFontSize(14);
-    doc.text("Student Information", 20, 70);
-    doc.setFontSize(10);
-    doc.text(`Name: ${student.name}`, 20, 80);
-    doc.text(`ID: ${student.id}`, 20, 85);
-    doc.text(`Class: ${student.class}`, 20, 90);
-    doc.text(`Roll: ${student.roll}`, 20, 95);
-
-    (doc as any).autoTable({
-      startY: 110,
-      head: [["Category", "Months", "Year", "Amount", "Transaction ID"]],
-      body: [
-        ["Monthly Fee", data.months.join(", "), data.year, `BDT ${data.amount}`, data.transaction_id]
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [6, 78, 59] }
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    doc.text("Total Paid:", 140, finalY);
-    doc.setFontSize(16);
-    doc.text(`BDT ${data.amount}.00`, 170, finalY);
-
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("This is a computer-generated receipt. No signature required.", 105, 280, { align: "center" });
-
-    const pdfData = doc.output('datauristring');
-    const filename = `Receipt_${student.id}_${data.transaction_id}.pdf`;
-    doc.save(filename);
+  const handlePayMonthlyFees = async () => {
+    if (selectedMonths.length === 0) return;
+    setIsPaying(true);
+    const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     
-    if (student.email) {
-      sendEmail(pdfData, filename, student.email);
-    } else {
-      alert("ছাত্রের ইমেইল অ্যাড্রেস নেই!");
+    try {
+      const response = await fetch("/api/pay-monthly-fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          student_id: student.id,
+          student_name: student.name,
+          year: selectedYear,
+          months: selectedMonths,
+          total_amount: totalAmount,
+          transaction_id: transactionId 
+        })
+      });
+      
+      if (response.ok) {
+        addToast("পেমেন্ট সফল হয়েছে", "success");
+        setSelectedMonths([]);
+        await fetchFees(student.id);
+        
+        // Generate receipt automatically using central utility
+        generateMonthlyReceipt({
+          transaction_id: transactionId,
+          paid_date: new Date().toISOString(),
+          months: selectedMonths,
+          year: selectedYear,
+          amount: totalAmount
+        }, student, sendEmail, addToast);
+      }
+    } catch (err) {
+      console.error("Payment failed", err);
+      addToast("পেমেন্ট ব্যর্থ হয়েছে", "error");
+    } finally {
+      setIsPaying(false);
     }
   };
 
-  const generateReceipt = (fee: any) => {
-    const doc = new jsPDF();
-    doc.setFillColor(6, 78, 59);
-    doc.rect(0, 0, 210, 40, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.text("AL HERA MADRASA", 105, 25, { align: "center" });
-    doc.setFontSize(10);
-    doc.text("Digital Payment Receipt", 105, 32, { align: "center" });
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.text(`Receipt No: ${fee.transaction_id}`, 20, 55);
-    doc.text(`Date: ${new Date(fee.paid_date).toLocaleDateString()}`, 150, 55);
-
-    doc.setFontSize(14);
-    doc.text("Student Information", 20, 70);
-    doc.setFontSize(10);
-    doc.text(`Name: ${student.name}`, 20, 80);
-    doc.text(`ID: ${student.id}`, 20, 85);
-    doc.text(`Class: ${student.class}`, 20, 90);
-    doc.text(`Roll: ${student.roll}`, 20, 95);
-
-    (doc as any).autoTable({
-      startY: 110,
-      head: [["Category", "Amount", "Status", "Transaction ID"]],
-      body: [
-        [fee.category, `BDT ${fee.amount}`, fee.status.toUpperCase(), fee.transaction_id]
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [6, 78, 59] }
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    doc.text("Total Paid:", 140, finalY);
-    doc.setFontSize(16);
-    doc.text(`BDT ${fee.amount}.00`, 170, finalY);
-
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("This is a computer-generated receipt. No signature required.", 105, 280, { align: "center" });
-
-    const pdfData = doc.output('datauristring');
-    const filename = `Receipt_${student.id}_${fee.id}.pdf`;
-    doc.save(filename);
-    
-    if (student.email) {
-      sendEmail(pdfData, filename, student.email);
-    } else {
-      alert("ছাত্রের ইমেইল অ্যাড্রেস নেই!");
+  const handlePay = async (fee: any) => {
+    const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    try {
+      const response = await fetch("/api/pay-fee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feeId: fee.id, transactionId })
+      });
+      if (response.ok) {
+        addToast("পেমেন্ট সফল হয়েছে", "success");
+        await fetchFees(student.id);
+        
+        // Generate receipt automatically
+        const updatedFee = { ...fee, status: 'paid', paid_date: new Date().toISOString(), transaction_id: transactionId };
+        generateReceipt(updatedFee, student, sendEmail, addToast);
+      }
+    } catch (err) {
+      console.error("Payment failed", err);
+      addToast("পেমেন্ট ব্যর্থ হয়েছে", "error");
     }
   };
 
@@ -461,7 +365,7 @@ export default function FeeManagement() {
                             </button>
                           ) : (
                             <button 
-                              onClick={() => generateReceipt(fee)}
+                              onClick={() => generateReceipt(fee, student, sendEmail, addToast)}
                               className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
                               title="রিসিট ডাউনলোড"
                             >

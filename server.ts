@@ -1,12 +1,15 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import admin from 'firebase-admin';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const ADMIN_CONFIG_PATH = path.join(__dirname, "firebase-admin-config.json");
 
 // Firebase Configuration (Hardcoded for Vercel compatibility)
 const firebaseConfig = {
@@ -29,15 +32,35 @@ const hardcodedServiceAccount = {
 };
 
 let firestore: any = null;
+let currentConfig: any = null;
 
 // Firebase Admin Initialization Helper
 function getFirestoreInstance() {
   if (firestore) return firestore;
 
   try {
-    const projectId = process.env.FIREBASE_PROJECT_ID || hardcodedServiceAccount.project_id;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || hardcodedServiceAccount.client_email;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY || hardcodedServiceAccount.private_key;
+    let config = { ...hardcodedServiceAccount };
+    let dbId = firebaseConfig.firestoreDatabaseId;
+
+    // Try to load from dynamic config file
+    if (fs.existsSync(ADMIN_CONFIG_PATH)) {
+      try {
+        const dynamicConfig = JSON.parse(fs.readFileSync(ADMIN_CONFIG_PATH, 'utf-8'));
+        config = {
+          project_id: dynamicConfig.projectId,
+          client_email: dynamicConfig.clientEmail,
+          private_key: dynamicConfig.privateKey,
+        };
+        dbId = dynamicConfig.databaseId || "(default)";
+        console.log("Loaded dynamic Firebase Admin config from file.");
+      } catch (e) {
+        console.error("Error parsing dynamic config file:", e);
+      }
+    }
+
+    const projectId = process.env.FIREBASE_PROJECT_ID || config.project_id;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || config.client_email;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY || config.private_key;
 
     if (!admin.apps.length) {
       const privateKeyFormatted = privateKey.replace(/\\n/g, '\n');
@@ -52,9 +75,9 @@ function getFirestoreInstance() {
       console.log("Firebase Admin initialized with project:", projectId);
     }
     
-    const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
+    const finalDbId = dbId === "(default)" ? undefined : dbId;
     const app = admin.app();
-    firestore = dbId ? getAdminFirestore(app, dbId) : getAdminFirestore(app);
+    firestore = finalDbId ? getAdminFirestore(app, finalDbId) : getAdminFirestore(app);
     return firestore;
   } catch (err) {
     console.error("Firebase Admin init error:", err);
@@ -66,6 +89,38 @@ const app = express();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// API to update Firebase Config
+app.post("/api/admin/update-firebase-config", async (req, res) => {
+  const { projectId, clientEmail, privateKey, databaseId, password } = req.body;
+  
+  const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
+  if (password !== adminPassword && password !== "১২৩৪") {
+    return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+  }
+
+  try {
+    const config = { projectId, clientEmail, privateKey, databaseId };
+    fs.writeFileSync(ADMIN_CONFIG_PATH, JSON.stringify(config, null, 2));
+    
+    // Reset Firebase Admin to re-initialize with new credentials
+    if (admin.apps.length) {
+      await Promise.all(admin.apps.map(app => app?.delete()));
+    }
+    firestore = null;
+    
+    // Test initialization
+    const db = getFirestoreInstance();
+    if (!db) {
+      throw new Error("Failed to initialize with new credentials");
+    }
+
+    res.json({ success: true, message: "Firebase configuration updated and reloaded." });
+  } catch (error: any) {
+    console.error("Error updating Firebase config:", error);
+    res.status(500).json({ error: "Failed to update configuration", details: error.message });
+  }
+});
 
 // Middleware to check Firestore
 app.use((req, res, next) => {
@@ -2429,6 +2484,47 @@ async function seedDatabase() {
   });
 
   // --- Nodemailer Email API ---
+  app.post("/api/send-email", async (req, res) => {
+    const { pdfData, filename, email } = req.body;
+    
+    if (!email || !pdfData) {
+      return res.status(400).json({ error: "Missing email or pdfData" });
+    }
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || "smtp.gmail.com",
+        port: parseInt(process.env.SMTP_PORT || "587"),
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const base64Data = pdfData.split(",")[1];
+
+      await transporter.sendMail({
+        from: `"Al Hera Madrasa" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: "Payment Receipt - Al Hera Madrasa",
+        text: "Please find your payment receipt attached.",
+        attachments: [
+          {
+            filename: filename,
+            content: base64Data,
+            encoding: "base64",
+          },
+        ],
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Email error:", error);
+      res.status(500).json({ error: "Failed to send email" });
+    }
+  });
+
   // Vite middleware for development
   // --- Database Reset ---
   app.get("/api/admin/archive/students", async (req, res) => {
