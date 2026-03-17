@@ -9,21 +9,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Import the Firebase configuration
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf8'));
+const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8'));
 
 // Initialize Firebase Admin
 let serviceAccount: any = null;
 try {
-  serviceAccount = JSON.parse(fs.readFileSync(path.join(__dirname, 'service-account.json'), 'utf8'));
+  serviceAccount = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'service-account.json'), 'utf8'));
 } catch (e) {
-  // Ignore if not found
+  console.warn("Could not find service-account.json at", path.join(process.cwd(), 'service-account.json'));
 }
 
-if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
+const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
+const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
 
+if (!admin.apps.length) {
   if (projectId && clientEmail && privateKey) {
     console.log("Initializing Firebase Admin with Service Account for project:", projectId);
     try {
@@ -48,11 +48,37 @@ if (!admin.apps.length) {
 
 const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
 
-const firestore = admin.firestore();
-if (firestoreDatabaseId) {
-  // If a specific database ID is provided and it's not default
-  // Note: admin.firestore() usually uses the default database unless configured otherwise
-  // For multiple databases, one might need to use the Firestore constructor or different app instances
+let firestore: admin.firestore.Firestore;
+
+try {
+  if (!projectId) {
+    throw new Error("Firebase Project ID is missing. Please check your configuration.");
+  }
+  
+  const firestoreOptions: any = {
+    projectId: projectId,
+    databaseId: firestoreDatabaseId,
+  };
+
+  if (projectId && clientEmail && privateKey) {
+    firestoreOptions.credentials = {
+      client_email: clientEmail,
+      private_key: privateKey.includes('\n') ? privateKey : privateKey.replace(/\\n/g, '\n'),
+    };
+  }
+
+  firestore = new admin.firestore.Firestore(firestoreOptions);
+  console.log("Firestore initialized successfully with databaseId:", firestoreDatabaseId || "(default)");
+} catch (err) {
+  console.error("Firestore initialization error:", err);
+  try {
+    firestore = admin.firestore();
+    console.log("Firestore initialized via admin.firestore() fallback.");
+  } catch (fallbackErr) {
+    console.error("Firestore fallback initialization error:", fallbackErr);
+    // Last resort fallback to prevent crash, though queries will still fail
+    firestore = null as any;
+  }
 }
 
 const app = express();
@@ -63,9 +89,37 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+  // Middleware to check Firestore
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/') && req.path !== '/api/health' && !firestore) {
+      return res.status(500).json({ 
+        error: "Firestore not initialized", 
+        details: "The server failed to connect to Firebase. Please check the logs." 
+      });
+    }
+    next();
+  });
+
   // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", async (req, res) => {
+    let firestoreStatus = "unknown";
+    try {
+      if (firestore) {
+        await firestore.collection("site_settings").doc("1").get();
+        firestoreStatus = "connected";
+      } else {
+        firestoreStatus = "not_initialized";
+      }
+    } catch (err) {
+      firestoreStatus = "error: " + (err instanceof Error ? err.message : String(err));
+    }
+    
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      firestore: firestoreStatus,
+      projectId: projectId || "missing"
+    });
   });
 
   // Hardcoded SMTP Settings
@@ -2546,9 +2600,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
