@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "../lib/utils";
-import { db } from "../firebase";
 
 function TypingTitle({ text }: { text: string }) {
   const [filledLength, setFilledLength] = useState(0);
@@ -114,52 +113,60 @@ const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch settings
-        const settingsRes = await fetch("/api/site-settings");
-        if (settingsRes.ok) {
-          const data = await settingsRes.json();
-          if (Object.keys(data).length > 0) setSettings(data);
-          else {
-            setSettings({
-              title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
-              description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
-              hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
-              contact_phone: '01700000000',
-              whatsapp_number: '01700000000',
-              facebook_url: '#',
-              announcement: 'স্বাগতম',
-              logo_url: null
-            });
-          }
-        }
+    const fetchWithTimeout = (url: string, timeout = 10000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+    };
 
-        // Fetch features
-        const featuresRes = await fetch("/api/features");
-        if (featuresRes.ok) {
-          const data = await featuresRes.json();
-          setFeatures(data);
-        }
+    fetchWithTimeout("/api/site-settings")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch settings");
+        return res.json();
+      })
+      .then(setSettings)
+      .catch((err) => {
+        console.error("Failed to load settings:", err);
+        setSettings({
+          title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
+          description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
+          hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
+          contact_phone: '01700000000',
+          whatsapp_number: '01700000000',
+          facebook_url: '#',
+          announcement: 'স্বাগতম',
+          logo_url: null
+        });
+      });
 
-        // Fetch food menu
-        const foodRes = await fetch("/api/food-menu");
-        if (foodRes.ok) {
-          const data = await foodRes.json();
+    fetchWithTimeout("/api/features")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setFeatures(data.filter((f: any) => f.is_active !== 0));
+        } else {
+          console.error("Failed to load features:", data);
+        }
+      })
+      .catch((err) => console.error("Failed to load features:", err));
+
+    fetchWithTimeout("/api/food-menu")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
           setFoodMenu(data);
         }
+      })
+      .catch((err) => console.error("Failed to load food menu:", err));
 
-        // Fetch showcase items
-        const showcaseRes = await fetch("/api/showcase-items");
-        if (showcaseRes.ok) {
-          const data = await showcaseRes.json();
+    fetchWithTimeout("/api/showcase-items")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
           setShowcaseItems(data);
         }
-      } catch (err) {
-        console.error("Failed to load data:", err);
-      }
-    };
-    fetchData();
+      })
+      .catch((err) => console.error("Failed to load showcase items:", err));
   }, []);
 
   if (!settings) return (

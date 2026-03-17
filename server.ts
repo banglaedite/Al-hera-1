@@ -25,35 +25,35 @@ if (!admin.apps.length) {
   const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
 
   if (projectId && clientEmail && privateKey) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: privateKey.replace(/\\n/g, '\n'),
-      }),
-      storageBucket: `${projectId}.appspot.com`
-    });
+    console.log("Initializing Firebase Admin with Service Account for project:", projectId);
+    try {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKey.includes('\n') ? privateKey : privateKey.replace(/\\n/g, '\n'),
+        }),
+        storageBucket: `${projectId}.appspot.com`
+      });
+    } catch (err) {
+      console.error("Firebase Admin initialization error:", err);
+    }
   } else {
-    // Fallback for local development or if env vars are missing
+    console.warn("Initializing Firebase Admin with limited credentials (missing service account).");
     admin.initializeApp({
       projectId: firebaseConfig.projectId,
     });
-    console.warn("Firebase Admin initialized with limited credentials.");
   }
 }
-const firestoreOptions: any = {
-  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId,
-  databaseId: firebaseConfig.firestoreDatabaseId,
-};
 
-if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
-  firestoreOptions.credentials = {
-    client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
-    private_key: (process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key).replace(/\\n/g, '\n'),
-  };
+const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
+
+const firestore = admin.firestore();
+if (firestoreDatabaseId) {
+  // If a specific database ID is provided and it's not default
+  // Note: admin.firestore() usually uses the default database unless configured otherwise
+  // For multiple databases, one might need to use the Firestore constructor or different app instances
 }
-
-const firestore = new admin.firestore.Firestore(firestoreOptions);
 
 const app = express();
 
@@ -62,6 +62,11 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
 
   // Hardcoded SMTP Settings
   process.env.SMTP_HOST = "smtp.gmail.com";
@@ -72,10 +77,15 @@ async function startServer() {
 
   // --- Database Seeding ---
   async function seedDatabase() {
+    console.log("Starting database seeding check...");
     try {
-      const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+      const settingsRef = firestore.collection("site_settings").doc("1");
+      const settingsDoc = await settingsRef.get();
+      console.log("Site settings doc check complete. Exists:", settingsDoc.exists);
+      
       if (!settingsDoc.exists) {
-        await firestore.collection("site_settings").doc("1").set({
+        console.log("Seeding default site settings...");
+        await settingsRef.set({
           title: "মাদরাসা ম্যানেজমেন্ট সিস্টেম",
           subtitle: "একটি আধুনিক ও ডিজিটাল মাদরাসা গড়ার প্রত্যয়ে",
           phone: "01700000000",
@@ -93,7 +103,10 @@ async function startServer() {
       }
 
       const featuresSnapshot = await firestore.collection("features").get();
+      console.log("Features check complete. Count:", featuresSnapshot.size);
+      
       if (featuresSnapshot.empty) {
+        console.log("Seeding default features...");
         const defaultFeatures = [
           { title: "অনলাইন ভর্তি", description: "সহজ ও দ্রুত অনলাইন ভর্তি প্রক্রিয়া", icon: "GraduationCap", is_active: 1 },
           { title: "ডিজিটাল হাজিরা", description: "ছাত্র ও শিক্ষকদের স্মার্ট হাজিরা সিস্টেম", icon: "CheckCircle2", is_active: 1 },
@@ -519,12 +532,21 @@ async function startServer() {
   // --- Site Settings ---
 
   app.get("/api/site-settings", async (req, res) => {
+    console.log("Fetching site settings...");
     try {
-      const settingsDoc = await firestore!.collection("site_settings").doc("1").get();
+      // Add a timeout to firestore call
+      const settingsPromise = firestore!.collection("site_settings").doc("1").get();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Firestore timeout")), 10000)
+      );
+      
+      const settingsDoc = await Promise.race([settingsPromise, timeoutPromise]) as admin.firestore.DocumentSnapshot;
+      
+      console.log("Site settings fetched successfully. Exists:", settingsDoc.exists);
       res.json(settingsDoc.exists ? { id: settingsDoc.id, ...settingsDoc.data() } : {});
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to fetch settings" });
+      console.error("Error fetching site settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -2517,7 +2539,8 @@ async function startServer() {
       server: { 
         middlewareMode: true,
         hmr: false,
-        watch: null
+        watch: null,
+        ws: false
       },
       appType: "spa",
     });
