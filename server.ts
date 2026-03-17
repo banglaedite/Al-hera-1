@@ -36,36 +36,52 @@ if (!admin.apps.length) {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
 
+  console.log("Initializing Firebase Admin with Project ID:", projectId);
+
   if (projectId && clientEmail && privateKey) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: privateKey.replace(/\\n/g, '\n'),
-      }),
-      storageBucket: `${projectId}.appspot.com`
-    });
+    try {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, '\n'),
+        }),
+        storageBucket: `${projectId}.appspot.com`
+      });
+      console.log("Firebase Admin initialized with service account.");
+    } catch (err) {
+      console.error("Failed to initialize Firebase Admin with cert:", err);
+      admin.initializeApp({ projectId });
+    }
   } else {
     // Fallback for local development or if env vars are missing
     admin.initializeApp({
-      projectId: firebaseConfig.projectId || "demo-project",
+      projectId: projectId || "demo-project",
     });
-    console.warn("Firebase Admin initialized with limited credentials.");
+    console.warn("Firebase Admin initialized with limited credentials (fallback).");
   }
 }
+
 const firestoreOptions: any = {
   projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId || "demo-project",
 };
-if (firebaseConfig.firestoreDatabaseId) {
+
+// Ensure databaseId is set correctly
+if (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)") {
   firestoreOptions.databaseId = firebaseConfig.firestoreDatabaseId;
 }
 
 if (process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email) {
-  firestoreOptions.credentials = {
-    client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
-    private_key: (process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key).replace(/\\n/g, '\n'),
-  };
+  const pKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
+  if (pKey) {
+    firestoreOptions.credentials = {
+      client_email: process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email,
+      private_key: pKey.replace(/\\n/g, '\n'),
+    };
+  }
 }
+
+console.log("Firestore Options:", JSON.stringify({ ...firestoreOptions, credentials: firestoreOptions.credentials ? "[HIDDEN]" : "NONE" }));
 
 const firestore = new admin.firestore.Firestore(firestoreOptions);
 
