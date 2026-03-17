@@ -27,62 +27,26 @@ const hardcodedServiceAccount = {
   "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJGKzl7nKU47Tj\nzd6OQTrIc7PpIDr5rZtUux14ftuRensGD2lKKVk6T0SUvwkj1ep+/NTLiSayMlMh\n/rL6Dp4L50eoAyS3H2+F+p18CENyUzIgnEmDcYKfHph44DHTBMBq32Is4BQSUdgQ\n5F9f0vopJdcwRLuLPmjzfFFSbeFyjOfjP/7fUqUfgznINTcQncs49GJvkmMb2rIi\nRty9GZYpbTwolchNAa0rhnyEBNRbptuG7IQBelLoWi1OAfmLWx6XB7LGeFN1vXQe\n9tdNJ9mmCFC/LqQHt/E8nWh4KezyWdaO+QBj8QJBAcXv5TJgazpPisEcd1MKO7qR\ntjydOETbAgMBAAECggEACE3WYfAXgjIgwkwdwHEUkivuTUD/hZB7FzIiNLDEX2Bf\nBn6KF1pmUHlERslKSJwo8p/SfQ1kGtjnfSXUUonoivmgXZpevQo8jnGCvhksl2LR\nHCe9WhEiD8ZjKco30PBVdZDHIefRXF3cD6YRPCwmGILIdh2/mC+vS+gFI3HdXpiu\nh/J5eCRio5FN63Z+i2smkSJn9M07vKHHF8YKt8RFK7oveGaVdksiSKGoq+NIru9V\nTmJIkCnIRwtTa4sOcxLf4/gIaIqXPOLL7khrTk4heDyVTyOwMo2nzLs+fl2/mAVP\n1uopDj8tRG3ayttOlzDQ4Fz7t1kfTs0mv2bKkyIv5QKBgQDx33H0peZs1DjRlUsc\ngtobUkRBBRWjGf7LEBbkiqnxJtljfGS08k8Ok73l2snnBsmgBbx+gA+/CFWI6UGX\nt5HIyED9zmfBmTt1QZA/uYk/MuSjrWjNs33c5RnmpV71kJq/Wm1ajprbkKCA3hg9\nXTHvzJWitnTZj8T14J58DeNDRwKBgQDU14dWkoYaD0qU5rXtvrxOCWraK+/Y6gpt\nYro4ghNbf+R9p1iykwZwY8W2JW6l4ZPnY6ZVSnSe7XOK0Wq82MZLt3XnKQs+/Onu\nPXs17EmGqRMPT7jgnJsZs9GBbekpYZu0UQC3jWlz0NnrnYdjNejCGWyFgHbWdjtn\nyLowiSnzzQKBgQCsl6JsTdmgPMuSmjKv1JuoNUrpDqTC7vDGm+OKD3x2zR8Ag6ol\nCGbrYvd1xmqeRVSosI8xwVX7HgpTGQcqKN6JZIQj2B5nol0wLamuH0nVZA6M0Vfg\nuL0OXBjgYY7iMd6Kvw8bOHk+RfSSIGkxmIfispzwL7wv5wxH25Gbuhk6TwKBgQDP\nMA86ot+PtprvX7ZxfF5pyJkPT/3mtcz4tkZ4g4a8Zz7RYnnhO2XlOfpYWQ/gwjnr\n4QElvZjQrGzxEPJKaup9AlXvc/DSm/hMReUOlLjuMN+w4/YgD9KbroOe7pMuCSo8\n2S1NgIbKit/XkD0ewneVmpIdUvRbyDQDz04PuTXxcQKBgAl0K0u5BJafZe/1jnP2\nqvP07VCF/RNWk8aJm4h5QBejcfO9kNEoIXgSZYsbssE0p0rimY+xnpkNIsXV95od\nNkZNMulMDn2Idv2soDYkeDQWvWLZVpybSDwzr21cBOymLorEfZjKX4PsjlhTWLE/\nCC7Q4Oo/oVAV+EOABx+tlm0M\n-----END PRIVATE KEY-----\n"
 };
 
-const projectId = process.env.FIREBASE_PROJECT_ID || hardcodedServiceAccount.project_id || firebaseConfig.projectId;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || hardcodedServiceAccount.client_email;
-const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || hardcodedServiceAccount.private_key;
-
-// Robust private key handling for Vercel
-const privateKey = (rawPrivateKey && typeof rawPrivateKey === 'string') 
-  ? rawPrivateKey.replace(/\\n/g, '\n').replace(/"/g, '')
-  : undefined;
-
-if (!admin.apps.length && projectId && clientEmail && privateKey) {
-  console.log("Initializing Firebase Admin for project:", projectId);
+// Firebase Admin Initialization
+if (!admin.apps.length) {
   try {
+    const privateKeyFormatted = hardcodedServiceAccount.private_key.replace(/\\n/g, '\n');
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
+        projectId: hardcodedServiceAccount.project_id,
+        clientEmail: hardcodedServiceAccount.client_email,
+        privateKey: privateKeyFormatted,
       }),
-      storageBucket: `${projectId}.appspot.com`
+      storageBucket: `${hardcodedServiceAccount.project_id}.appspot.com`
     });
-    console.log("Firebase Admin initialized successfully.");
+    console.log("Firebase Admin initialized.");
   } catch (err) {
-    console.error("Firebase Admin initialization error:", err);
+    console.error("Firebase Admin init error:", err);
   }
 }
 
-const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
-
-let firestore: admin.firestore.Firestore;
-
-try {
-  if (admin.apps.length) {
-    // If a specific database ID is needed and it's not the default
-    if (firestoreDatabaseId) {
-      firestore = (admin as any).firestore(firestoreDatabaseId);
-    } else {
-      firestore = admin.firestore();
-    }
-    console.log("Firestore initialized successfully via admin.firestore()");
-  } else {
-    // Fallback for direct initialization if admin app failed
-    const firestoreOptions: any = {
-      projectId: projectId,
-      databaseId: firestoreDatabaseId,
-      credentials: {
-        client_email: clientEmail,
-        private_key: privateKey,
-      }
-    };
-    firestore = new admin.firestore.Firestore(firestoreOptions);
-    console.log("Firestore initialized via direct constructor");
-  }
-} catch (err) {
-  console.error("Firestore initialization error:", err);
-  firestore = null as any;
-}
+const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
+const firestore = dbId ? (admin as any).firestore(dbId) : admin.firestore();
 
 const app = express();
 
@@ -102,33 +66,12 @@ app.use((req, res, next) => {
 
 // Health check
 app.get("/api/health", async (req, res) => {
-  let firestoreStatus = "unknown";
-  let details = null;
   try {
-    if (firestore) {
-      const testDoc = await firestore.collection("site_settings").doc("1").get();
-      firestoreStatus = "connected";
-      details = { exists: testDoc.exists };
-    } else {
-      firestoreStatus = "not_initialized";
-    }
-  } catch (err) {
-    firestoreStatus = "error";
-    details = err instanceof Error ? { message: err.message, stack: err.stack } : String(err);
+    const test = await firestore.collection("site_settings").limit(1).get();
+    res.json({ status: "ok", firestore: "connected", data: !test.empty });
+  } catch (err: any) {
+    res.status(500).json({ status: "error", firestore: "disconnected", error: err.message });
   }
-  
-  res.json({ 
-    status: "ok", 
-    timestamp: new Date().toISOString(),
-    firestore: firestoreStatus,
-    details,
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      hasProjectId: !!projectId,
-      hasClientEmail: !!clientEmail,
-      hasPrivateKey: !!privateKey
-    }
-  });
 });
 
 // Hardcoded SMTP Settings
@@ -2605,57 +2548,23 @@ async function seedDatabase() {
     }
   });
 
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      const { createServer: createViteServer } = await import('vite');
-      const vite = await createViteServer({
-        server: { 
-          middlewareMode: true,
-          hmr: false,
-          watch: null,
-          ws: false
-        },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
-      
-      const PORT = 3000;
-      const server = app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-      });
+// --- Server Startup ---
+const PORT = 3000;
 
-      server.on('error', (e: any) => {
-        if (e.code === 'EADDRINUSE') {
-          console.log('Address in use, retrying...');
-          setTimeout(() => {
-            server.close();
-            server.listen(PORT, "0.0.0.0");
-          }, 1000);
-        }
-      });
-    } catch (err) {
-      console.error("Vite dev server error:", err);
-    }
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-    }
-    app.get("*", (req, res) => {
-      const indexPath = path.join(process.cwd(), "dist", "index.html");
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        res.status(404).send("Frontend build not found. Please run build first.");
-      }
-    });
-  }
-}
-
-// Only call startServer if not in a serverless environment or if explicitly needed
-if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-  startServer();
+if (process.env.NODE_ENV !== "production") {
+  const { createServer: createViteServer } = await import('vite');
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "spa",
+  });
+  app.use(vite.middlewares);
+  app.listen(PORT, () => console.log(`Dev server: http://localhost:${PORT}`));
+} else {
+  const distPath = path.join(process.cwd(), "dist");
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
 }
 
 export default app;
