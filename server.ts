@@ -2588,7 +2588,8 @@ if (process.env.NODE_ENV !== "production") {
   });
   app.use(vite.middlewares);
   app.listen(PORT, () => console.log(`Dev server: http://localhost:${PORT}`));
-} else {
+} else if (!process.env.VERCEL) {
+  // Only serve static files if NOT on Vercel (e.g., local production test or other VPS)
   const distPath = path.join(process.cwd(), "dist");
   app.use(express.static(distPath));
   app.get("*", (req, res) => {
