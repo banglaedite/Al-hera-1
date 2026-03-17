@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -31,9 +30,13 @@ const hardcodedServiceAccount = {
 const projectId = process.env.FIREBASE_PROJECT_ID || hardcodedServiceAccount.project_id || firebaseConfig.projectId;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || hardcodedServiceAccount.client_email;
 const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || hardcodedServiceAccount.private_key;
-const privateKey = rawPrivateKey.includes('\n') ? rawPrivateKey : rawPrivateKey.replace(/\\n/g, '\n');
 
-if (!admin.apps.length) {
+// Robust private key handling for Vercel
+const privateKey = (rawPrivateKey && typeof rawPrivateKey === 'string') 
+  ? rawPrivateKey.replace(/\\n/g, '\n').replace(/"/g, '')
+  : undefined;
+
+if (!admin.apps.length && projectId && clientEmail && privateKey) {
   console.log("Initializing Firebase Admin for project:", projectId);
   try {
     admin.initializeApp({
@@ -44,6 +47,7 @@ if (!admin.apps.length) {
       }),
       storageBucket: `${projectId}.appspot.com`
     });
+    console.log("Firebase Admin initialized successfully.");
   } catch (err) {
     console.error("Firebase Admin initialization error:", err);
   }
@@ -54,26 +58,30 @@ const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId === "(default)" ?
 let firestore: admin.firestore.Firestore;
 
 try {
-  const firestoreOptions: any = {
-    projectId: projectId,
-    databaseId: firestoreDatabaseId,
-    credentials: {
-      client_email: clientEmail,
-      private_key: privateKey,
+  if (admin.apps.length) {
+    // If a specific database ID is needed and it's not the default
+    if (firestoreDatabaseId) {
+      firestore = (admin as any).firestore(firestoreDatabaseId);
+    } else {
+      firestore = admin.firestore();
     }
-  };
-
-  firestore = new admin.firestore.Firestore(firestoreOptions);
-  console.log("Firestore initialized successfully with databaseId:", firestoreDatabaseId || "(default)");
+    console.log("Firestore initialized successfully via admin.firestore()");
+  } else {
+    // Fallback for direct initialization if admin app failed
+    const firestoreOptions: any = {
+      projectId: projectId,
+      databaseId: firestoreDatabaseId,
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey,
+      }
+    };
+    firestore = new admin.firestore.Firestore(firestoreOptions);
+    console.log("Firestore initialized via direct constructor");
+  }
 } catch (err) {
   console.error("Firestore initialization error:", err);
-  try {
-    firestore = admin.firestore();
-    console.log("Firestore initialized via admin.firestore() fallback.");
-  } catch (fallbackErr) {
-    console.error("Firestore fallback initialization error:", fallbackErr);
-    firestore = null as any;
-  }
+  firestore = null as any;
 }
 
 const app = express();
@@ -2597,38 +2605,57 @@ async function seedDatabase() {
     }
   });
 
+async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { 
-        middlewareMode: true,
-        hmr: false,
-        watch: null,
-        ws: false
-      },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-    
-    const PORT = 3000;
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          hmr: false,
+          watch: null,
+          ws: false
+        },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      
+      const PORT = 3000;
+      const server = app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
 
-    server.on('error', (e: any) => {
-      if (e.code === 'EADDRINUSE') {
-        console.log('Address in use, retrying...');
-        setTimeout(() => {
-          server.close();
-          server.listen(PORT, "0.0.0.0");
-        }, 1000);
-      }
-    });
+      server.on('error', (e: any) => {
+        if (e.code === 'EADDRINUSE') {
+          console.log('Address in use, retrying...');
+          setTimeout(() => {
+            server.close();
+            server.listen(PORT, "0.0.0.0");
+          }, 1000);
+        }
+      });
+    } catch (err) {
+      console.error("Vite dev server error:", err);
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    }
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(process.cwd(), "dist", "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Frontend build not found. Please run build first.");
+      }
     });
   }
+}
+
+// Only call startServer if not in a serverless environment or if explicitly needed
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  startServer();
+}
 
 export default app;
