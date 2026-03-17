@@ -6,6 +6,7 @@ import { RecruitmentManager } from "./RecruitmentManager";
 import { FoodMenuManager } from "./FoodMenuManager";
 import { AllStudentsManager } from "./AllStudentsManager";
 import { DatabaseResetManager } from "./DatabaseResetManager";
+import { FirebaseSetup } from "./FirebaseSetup";
 import { 
   LayoutDashboard, 
   Users, 
@@ -26,6 +27,7 @@ import {
   FileText,
   ArrowRight,
   Settings,
+  ShieldCheck,
   UserPlus,
   Check,
   X as CloseIcon,
@@ -201,6 +203,7 @@ export default function AdminPanel() {
     { id: "features", label: "বৈশিষ্ট্য", icon: Award },
     { id: "showcase", label: "শোকেস", icon: Globe },
     { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2 },
+    { id: "firebase", label: "ফায়ারবেস সেটআপ", icon: ShieldCheck },
     { id: "settings", label: "সেটিংস", icon: Settings },
   ];
 
@@ -386,6 +389,10 @@ export default function AdminPanel() {
 
             {activeTab === "delete-history" && (
               <DeleteHistory />
+            )}
+
+            {activeTab === "firebase" && (
+              <FirebaseSetup />
             )}
 
             {activeTab === "settings" && (

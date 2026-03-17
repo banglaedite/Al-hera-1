@@ -27,6 +27,8 @@ const hardcodedServiceAccount = {
   "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJGKzl7nKU47Tj\nzd6OQTrIc7PpIDr5rZtUux14ftuRensGD2lKKVk6T0SUvwkj1ep+/NTLiSayMlMh\n/rL6Dp4L50eoAyS3H2+F+p18CENyUzIgnEmDcYKfHph44DHTBMBq32Is4BQSUdgQ\n5F9f0vopJdcwRLuLPmjzfFFSbeFyjOfjP/7fUqUfgznINTcQncs49GJvkmMb2rIi\nRty9GZYpbTwolchNAa0rhnyEBNRbptuG7IQBelLoWi1OAfmLWx6XB7LGeFN1vXQe\n9tdNJ9mmCFC/LqQHt/E8nWh4KezyWdaO+QBj8QJBAcXv5TJgazpPisEcd1MKO7qR\ntjydOETbAgMBAAECggEACE3WYfAXgjIgwkwdwHEUkivuTUD/hZB7FzIiNLDEX2Bf\nBn6KF1pmUHlERslKSJwo8p/SfQ1kGtjnfSXUUonoivmgXZpevQo8jnGCvhksl2LR\nHCe9WhEiD8ZjKco30PBVdZDHIefRXF3cD6YRPCwmGILIdh2/mC+vS+gFI3HdXpiu\nh/J5eCRio5FN63Z+i2smkSJn9M07vKHHF8YKt8RFK7oveGaVdksiSKGoq+NIru9V\nTmJIkCnIRwtTa4sOcxLf4/gIaIqXPOLL7khrTk4heDyVTyOwMo2nzLs+fl2/mAVP\n1uopDj8tRG3ayttOlzDQ4Fz7t1kfTs0mv2bKkyIv5QKBgQDx33H0peZs1DjRlUsc\ngtobUkRBBRWjGf7LEBbkiqnxJtljfGS08k8Ok73l2snnBsmgBbx+gA+/CFWI6UGX\nt5HIyED9zmfBmTt1QZA/uYk/MuSjrWjNs33c5RnmpV71kJq/Wm1ajprbkKCA3hg9\nXTHvzJWitnTZj8T14J58DeNDRwKBgQDU14dWkoYaD0qU5rXtvrxOCWraK+/Y6gpt\nYro4ghNbf+R9p1iykwZwY8W2JW6l4ZPnY6ZVSnSe7XOK0Wq82MZLt3XnKQs+/Onu\nPXs17EmGqRMPT7jgnJsZs9GBbekpYZu0UQC3jWlz0NnrnYdjNejCGWyFgHbWdjtn\nyLowiSnzzQKBgQCsl6JsTdmgPMuSmjKv1JuoNUrpDqTC7vDGm+OKD3x2zR8Ag6ol\nCGbrYvd1xmqeRVSosI8xwVX7HgpTGQcqKN6JZIQj2B5nol0wLamuH0nVZA6M0Vfg\nuL0OXBjgYY7iMd6Kvw8bOHk+RfSSIGkxmIfispzwL7wv5wxH25Gbuhk6TwKBgQDP\nMA86ot+PtprvX7ZxfF5pyJkPT/3mtcz4tkZ4g4a8Zz7RYnnhO2XlOfpYWQ/gwjnr\n4QElvZjQrGzxEPJKaup9AlXvc/DSm/hMReUOlLjuMN+w4/YgD9KbroOe7pMuCSo8\n2S1NgIbKit/XkD0ewneVmpIdUvRbyDQDz04PuTXxcQKBgAl0K0u5BJafZe/1jnP2\nqvP07VCF/RNWk8aJm4h5QBejcfO9kNEoIXgSZYsbssE0p0rimY+xnpkNIsXV95od\nNkZNMulMDn2Idv2soDYkeDQWvWLZVpybSDwzr21cBOymLorEfZjKX4PsjlhTWLE/\nCC7Q4Oo/oVAV+EOABx+tlm0M\n-----END PRIVATE KEY-----\n"
 };
 
+let firestore: any = null;
+
 // Firebase Admin Initialization
 if (!admin.apps.length) {
   try {
@@ -40,13 +42,20 @@ if (!admin.apps.length) {
       storageBucket: `${hardcodedServiceAccount.project_id}.appspot.com`
     });
     console.log("Firebase Admin initialized.");
+    
+    const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
+    firestore = dbId ? (admin as any).firestore(dbId) : admin.firestore();
   } catch (err) {
     console.error("Firebase Admin init error:", err);
   }
+} else {
+  try {
+    const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
+    firestore = dbId ? (admin as any).firestore(dbId) : admin.firestore();
+  } catch (err) {
+    console.error("Firestore init error (existing app):", err);
+  }
 }
-
-const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
-const firestore = dbId ? (admin as any).firestore(dbId) : admin.firestore();
 
 const app = express();
 
@@ -68,9 +77,29 @@ app.use((req, res, next) => {
 app.get("/api/health", async (req, res) => {
   try {
     const test = await firestore.collection("site_settings").limit(1).get();
-    res.json({ status: "ok", firestore: "connected", data: !test.empty });
+    res.json({ 
+      status: "ok", 
+      firestore: "connected", 
+      data: !test.empty,
+      config: {
+        projectId: hardcodedServiceAccount.project_id,
+        clientEmail: hardcodedServiceAccount.client_email,
+        hasPrivateKey: !!hardcodedServiceAccount.private_key,
+        databaseId: firebaseConfig.firestoreDatabaseId
+      }
+    });
   } catch (err: any) {
-    res.status(500).json({ status: "error", firestore: "disconnected", error: err.message });
+    res.status(500).json({ 
+      status: "error", 
+      firestore: "disconnected", 
+      error: err.message,
+      config: {
+        projectId: hardcodedServiceAccount.project_id,
+        clientEmail: hardcodedServiceAccount.client_email,
+        hasPrivateKey: !!hardcodedServiceAccount.private_key,
+        databaseId: firebaseConfig.firestoreDatabaseId
+      }
+    });
   }
 });
 
@@ -1388,7 +1417,7 @@ async function seedDatabase() {
       let examStats: any = {};
       try {
         const exams = [...new Set(results.map((r: any) => r.exam_name))];
-        for (const exam of exams) {
+        for (const exam of (exams as string[])) {
           const classStudentsSnapshot = await firestore.collection("students").where("class", "==", student.class).where("deleted_at", "==", null).get();
           const classStudentIds = classStudentsSnapshot.docs.map(s => s.id);
 
