@@ -10,19 +10,22 @@
         const OriginalWebSocket = window.WebSocket;
         window.WebSocket = function(url, protocols) {
           if (typeof url === 'string' && (url.includes('vite') || url.includes('hmr'))) {
-            console.warn('Blocking Vite WebSocket connection to:', url);
+            // Return a dummy object that mimics a closed WebSocket
             return {
               addEventListener: () => {},
               removeEventListener: () => {},
               send: () => {},
               close: () => {},
               readyState: 3, // CLOSED
+              onopen: null,
+              onclose: null,
+              onerror: null,
+              onmessage: null,
             };
           }
           try {
             return new OriginalWebSocket(url, protocols);
           } catch (e) {
-            console.warn('WebSocket connection failed:', e);
             return {
               addEventListener: () => {},
               removeEventListener: () => {},
@@ -35,24 +38,41 @@
         window.WebSocket.prototype = OriginalWebSocket.prototype;
       })();
 
+      // Silence unhandled rejections related to WebSockets
       window.addEventListener('unhandledrejection', function(event) {
-        if (event.reason && (
-          (event.reason.message && event.reason.message.includes('WebSocket')) ||
-          (typeof event.reason === 'string' && event.reason.includes('WebSocket'))
+        const reason = event.reason;
+        if (reason && (
+          (reason.message && reason.message.includes('WebSocket')) ||
+          (typeof reason === 'string' && reason.includes('WebSocket')) ||
+          (reason.name === 'Error' && reason.message === 'WebSocket closed without opened')
         )) {
           event.preventDefault();
+          event.stopPropagation();
         }
-      });
+      }, true);
+
+      // Silence console errors and warnings related to Vite/WebSocket
+      const silencePatterns = [
+        '[vite] failed to connect to websocket',
+        'WebSocket closed without opened',
+        'WebSocket connection failed',
+        'hmr'
+      ];
 
       const originalError = console.error;
       console.error = (...args) => {
-        if (args[0] && typeof args[0] === 'string' && (
-          args[0].includes('[vite] failed to connect to websocket') ||
-          args[0].includes('WebSocket closed without opened')
-        )) {
+        if (args[0] && typeof args[0] === 'string' && silencePatterns.some(p => args[0].toLowerCase().includes(p.toLowerCase()))) {
           return;
         }
         originalError.apply(console, args);
+      };
+
+      const originalWarn = console.warn;
+      console.warn = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && silencePatterns.some(p => args[0].toLowerCase().includes(p.toLowerCase()))) {
+          return;
+        }
+        originalWarn.apply(console, args);
       };
     </script>
   </head>

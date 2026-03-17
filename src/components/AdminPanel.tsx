@@ -104,7 +104,6 @@ const PrintHeader = ({ settings }: { settings: any }) => (
   </div>
 );
 
-import { generateResultPDF } from "../utils/pdfGenerator";
 import { useToast } from "./ToastContext";
 
 export default function AdminPanel() {
@@ -149,25 +148,26 @@ export default function AdminPanel() {
     e.preventDefault();
     const p = password.trim();
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-    
-    console.log("Login attempt...");
-    console.log("Is using default password (1234):", adminPassword === "1234");
-    console.log("Entered password length:", p.length);
-    console.log("Expected password length:", adminPassword.length);
-
-    if (p === adminPassword || p === "১২৩৪") {
-      console.log("Login successful!");
+    if (p === adminPassword || p === "১২৩৪") { // Simple secret password
       setIsAuthenticated(true);
     } else {
-      console.error("Login failed: Incorrect password.");
       addToast("ভুল পাসওয়ার্ড!", "error");
     }
   };
 
   const fetchStats = async () => {
-    const res = await fetch("/api/admin/stats");
-    setStats(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/stats");
+      if (res.ok) {
+        setStats(await res.json());
+      } else {
+        console.error("Failed to fetch stats:", res.status);
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchStudents = async () => {
@@ -361,7 +361,7 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "results" && (
-              <ResultManager students={students} settings={settings} sendEmail={sendEmail} />
+              <ResultManager students={students} settings={settings} />
             )}
 
             {activeTab === "fees" && (
@@ -2506,7 +2506,7 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
   );
 }
 
-function ResultManager({ students, settings, sendEmail }: { students: any[], settings: any, sendEmail: any }) {
+function ResultManager({ students, settings }: { students: any[], settings: any }) {
   const { addToast } = useToast();
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedExam, setSelectedExam] = useState("প্রথম সাময়িক");
@@ -3231,35 +3231,6 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
     setGenerating(false);
   };
 
-  const sendEmail = async (pdfData: string, filename: string, studentEmail: string, addToast: any) => {
-    try {
-      const response = await fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: studentEmail,
-          subject: "আপনার ফি রসিদ",
-          text: "আপনার ফি রসিদটি সংযুক্ত করা হলো।",
-          attachments: [
-            {
-              filename: filename,
-              content: pdfData.split(',')[1],
-              encoding: 'base64'
-            }
-          ]
-        })
-      });
-      if (response.ok) {
-        addToast("ইমেইল সফলভাবে পাঠানো হয়েছে!", "success");
-      } else {
-        addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
-      }
-    } catch (error) {
-      console.error("Email error:", error);
-      addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
-    }
-  };
-
   const handlePayMonthlyFees = async () => {
     if (selectedMonths.length === 0) return;
     setPaying(true);
@@ -3358,13 +3329,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
           doc.setTextColor(100, 100, 100);
           doc.text("This is a computer-generated receipt. No signature required.", 105, 280, { align: "center" });
 
-          const pdfData = doc.output('datauristring');
-          const filename = `Receipt_${selectedStudent.id}_${transactionId}.pdf`;
-          doc.save(filename);
-
-          if (selectedStudent.email) {
-            sendEmail(pdfData, filename, selectedStudent.email, addToast);
-          }
+          doc.save(`Receipt_${selectedStudent.id}_${transactionId}.pdf`);
 
           const message = `আসসালামু আলাইকুম,\nআপনার পেমেন্ট সফল হয়েছে।\nরশিদ নং: ${transactionId}\nমোট: ৳${totalAmount}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
           const whatsappUrl = `https://wa.me/${selectedStudent.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;

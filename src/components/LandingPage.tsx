@@ -113,7 +113,7 @@ const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
-    const fetchWithTimeout = (url: string, timeout = 10000) => {
+    const fetchWithTimeout = (url: string, timeout = 5000) => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
       return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
@@ -121,14 +121,20 @@ const LandingPage = () => {
 
     fetchWithTimeout("/api/site-settings")
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch settings");
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       })
-      .then(setSettings)
+      .then(data => {
+        if (data && data.title) {
+          setSettings(data);
+        } else {
+          throw new Error("Invalid settings data");
+        }
+      })
       .catch((err) => {
         console.error("Failed to load settings:", err);
         setSettings({
-          title: 'মাদরাসা ম্যানেজমেন্ট সিস্টেম',
+          title: 'আল হেরা মাদরাসা',
           description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
           hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
           contact_phone: '01700000000',

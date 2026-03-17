@@ -103,22 +103,31 @@ async function startServer() {
   // Health check
   app.get("/api/health", async (req, res) => {
     let firestoreStatus = "unknown";
+    let details = null;
     try {
       if (firestore) {
-        await firestore.collection("site_settings").doc("1").get();
+        const testDoc = await firestore.collection("site_settings").doc("1").get();
         firestoreStatus = "connected";
+        details = { exists: testDoc.exists };
       } else {
         firestoreStatus = "not_initialized";
       }
     } catch (err) {
-      firestoreStatus = "error: " + (err instanceof Error ? err.message : String(err));
+      firestoreStatus = "error";
+      details = err instanceof Error ? { message: err.message, stack: err.stack } : String(err);
     }
     
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(),
       firestore: firestoreStatus,
-      projectId: projectId || "missing"
+      details,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        hasProjectId: !!projectId,
+        hasClientEmail: !!clientEmail,
+        hasPrivateKey: !!privateKey
+      }
     });
   });
 
@@ -131,6 +140,10 @@ async function startServer() {
 
   // --- Database Seeding ---
   async function seedDatabase() {
+    if (!firestore) {
+      console.warn("Skipping database seeding: Firestore not initialized.");
+      return;
+    }
     console.log("Starting database seeding check...");
     try {
       const settingsRef = firestore.collection("site_settings").doc("1");
@@ -177,7 +190,11 @@ async function startServer() {
     }
   }
 
-  seedDatabase();
+  try {
+    await seedDatabase();
+  } catch (e) {
+    console.error("Critical error during database seeding:", e);
+  }
 
   // --- Exams ---
   app.get("/api/exams", async (req, res) => {
