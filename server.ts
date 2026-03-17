@@ -8,41 +8,44 @@ import admin from 'firebase-admin';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Import the Firebase configuration
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8'));
+// Firebase Configuration (Hardcoded for Vercel compatibility)
+const firebaseConfig = {
+  "apiKey": "AIzaSyDySiewR8fortI2dWkpODCZJ0Oc_iq_NMg",
+  "authDomain": "al-hera-f4f7d.firebaseapp.com",
+  "databaseURL": "https://al-hera-f4f7d-default-rtdb.firebaseio.com",
+  "projectId": "al-hera-f4f7d",
+  "storageBucket": "al-hera-f4f7d.firebasestorage.app",
+  "messagingSenderId": "101331236415",
+  "appId": "1:101331236415:web:5530b12a87ef4de8596a8a",
+  "measurementId": "G-W3RSQH474X",
+  "firestoreDatabaseId": "(default)"
+};
 
-// Initialize Firebase Admin
-let serviceAccount: any = null;
-try {
-  serviceAccount = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'service-account.json'), 'utf8'));
-} catch (e) {
-  console.warn("Could not find service-account.json at", path.join(process.cwd(), 'service-account.json'));
-}
+// Service Account Credentials (Hardcoded for Vercel compatibility)
+const hardcodedServiceAccount = {
+  "project_id": "al-hera-f4f7d",
+  "client_email": "firebase-adminsdk-fbsvc@al-hera-f4f7d.iam.gserviceaccount.com",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJGKzl7nKU47Tj\nzd6OQTrIc7PpIDr5rZtUux14ftuRensGD2lKKVk6T0SUvwkj1ep+/NTLiSayMlMh\n/rL6Dp4L50eoAyS3H2+F+p18CENyUzIgnEmDcYKfHph44DHTBMBq32Is4BQSUdgQ\n5F9f0vopJdcwRLuLPmjzfFFSbeFyjOfjP/7fUqUfgznINTcQncs49GJvkmMb2rIi\nRty9GZYpbTwolchNAa0rhnyEBNRbptuG7IQBelLoWi1OAfmLWx6XB7LGeFN1vXQe\n9tdNJ9mmCFC/LqQHt/E8nWh4KezyWdaO+QBj8QJBAcXv5TJgazpPisEcd1MKO7qR\ntjydOETbAgMBAAECggEACE3WYfAXgjIgwkwdwHEUkivuTUD/hZB7FzIiNLDEX2Bf\nBn6KF1pmUHlERslKSJwo8p/SfQ1kGtjnfSXUUonoivmgXZpevQo8jnGCvhksl2LR\nHCe9WhEiD8ZjKco30PBVdZDHIefRXF3cD6YRPCwmGILIdh2/mC+vS+gFI3HdXpiu\nh/J5eCRio5FN63Z+i2smkSJn9M07vKHHF8YKt8RFK7oveGaVdksiSKGoq+NIru9V\nTmJIkCnIRwtTa4sOcxLf4/gIaIqXPOLL7khrTk4heDyVTyOwMo2nzLs+fl2/mAVP\n1uopDj8tRG3ayttOlzDQ4Fz7t1kfTs0mv2bKkyIv5QKBgQDx33H0peZs1DjRlUsc\ngtobUkRBBRWjGf7LEBbkiqnxJtljfGS08k8Ok73l2snnBsmgBbx+gA+/CFWI6UGX\nt5HIyED9zmfBmTt1QZA/uYk/MuSjrWjNs33c5RnmpV71kJq/Wm1ajprbkKCA3hg9\nXTHvzJWitnTZj8T14J58DeNDRwKBgQDU14dWkoYaD0qU5rXtvrxOCWraK+/Y6gpt\nYro4ghNbf+R9p1iykwZwY8W2JW6l4ZPnY6ZVSnSe7XOK0Wq82MZLt3XnKQs+/Onu\nPXs17EmGqRMPT7jgnJsZs9GBbekpYZu0UQC3jWlz0NnrnYdjNejCGWyFgHbWdjtn\nyLowiSnzzQKBgQCsl6JsTdmgPMuSmjKv1JuoNUrpDqTC7vDGm+OKD3x2zR8Ag6ol\nCGbrYvd1xmqeRVSosI8xwVX7HgpTGQcqKN6JZIQj2B5nol0wLamuH0nVZA6M0Vfg\nuL0OXBjgYY7iMd6Kvw8bOHk+RfSSIGkxmIfispzwL7wv5wxH25Gbuhk6TwKBgQDP\nMA86ot+PtprvX7ZxfF5pyJkPT/3mtcz4tkZ4g4a8Zz7RYnnhO2XlOfpYWQ/gwjnr\n4QElvZjQrGzxEPJKaup9AlXvc/DSm/hMReUOlLjuMN+w4/YgD9KbroOe7pMuCSo8\n2S1NgIbKit/XkD0ewneVmpIdUvRbyDQDz04PuTXxcQKBgAl0K0u5BJafZe/1jnP2\nqvP07VCF/RNWk8aJm4h5QBejcfO9kNEoIXgSZYsbssE0p0rimY+xnpkNIsXV95od\nNkZNMulMDn2Idv2soDYkeDQWvWLZVpybSDwzr21cBOymLorEfZjKX4PsjlhTWLE/\nCC7Q4Oo/oVAV+EOABx+tlm0M\n-----END PRIVATE KEY-----\n"
+};
 
-const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || firebaseConfig.projectId;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || serviceAccount?.client_email;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY || serviceAccount?.private_key;
+const projectId = process.env.FIREBASE_PROJECT_ID || hardcodedServiceAccount.project_id || firebaseConfig.projectId;
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || hardcodedServiceAccount.client_email;
+const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || hardcodedServiceAccount.private_key;
+const privateKey = rawPrivateKey.includes('\n') ? rawPrivateKey : rawPrivateKey.replace(/\\n/g, '\n');
 
 if (!admin.apps.length) {
-  if (projectId && clientEmail && privateKey) {
-    console.log("Initializing Firebase Admin with Service Account for project:", projectId);
-    try {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId,
-          clientEmail,
-          privateKey: privateKey.includes('\n') ? privateKey : privateKey.replace(/\\n/g, '\n'),
-        }),
-        storageBucket: `${projectId}.appspot.com`
-      });
-    } catch (err) {
-      console.error("Firebase Admin initialization error:", err);
-    }
-  } else {
-    console.warn("Initializing Firebase Admin with limited credentials (missing service account).");
+  console.log("Initializing Firebase Admin for project:", projectId);
+  try {
     admin.initializeApp({
-      projectId: firebaseConfig.projectId,
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+      storageBucket: `${projectId}.appspot.com`
     });
+  } catch (err) {
+    console.error("Firebase Admin initialization error:", err);
   }
 }
 
@@ -51,21 +54,14 @@ const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId === "(default)" ?
 let firestore: admin.firestore.Firestore;
 
 try {
-  if (!projectId) {
-    throw new Error("Firebase Project ID is missing. Please check your configuration.");
-  }
-  
   const firestoreOptions: any = {
     projectId: projectId,
     databaseId: firestoreDatabaseId,
-  };
-
-  if (projectId && clientEmail && privateKey) {
-    firestoreOptions.credentials = {
+    credentials: {
       client_email: clientEmail,
-      private_key: privateKey.includes('\n') ? privateKey : privateKey.replace(/\\n/g, '\n'),
-    };
-  }
+      private_key: privateKey,
+    }
+  };
 
   firestore = new admin.firestore.Firestore(firestoreOptions);
   console.log("Firestore initialized successfully with databaseId:", firestoreDatabaseId || "(default)");
@@ -76,7 +72,6 @@ try {
     console.log("Firestore initialized via admin.firestore() fallback.");
   } catch (fallbackErr) {
     console.error("Firestore fallback initialization error:", fallbackErr);
-    // Last resort fallback to prevent crash, though queries will still fail
     firestore = null as any;
   }
 }
