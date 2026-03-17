@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import admin from 'firebase-admin';
+import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,31 +30,35 @@ const hardcodedServiceAccount = {
 
 let firestore: any = null;
 
-// Firebase Admin Initialization
-if (!admin.apps.length) {
+// Firebase Admin Initialization Helper
+function getFirestoreInstance() {
+  if (firestore) return firestore;
+
   try {
-    const privateKeyFormatted = hardcodedServiceAccount.private_key.replace(/\\n/g, '\n');
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: hardcodedServiceAccount.project_id,
-        clientEmail: hardcodedServiceAccount.client_email,
-        privateKey: privateKeyFormatted,
-      }),
-      storageBucket: `${hardcodedServiceAccount.project_id}.appspot.com`
-    });
-    console.log("Firebase Admin initialized.");
+    const projectId = process.env.FIREBASE_PROJECT_ID || hardcodedServiceAccount.project_id;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || hardcodedServiceAccount.client_email;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY || hardcodedServiceAccount.private_key;
+
+    if (!admin.apps.length) {
+      const privateKeyFormatted = privateKey.replace(/\\n/g, '\n');
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKeyFormatted,
+        }),
+        storageBucket: `${projectId}.appspot.com`
+      });
+      console.log("Firebase Admin initialized with project:", projectId);
+    }
     
     const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
-    firestore = dbId ? (admin as any).firestore(dbId) : admin.firestore();
+    const app = admin.app();
+    firestore = dbId ? getAdminFirestore(app, dbId) : getAdminFirestore(app);
+    return firestore;
   } catch (err) {
     console.error("Firebase Admin init error:", err);
-  }
-} else {
-  try {
-    const dbId = firebaseConfig.firestoreDatabaseId === "(default)" ? undefined : firebaseConfig.firestoreDatabaseId;
-    firestore = dbId ? (admin as any).firestore(dbId) : admin.firestore();
-  } catch (err) {
-    console.error("Firestore init error (existing app):", err);
+    return null;
   }
 }
 
@@ -64,11 +69,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Middleware to check Firestore
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') && req.path !== '/api/health' && !firestore) {
-    return res.status(500).json({ 
-      error: "Firestore not initialized", 
-      details: "The server failed to connect to Firebase. Please check the logs." 
-    });
+  if (req.path.startsWith('/api/') && req.path !== '/api/health') {
+    const db = getFirestoreInstance();
+    if (!db) {
+      return res.status(500).json({ 
+        error: "Firestore not initialized", 
+        details: "The server failed to connect to Firebase. Please check the logs." 
+      });
+    }
   }
   next();
 });
@@ -76,7 +84,11 @@ app.use((req, res, next) => {
 // Health check
 app.get("/api/health", async (req, res) => {
   try {
-    const test = await firestore.collection("site_settings").limit(1).get();
+    const db = getFirestoreInstance();
+    if (!db) {
+      throw new Error("Firestore initialization failed");
+    }
+    const test = await db.collection("site_settings").limit(1).get();
     res.json({ 
       status: "ok", 
       firestore: "connected", 
@@ -112,13 +124,14 @@ process.env.SENDER_EMAIL = "newdrshahidul@gmail.com";
 
 // --- Database Seeding ---
 async function seedDatabase() {
-  if (!firestore) {
+  const db = getFirestoreInstance();
+  if (!db) {
     console.warn("Skipping database seeding: Firestore not initialized.");
     return;
   }
   console.log("Starting database seeding check...");
   try {
-    const settingsRef = firestore.collection("site_settings").doc("1");
+    const settingsRef = db.collection("site_settings").doc("1");
     const settingsDoc = await settingsRef.get();
     console.log("Site settings doc check complete. Exists:", settingsDoc.exists);
     
@@ -141,7 +154,7 @@ async function seedDatabase() {
         console.log("Default site settings seeded.");
       }
 
-      const featuresSnapshot = await firestore.collection("features").get();
+      const featuresSnapshot = await db.collection("features").get();
       console.log("Features check complete. Count:", featuresSnapshot.size);
       
       if (featuresSnapshot.empty) {
@@ -153,7 +166,7 @@ async function seedDatabase() {
           { title: "ফি ম্যানেজমেন্ট", description: "অনলাইন ফি প্রদান ও রশিদ সংগ্রহ", icon: "CreditCard", is_active: 1 }
         ];
         for (const feature of defaultFeatures) {
-          await firestore.collection("features").add(feature);
+          await db.collection("features").add(feature);
         }
         console.log("Default features seeded.");
       }
@@ -171,7 +184,8 @@ async function seedDatabase() {
   // --- Exams ---
   app.get("/api/exams", async (req, res) => {
     try {
-      const examsSnapshot = await firestore!.collection("exams").orderBy("date", "desc").get();
+      const db = getFirestoreInstance();
+      const examsSnapshot = await db.collection("exams").orderBy("date", "desc").get();
       const exams = examsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(exams);
     } catch (error) {
@@ -183,7 +197,8 @@ async function seedDatabase() {
   app.post("/api/exams", async (req, res) => {
     const { name } = req.body;
     try {
-      await firestore!.collection("exams").add({ name, date: new Date().toISOString() });
+      const db = getFirestoreInstance();
+      await db.collection("exams").add({ name, date: new Date().toISOString() });
       res.json({ success: true });
     } catch (error) {
       console.error(error);
@@ -400,7 +415,8 @@ async function seedDatabase() {
   // --- Features ---
   app.get("/api/donations", async (req, res) => {
     try {
-      const donationsSnapshot = await firestore!.collection("donations").orderBy("date", "desc").get();
+      const db = getFirestoreInstance();
+      const donationsSnapshot = await db.collection("donations").orderBy("date", "desc").get();
       const donations = donationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(donations);
     } catch (error) {
@@ -422,7 +438,8 @@ async function seedDatabase() {
 
   app.get("/api/features", async (req, res) => {
     try {
-      const featuresSnapshot = await firestore!.collection("features").where("is_active", "==", 1).get();
+      const db = getFirestoreInstance();
+      const featuresSnapshot = await db.collection("features").where("is_active", "==", 1).get();
       const features = featuresSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(features);
     } catch (error) {
@@ -542,7 +559,8 @@ async function seedDatabase() {
   // --- Showcase Items ---
   app.get("/api/showcase-items", async (req, res) => {
     try {
-      const itemsSnapshot = await firestore!.collection("showcase_items").get();
+      const db = getFirestoreInstance();
+      const itemsSnapshot = await db.collection("showcase_items").get();
       const items = itemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(items);
     } catch (error) {
@@ -577,8 +595,11 @@ async function seedDatabase() {
   app.get("/api/site-settings", async (req, res) => {
     console.log("Fetching site settings...");
     try {
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
       // Add a timeout to firestore call
-      const settingsPromise = firestore!.collection("site_settings").doc("1").get();
+      const settingsPromise = db.collection("site_settings").doc("1").get();
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error("Firestore timeout")), 10000)
       );
@@ -655,7 +676,8 @@ async function seedDatabase() {
   // --- Food Menu ---
   app.get("/api/food-menu", async (req, res) => {
     try {
-      const foodMenuSnapshot = await firestore!.collection("food_menu").get();
+      const db = getFirestoreInstance();
+      const foodMenuSnapshot = await db.collection("food_menu").get();
       const foodMenu = foodMenuSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() as any }))
         .filter(item => item.is_active === 1)

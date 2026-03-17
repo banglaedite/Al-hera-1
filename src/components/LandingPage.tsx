@@ -113,7 +113,7 @@ const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
-    const fetchWithTimeout = (url: string, timeout = 5000) => {
+    const fetchWithTimeout = (url: string, timeout = 15000) => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
       return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));

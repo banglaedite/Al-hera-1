@@ -13,6 +13,20 @@ export function FirebaseSetup() {
     setLoading(true);
     try {
       const res = await fetch("/api/health");
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          setStatus(data);
+        } catch (e) {
+          setStatus({ 
+            status: "error", 
+            firestore: "disconnected", 
+            error: `সার্ভার ত্রুটি (HTTP ${res.status}): ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}` 
+          });
+        }
+        return;
+      }
       const data = await res.json();
       setStatus(data);
     } catch (error) {
