@@ -95,7 +95,7 @@ service cloud.firestore {
 
     // Food Menu
     match /food_menu/{foodMenuId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow create, update, delete: if isAdmin();
     }
 

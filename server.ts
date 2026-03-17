@@ -78,76 +78,73 @@ try {
 
 const app = express();
 
-async function startServer() {
-  const PORT = 3000;
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-  // Middleware to check Firestore
-  app.use((req, res, next) => {
-    if (req.path.startsWith('/api/') && req.path !== '/api/health' && !firestore) {
-      return res.status(500).json({ 
-        error: "Firestore not initialized", 
-        details: "The server failed to connect to Firebase. Please check the logs." 
-      });
-    }
-    next();
-  });
-
-  // Health check
-  app.get("/api/health", async (req, res) => {
-    let firestoreStatus = "unknown";
-    let details = null;
-    try {
-      if (firestore) {
-        const testDoc = await firestore.collection("site_settings").doc("1").get();
-        firestoreStatus = "connected";
-        details = { exists: testDoc.exists };
-      } else {
-        firestoreStatus = "not_initialized";
-      }
-    } catch (err) {
-      firestoreStatus = "error";
-      details = err instanceof Error ? { message: err.message, stack: err.stack } : String(err);
-    }
-    
-    res.json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      firestore: firestoreStatus,
-      details,
-      env: {
-        NODE_ENV: process.env.NODE_ENV,
-        hasProjectId: !!projectId,
-        hasClientEmail: !!clientEmail,
-        hasPrivateKey: !!privateKey
-      }
+// Middleware to check Firestore
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') && req.path !== '/api/health' && !firestore) {
+    return res.status(500).json({ 
+      error: "Firestore not initialized", 
+      details: "The server failed to connect to Firebase. Please check the logs." 
     });
-  });
+  }
+  next();
+});
 
-  // Hardcoded SMTP Settings
-  process.env.SMTP_HOST = "smtp.gmail.com";
-  process.env.SMTP_PORT = "587";
-  process.env.SMTP_USER = "newdrshahidul@gmail.com";
-  process.env.SMTP_PASS = "mogt vhhm jtme rjzg";
-  process.env.SENDER_EMAIL = "newdrshahidul@gmail.com";
-
-  // --- Database Seeding ---
-  async function seedDatabase() {
-    if (!firestore) {
-      console.warn("Skipping database seeding: Firestore not initialized.");
-      return;
+// Health check
+app.get("/api/health", async (req, res) => {
+  let firestoreStatus = "unknown";
+  let details = null;
+  try {
+    if (firestore) {
+      const testDoc = await firestore.collection("site_settings").doc("1").get();
+      firestoreStatus = "connected";
+      details = { exists: testDoc.exists };
+    } else {
+      firestoreStatus = "not_initialized";
     }
-    console.log("Starting database seeding check...");
-    try {
-      const settingsRef = firestore.collection("site_settings").doc("1");
-      const settingsDoc = await settingsRef.get();
-      console.log("Site settings doc check complete. Exists:", settingsDoc.exists);
-      
-      if (!settingsDoc.exists) {
-        console.log("Seeding default site settings...");
-        await settingsRef.set({
+  } catch (err) {
+    firestoreStatus = "error";
+    details = err instanceof Error ? { message: err.message, stack: err.stack } : String(err);
+  }
+  
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    firestore: firestoreStatus,
+    details,
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      hasProjectId: !!projectId,
+      hasClientEmail: !!clientEmail,
+      hasPrivateKey: !!privateKey
+    }
+  });
+});
+
+// Hardcoded SMTP Settings
+process.env.SMTP_HOST = "smtp.gmail.com";
+process.env.SMTP_PORT = "587";
+process.env.SMTP_USER = "newdrshahidul@gmail.com";
+process.env.SMTP_PASS = "mogt vhhm jtme rjzg";
+process.env.SENDER_EMAIL = "newdrshahidul@gmail.com";
+
+// --- Database Seeding ---
+async function seedDatabase() {
+  if (!firestore) {
+    console.warn("Skipping database seeding: Firestore not initialized.");
+    return;
+  }
+  console.log("Starting database seeding check...");
+  try {
+    const settingsRef = firestore.collection("site_settings").doc("1");
+    const settingsDoc = await settingsRef.get();
+    console.log("Site settings doc check complete. Exists:", settingsDoc.exists);
+    
+    if (!settingsDoc.exists) {
+      console.log("Seeding default site settings...");
+      await settingsRef.set({
           title: "মাদরাসা ম্যানেজমেন্ট সিস্টেম",
           subtitle: "একটি আধুনিক ও ডিজিটাল মাদরাসা গড়ার প্রত্যয়ে",
           phone: "01700000000",
@@ -2611,15 +2608,8 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  if (process.env.NODE_ENV !== "production") {
+    
+    const PORT = 3000;
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
@@ -2633,9 +2623,12 @@ async function startServer() {
         }, 1000);
       }
     });
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   }
-}
-
-startServer();
 
 export default app;
