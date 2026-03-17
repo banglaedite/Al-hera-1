@@ -63,7 +63,7 @@ function getFirestoreInstance() {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY || config.private_key;
 
     if (!admin.apps.length) {
-      const privateKeyFormatted = privateKey.replace(/\\n/g, '\n');
+      const privateKeyFormatted = (privateKey || "").replace(/\\n/g, '\n');
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId,
