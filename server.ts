@@ -2306,7 +2306,10 @@ async function seedDatabase() {
       await firestore!.collection("pending_payments").doc(transactionId).set(pendingPayment);
 
       if (method === "udyoktapay") {
-        if (!settings.udyoktapay_api_key || !settings.udyoktapay_api_url) {
+        const udyoktaKey = settings.udyoktapay_api_key || process.env.UDYOKTAPAY_API_KEY;
+        const udyoktaUrl = settings.udyoktapay_api_url || process.env.UDYOKTAPAY_API_URL;
+
+        if (!udyoktaKey || !udyoktaUrl) {
           return res.status(400).json({ error: "Udyokta Pay is not configured." });
         }
 
@@ -2322,10 +2325,10 @@ async function seedDatabase() {
           webhook_url: `${req.protocol}://${req.get('host')}/api/udyoktapay/webhook`
         };
 
-        const response = await fetch(settings.udyoktapay_api_url, {
+        const response = await fetch(udyoktaUrl, {
           method: "POST",
           headers: {
-            "RT-UDYOKTAPAY-API-KEY": settings.udyoktapay_api_key,
+            "RT-UDYOKTAPAY-API-KEY": udyoktaKey,
             "Content-Type": "application/json"
           },
           body: JSON.stringify(payload)

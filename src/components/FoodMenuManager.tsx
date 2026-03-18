@@ -166,7 +166,7 @@ export function FoodMenuManager() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
         {menu.map(item => (
           <motion.div whileHover={{ y: -5 }} key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative group">
-            <div className="absolute top-4 right-4 z-10 flex gap-2 opacity-100 transition-all">
+            <div className="absolute top-4 right-4 z-20 flex gap-2">
               <button 
                 onClick={() => openEdit(item)}
                 className="p-3 bg-white/90 backdrop-blur-sm text-blue-500 rounded-2xl shadow-sm hover:bg-blue-50"
@@ -182,13 +182,11 @@ export function FoodMenuManager() {
             </div>
             
             <div className="relative mb-6 mt-2">
-              <div className="absolute inset-0 bg-emerald-200 rounded-3xl transform rotate-3 scale-105 opacity-50 transition-transform group-hover:rotate-6"></div>
-              <div className="absolute inset-0 bg-amber-200 rounded-3xl transform -rotate-3 scale-105 opacity-50 transition-transform group-hover:-rotate-6"></div>
               {item.image_url ? (
                 <div className="w-full h-48 bg-slate-50 rounded-3xl relative z-10 border-4 border-white shadow-md overflow-hidden flex items-center justify-center">
                   <img 
                     src={item.image_url} 
-                    className="max-w-full max-h-full object-contain" 
+                    className="w-full h-full object-cover" 
                     referrerPolicy="no-referrer"
                     alt={item.title}
                   />

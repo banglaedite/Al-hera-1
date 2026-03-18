@@ -27,76 +27,37 @@ import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
 
 function TypingTitle({ text }: { text: string }) {
-  const [filledLength, setFilledLength] = useState(0);
-
-  useEffect(() => {
-    if (!text) return;
-    
-    setFilledLength(0);
-    
-    const timeout = setTimeout(() => {
-      let i = 0;
-      const interval = setInterval(() => {
-        if (i <= text.length) {
-          setFilledLength(i);
-          
-          try {
-            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-            if (AudioContext && i > 0 && i < text.length && text[i-1] !== ' ') {
-              const ctx = new AudioContext();
-              const osc = ctx.createOscillator();
-              const gain = ctx.createGain();
-              osc.connect(gain);
-              gain.connect(ctx.destination);
-              osc.type = 'sine';
-              osc.frequency.setValueAtTime(600 + Math.random() * 200, ctx.currentTime);
-              gain.gain.setValueAtTime(0.02, ctx.currentTime);
-              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
-              osc.start(ctx.currentTime);
-              osc.stop(ctx.currentTime + 0.03);
-            }
-          } catch (e) {
-            // Ignore audio errors
-          }
-          
-          i++;
-        } else {
-          clearInterval(interval);
-        }
-      }, 120); // Typing speed
-      return () => clearInterval(interval);
-    }, 500);
-    
-    return () => clearTimeout(timeout);
-  }, [text]);
-
-  if (!text) return null;
-
   return (
-    <div className="relative inline-block w-full">
-      {/* Stroke Text (Background) */}
-      <span 
-        className="absolute inset-0 text-transparent pointer-events-none select-none" 
-        style={{ WebkitTextStroke: '2px rgba(15, 23, 42, 0.15)' }}
-        aria-hidden="true"
-      >
-        {text}
-      </span>
-      
-      {/* Filled Text (Foreground) */}
-      <span className="relative text-slate-900 whitespace-pre-wrap">
-        {text.substring(0, filledLength)}
-        <span className="relative">
-          {filledLength < text.length && (
-            <motion.span 
-              animate={{ opacity: [1, 0] }} 
-              transition={{ repeat: Infinity, duration: 0.8 }}
-              className="absolute left-0 top-0 w-1.5 md:w-2 h-[0.8em] bg-emerald-500 ml-1 mt-[0.1em]"
-            />
-          )}
-        </span>
-        <span className="opacity-0">{text.substring(filledLength)}</span>
-      </span>
+    <div className="relative inline-block w-full h-[1.2em]">
+      <svg viewBox="0 0 500 100" className="w-full h-full">
+        <defs>
+          <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#059669" />
+            <stop offset="50%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#059669" />
+          </linearGradient>
+          <mask id="textMask">
+            <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="text-6xl font-black fill-white">
+              {text}
+            </text>
+          </mask>
+        </defs>
+        
+        {/* Stroke Outline */}
+        <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="text-6xl font-black fill-transparent stroke-slate-200 stroke-[2px]">
+          {text}
+        </text>
+        
+        {/* Wave Fill Animation */}
+        <motion.rect
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 3, ease: "easeInOut" }}
+          x="0" y="0" width="500" height="100"
+          fill="url(#waveGradient)"
+          mask="url(#textMask)"
+        />
+      </svg>
     </div>
   );
 }
@@ -494,39 +455,32 @@ const LandingPage = () => {
                   key={item.id}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.03, y: -5 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.03 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
-                  className="bg-white rounded-[3rem] border border-slate-100 shadow-2xl shadow-slate-200/50 group overflow-hidden flex flex-col cursor-pointer"
+                  className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/20 group overflow-hidden flex flex-col"
                 >
-                  <div className="relative h-64 w-full bg-slate-50 overflow-hidden">
+                  <div className="relative h-64 w-full bg-slate-50 overflow-hidden p-4">
+                    {/* Frame Effect */}
+                    <div className="absolute inset-2 border-4 border-emerald-100 rounded-[2rem] group-hover:border-emerald-200 transition-colors" />
+                    
                     <img 
                       src={item.image_url || `https://picsum.photos/seed/food-${item.id}/600/400`} 
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 relative z-10" 
+                      className="w-full h-full object-cover rounded-[1.5rem] group-hover:scale-105 transition-transform duration-700" 
                       referrerPolicy="no-referrer" 
                       alt={item.title} 
                     />
-                    {/* Decorative background for the image frame */}
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-50/50 via-transparent to-transparent" />
                   </div>
                   
-                  <div className="p-8 flex-1 flex flex-col gap-4 relative">
-                    <div className="absolute -top-6 left-8 bg-emerald-600 text-white px-6 py-2 rounded-2xl font-black text-sm shadow-xl transform -rotate-2">
-                      {item.title}
-                    </div>
-                    <div className="mt-4">
-                      <p className="text-slate-600 text-lg leading-relaxed font-medium line-clamp-3">
-                        {item.description}
-                      </p>
-                    </div>
-                    <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-rose-500">
+                  <div className="p-8 flex-1 flex flex-col gap-2">
+                    <h3 className="text-2xl font-black text-emerald-900">{item.title}</h3>
+                    <p className="text-slate-600 text-lg leading-relaxed font-medium line-clamp-3">
+                      {item.description}
+                    </p>
+                    <div className="mt-auto pt-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-rose-500 bg-rose-50 px-3 py-1 rounded-full">
                         <Heart className="w-4 h-4 fill-rose-500" />
                         <span className="text-xs font-bold">স্বাস্থ্যসম্মত</span>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                        <Utensils className="w-4 h-4 text-emerald-600" />
                       </div>
                     </div>
                   </div>

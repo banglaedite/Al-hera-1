@@ -215,9 +215,10 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
       <html>
         <head>
           <title>Accounting Report</title>
+          <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Kalpurush', 'Siyam Rupali'; padding: 20px; color: #333; }
-            h1 { text-align: center; margin-bottom: 5px; font-size: 24px; }
+            body { font-family: 'Hind Siliguri', sans-serif; padding: 20px; color: #333; background-color: #fff; }
+            h1 { text-align: center; margin-bottom: 5px; font-size: 24px; color: #059669; }
             h2 { text-align: center; margin-bottom: 20px; font-size: 18px; color: #666; }
             .date-range { text-align: center; margin-bottom: 30px; font-size: 14px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }
