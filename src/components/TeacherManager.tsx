@@ -571,16 +571,21 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                 try {
                   const imgData = await toPng(element, { 
                     quality: 1,
+                    pixelRatio: 2,
                     backgroundColor: '#ffffff',
                     style: { backgroundColor: '#ffffff' }
                   });
-                  const pdf = new jsPDF('p', 'mm', 'a4');
+                  const pdf = new jsPDF('p', 'mm', 'a5');
                   const pdfWidth = pdf.internal.pageSize.getWidth();
+                  const pdfHeight = pdf.internal.pageSize.getHeight();
+                  const margin = 10;
+                  const contentWidth = pdfWidth - (2 * margin);
+                  
                   const img = new Image();
                   img.src = imgData;
                   img.onload = () => {
-                    const pdfHeight = (img.height * pdfWidth) / img.width;
-                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    const contentHeight = (img.height * contentWidth) / img.width;
+                    pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
                     pdf.save(`salary-receipt-${selectedSalary.id}.pdf`);
                   };
                 } catch (err) {
@@ -604,14 +609,69 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                 <MessageCircle className="w-5 h-5 text-green-600" />
                 <span className="text-[10px] font-bold text-green-700">হোয়াটসঅ্যাপ</span>
               </button>
-              <button onClick={() => {
+              <button onClick={async () => {
                 if (!selectedTeacher?.email) {
                   addToast("শিক্ষকের ইমেইল দেওয়া নেই", "error");
                   return;
                 }
-                const subject = `বেতন রিসিট - ${selectedSalary.month} ${selectedSalary.year}`;
-                const body = `আসসালামু আলাইকুম,\nআপনার ${selectedSalary.month} ${selectedSalary.year} মাসের বেতন ৳${selectedSalary.amount} প্রদান করা হয়েছে।\nধন্যবাদ।`;
-                window.open(`mailto:${selectedTeacher.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                
+                const element = document.getElementById('salary-receipt');
+                if (!element) return;
+
+                const toastId = addToast("ইমেইল পাঠানো হচ্ছে...", "info");
+
+                try {
+                  const imgData = await toPng(element, { 
+                    quality: 1,
+                    pixelRatio: 2,
+                    backgroundColor: '#ffffff',
+                    style: { backgroundColor: '#ffffff' }
+                  });
+                  
+                  const pdf = new jsPDF('p', 'mm', 'a5');
+                  const pdfWidth = pdf.internal.pageSize.getWidth();
+                  const margin = 10;
+                  const contentWidth = pdfWidth - (2 * margin);
+                  
+                  const img = new Image();
+                  img.src = imgData;
+                  
+                  await new Promise((resolve) => {
+                    img.onload = () => {
+                      const contentHeight = (img.height * contentWidth) / img.width;
+                      pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+                      resolve(null);
+                    };
+                  });
+
+                  const pdfBase64 = pdf.output('datauristring').split(',')[1];
+
+                  const response = await fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      to: selectedTeacher.email,
+                      subject: `বেতন রিসিট - ${selectedSalary.month} ${selectedSalary.year}`,
+                      text: `আসসালামু আলাইকুম,\nআপনার ${selectedSalary.month} ${selectedSalary.year} মাসের বেতন ৳${selectedSalary.amount} প্রদান করা হয়েছে। রিসিটটি সংযুক্ত করা হলো।\nধন্যবাদ।`,
+                      attachments: [
+                        {
+                          filename: `Salary_Receipt_${selectedSalary.month}_${selectedSalary.year}.pdf`,
+                          content: pdfBase64,
+                          encoding: 'base64'
+                        }
+                      ]
+                    })
+                  });
+
+                  if (response.ok) {
+                    addToast("ইমেইল সফলভাবে পাঠানো হয়েছে।", "success");
+                  } else {
+                    throw new Error("Failed to send email");
+                  }
+                } catch (err) {
+                  console.error("Email sending failed", err);
+                  addToast("ইমেইল পাঠাতে সমস্যা হয়েছে।", "error");
+                }
               }} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
                 <Mail className="w-5 h-5 text-blue-600" />
                 <span className="text-[10px] font-bold text-blue-700">ইমেইল</span>

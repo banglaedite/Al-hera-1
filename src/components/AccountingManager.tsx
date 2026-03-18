@@ -652,18 +652,22 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                   try {
                     const imgData = await toPng(element, { 
                       quality: 1,
+                      pixelRatio: 2,
                       backgroundColor: '#ffffff',
                       style: {
                         backgroundColor: '#ffffff'
                       }
                     });
-                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdf = new jsPDF('p', 'mm', 'a5');
                     const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const margin = 10;
+                    const contentWidth = pdfWidth - (2 * margin);
+                    
                     const img = new Image();
                     img.src = imgData;
                     img.onload = () => {
-                      const pdfHeight = (img.height * pdfWidth) / img.width;
-                      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                      const contentHeight = (img.height * contentWidth) / img.width;
+                      pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
                       pdf.save(`receipt-${selectedTransaction.id}.pdf`);
                     };
                   } catch (err) {
@@ -681,19 +685,23 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                       try {
                         const imgData = await toPng(element, { 
                           quality: 1,
+                          pixelRatio: 2,
                           backgroundColor: '#ffffff',
                           style: {
                             backgroundColor: '#ffffff'
                           }
                         });
-                        const pdf = new jsPDF('p', 'mm', 'a4');
+                        const pdf = new jsPDF('p', 'mm', 'a5');
                         const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const margin = 10;
+                        const contentWidth = pdfWidth - (2 * margin);
+                        
                         const img = new Image();
                         img.src = imgData;
                         await new Promise((resolve) => {
                           img.onload = () => {
-                            const pdfHeight = (img.height * pdfWidth) / img.width;
-                            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                            const contentHeight = (img.height * contentWidth) / img.width;
+                            pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
                             pdf.save(`receipt-${selectedTransaction.id}.pdf`);
                             resolve(null);
                           };
@@ -711,10 +719,71 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                   <span className="text-[10px] font-bold">WhatsApp</span>
                 </button>
                 <button 
-                  onClick={() => {
-                    const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
-                    const body = `লেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
-                    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+                  onClick={async () => {
+                    const element = document.getElementById('transaction-detail');
+                    if (!element) return;
+
+                    const toastId = addToast("ইমেইল পাঠানো হচ্ছে...", "info");
+
+                    try {
+                      const imgData = await toPng(element, { 
+                        quality: 1,
+                        pixelRatio: 2,
+                        backgroundColor: '#ffffff',
+                        style: { backgroundColor: '#ffffff' }
+                      });
+                      
+                      const pdf = new jsPDF('p', 'mm', 'a5');
+                      const pdfWidth = pdf.internal.pageSize.getWidth();
+                      const margin = 10;
+                      const contentWidth = pdfWidth - (2 * margin);
+                      
+                      const img = new Image();
+                      img.src = imgData;
+                      
+                      await new Promise((resolve) => {
+                        img.onload = () => {
+                          const contentHeight = (img.height * contentWidth) / img.width;
+                          pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+                          resolve(null);
+                        };
+                      });
+
+                      const pdfBase64 = pdf.output('datauristring').split(',')[1];
+
+                      const response = await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          to: "", // User will need to provide email if not available
+                          subject: `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`,
+                          text: `আসসালামু আলাইকুম,\nআপনার পেমেন্ট সফল হয়েছে। রিসিটটি সংযুক্ত করা হলো।\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nধন্যবাদ।`,
+                          attachments: [
+                            {
+                              filename: `Receipt_${selectedTransaction.id}.pdf`,
+                              content: pdfBase64,
+                              encoding: 'base64'
+                            }
+                          ]
+                        })
+                      });
+
+                      if (response.ok) {
+                        addToast("ইমেইল সফলভাবে পাঠানো হয়েছে।", "success");
+                      } else {
+                        // If to is empty, mailto fallback
+                        const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
+                        const body = `লেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
+                        window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+                        addToast("ইমেইল পাঠানোর উইন্ডো ওপেন হয়েছে।", "info");
+                      }
+                    } catch (err) {
+                      console.error("Email sending failed", err);
+                      // Fallback to mailto
+                      const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
+                      const body = `লেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
+                      window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+                    }
                   }}
                   className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all"
                 >

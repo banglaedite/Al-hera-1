@@ -1031,6 +1031,11 @@ const downloadPDF = async (elementId: string, fileName: string, addToast: any, s
     
     const pdf = new jsPDF('p', 'mm', size);
     const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    
+    // Add margins (10mm)
+    const margin = 10;
+    const contentWidth = pdfWidth - (margin * 2);
     
     // Get image dimensions to calculate height
     const img = new Image();
@@ -1039,13 +1044,69 @@ const downloadPDF = async (elementId: string, fileName: string, addToast: any, s
       img.onload = resolve;
     });
     
-    const pdfHeight = (img.height * pdfWidth) / img.width;
+    const imgHeight = (img.height * contentWidth) / img.width;
     
-    pdf.addImage(data, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.addImage(data, 'PNG', margin, margin, contentWidth, imgHeight);
     pdf.save(fileName);
   } catch (error) {
     console.error("PDF generation error:", error);
     addToast("PDF জেনারেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।", "error");
+  } finally {
+    element.className = originalClass;
+    element.setAttribute('style', originalStyle);
+  }
+};
+
+const sendEmailWithPDF = async (elementId: string, student: any, transactionId: string, total: number, addToast: any) => {
+  if (!student.email) {
+    addToast("ছাত্রের ইমেইল অ্যাড্রেস নেই!", "error");
+    return;
+  }
+
+  const element = document.getElementById(elementId);
+  if (!element) return;
+
+  const originalClass = element.className;
+  const originalStyle = element.getAttribute('style') || '';
+  
+  element.className = originalClass.replace('hidden', 'block');
+  element.style.width = '800px';
+  element.style.padding = '40px';
+
+  try {
+    const data = await toPng(element, { pixelRatio: 2, backgroundColor: '#ffffff', width: 800 });
+    const pdf = new jsPDF('p', 'mm', 'a5');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const contentWidth = pdfWidth - (margin * 2);
+    const img = new Image();
+    img.src = data;
+    await new Promise((resolve) => { img.onload = resolve; });
+    const imgHeight = (img.height * contentWidth) / img.width;
+    pdf.addImage(data, 'PNG', margin, margin, contentWidth, imgHeight);
+    
+    const pdfBase64 = pdf.output('datauristring').split(',')[1];
+    const filename = `Receipt_${student.id}_${transactionId}.pdf`;
+
+    const response = await fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: student.email,
+        subject: "পেমেন্ট রশিদ - আল-হেরা মাদ্রাসা",
+        text: `আসসালামু আলাইকুম। আপনার পেমেন্ট সফল হয়েছে। রশিদ নং: ${transactionId}, মোট পরিমাণ: ৳${total}। রশিদটি সংযুক্ত করা হলো।`,
+        attachments: [{ filename, content: pdfBase64, encoding: 'base64' }]
+      })
+    });
+
+    if (response.ok) {
+      addToast("ইমেইল সফলভাবে পাঠানো হয়েছে!", "success");
+    } else {
+      addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
+    }
+  } catch (error) {
+    console.error("Email error:", error);
+    addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
   } finally {
     element.className = originalClass;
     element.setAttribute('style', originalStyle);
@@ -1861,6 +1922,22 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                         <MessageCircle className="w-4 h-4" /> WhatsApp
                       </button>
                       <button 
+                        onClick={() => {
+                          if (!fullProfile.student.email) {
+                            addToast("ছাত্রের ইমেইল দেওয়া নেই", "error");
+                            return;
+                          }
+                          const exam = selectedResultExam;
+                          const stats = fullProfile.examStats[exam];
+                          const subject = `${exam} এর ফলাফল - ${fullProfile.student.name}`;
+                          const body = `${fullProfile.student.name} এর ${exam} এর ফলাফল:\nমোট নম্বর: ${stats.myTotal}\nমেধা স্থান: ${stats.rank}\n\nবিস্তারিত জানতে মাদরাসায় যোগাযোগ করুন।`;
+                          window.open(`mailto:${fullProfile.student.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                        }}
+                        className="px-4 py-2 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2 text-xs font-bold"
+                      >
+                        <Mail className="w-4 h-4" /> Gmail
+                      </button>
+                      <button 
                         onClick={() => printElement('marksheet-template')}
                         className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all flex items-center gap-2 text-xs font-bold"
                       >
@@ -2078,16 +2155,27 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                   </div>
                 </div>
                 {s.whatsapp && (
-                  <div className="absolute bottom-4 right-4 z-10">
+                  <div className="absolute bottom-4 right-4 z-10 flex gap-2">
                     <a 
                       href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '').startsWith('0') ? '88' + s.whatsapp.replace(/[^0-9]/g, '') : s.whatsapp.replace(/[^0-9]/g, '')}?text=আসসালামু%20আলাইকুম,%20${s.name}%20এর%20অভিভাবক,%20`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="p-2 bg-emerald-100 text-emerald-600 rounded-full hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center justify-center"
+                      title="WhatsApp"
                     >
                       <MessageCircle className="w-5 h-5" />
                     </a>
+                    {s.email && (
+                      <a 
+                        href={`mailto:${s.email}?subject=মাদরাসা যোগাযোগ - ${s.name}&body=আসসালামু আলাইকুম, ${s.name} এর অভিভাবক, `}
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-500 hover:text-white transition-all shadow-sm flex items-center justify-center"
+                        title="Gmail"
+                      >
+                        <Mail className="w-5 h-5" />
+                      </a>
+                    )}
                   </div>
                 )}
               </motion.div>
@@ -4100,9 +4188,6 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
               
               <div className="p-8">
                 <div id="payment-receipt" className="bg-white p-8 border-4 border-slate-900 rounded-3xl relative overflow-hidden">
-                  {/* Watermark/Background decoration */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -translate-y-1/2 translate-x-1/2" />
-                  
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-8 border-b-2 border-slate-900 pb-6">
                       <div className="flex items-center gap-4">
@@ -4194,6 +4279,12 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
 
               <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-center">
                 <button 
+                  onClick={() => window.print()}
+                  className="px-6 py-3 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all shadow-lg shadow-slate-200"
+                >
+                  <Printer className="w-5 h-5" /> প্রিন্ট করুন
+                </button>
+                <button 
                   onClick={() => downloadPDF('payment-receipt', `Receipt_${receiptData.transactionId}.pdf`, addToast, 'a5')}
                   className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
                 >
@@ -4210,6 +4301,12 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
                   className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-200"
                 >
                   <MessageCircle className="w-5 h-5" /> WhatsApp শেয়ার
+                </button>
+                <button 
+                  onClick={() => sendEmailWithPDF('payment-receipt', receiptData.student, receiptData.transactionId, receiptData.total, addToast)}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                >
+                  <Mail className="w-5 h-5" /> Gmail পাঠান
                 </button>
               </div>
             </motion.div>
@@ -4460,8 +4557,6 @@ function TransactionHistory({ settings }: { settings: any }) {
               
               <div className="p-8">
                 <div id="history-receipt" className="bg-white p-8 border-4 border-slate-900 rounded-3xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -translate-y-1/2 translate-x-1/2" />
-                  
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-8 border-b-2 border-slate-900 pb-6">
                       <div className="flex items-center gap-4">
@@ -4565,6 +4660,12 @@ function TransactionHistory({ settings }: { settings: any }) {
                   className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-200"
                 >
                   <MessageCircle className="w-5 h-5" /> WhatsApp শেয়ার
+                </button>
+                <button 
+                  onClick={() => sendEmailWithPDF('history-receipt', receiptData.student, receiptData.transactionId, receiptData.total, addToast)}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                >
+                  <Mail className="w-5 h-5" /> Gmail পাঠান
                 </button>
               </div>
             </motion.div>
@@ -4844,7 +4945,6 @@ function DeleteHistory() {
                   ) : (selectedHistory.type === 'income' || selectedHistory.type === 'expense') ? (
                     <div className="bg-white border-2 border-slate-100 rounded-[2rem] p-8 relative overflow-hidden">
                       {/* Receipt Style */}
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -translate-y-1/2 translate-x-1/2" />
                       
                       <div className="relative z-10 space-y-6">
                         <div className="flex justify-between items-start border-b border-dashed border-slate-200 pb-6">
