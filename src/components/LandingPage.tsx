@@ -27,37 +27,27 @@ import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
 
 function TypingTitle({ text }: { text: string }) {
+  const isEnglish = (text: string) => /^[A-Za-z0-9\s!@#$%^&*()_+=-`~\\|[\]{};':",./<>?]+$/.test(text);
+  const useLuckiest = isEnglish(text);
+
   return (
-    <div className="relative inline-block w-full h-[1.2em]">
-      <svg viewBox="0 0 500 100" className="w-full h-full">
-        <defs>
-          <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#059669" />
-            <stop offset="50%" stopColor="#10b981" />
-            <stop offset="100%" stopColor="#059669" />
-          </linearGradient>
-          <mask id="textMask">
-            <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="text-6xl font-black fill-white">
-              {text}
-            </text>
-          </mask>
-        </defs>
-        
-        {/* Stroke Outline */}
-        <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="text-6xl font-black fill-transparent stroke-slate-200 stroke-[2px]">
-          {text}
-        </text>
-        
-        {/* Wave Fill Animation */}
-        <motion.rect
-          initial={{ y: 100 }}
-          animate={{ y: 0 }}
-          transition={{ duration: 3, ease: "easeInOut" }}
-          x="0" y="0" width="500" height="100"
-          fill="url(#waveGradient)"
-          mask="url(#textMask)"
-        />
-      </svg>
+    <div className="relative inline-block w-full group mb-4">
+      <h1 
+        className={cn(
+          "text-[clamp(1.75rem,7vw,5.5rem)] font-black leading-[1.2] tracking-tight text-slate-900 drop-shadow-sm whitespace-nowrap overflow-hidden text-ellipsis animate-neon-reveal animate-shimmer px-2",
+          useLuckiest ? "font-luckiest" : "font-sans"
+        )}
+        style={{
+          background: 'linear-gradient(90deg, #059669, #10b981, #34d399, #10b981, #059669)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundSize: '200% auto',
+        }}
+      >
+        {text}
+      </h1>
+      {/* Subtle glow behind text */}
+      <div className="absolute inset-0 blur-3xl bg-emerald-400/5 -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
     </div>
   );
 }
@@ -225,7 +215,7 @@ const LandingPage = () => {
       </div>
 
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
         {/* Background */}
         <div className="absolute inset-0 z-0 bg-white">
           <div className="absolute inset-0 opacity-20">
@@ -236,10 +226,10 @@ const LandingPage = () => {
               alt="Hero"
             />
           </div>
-          <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/95 via-white/90 to-white" />
           
           {/* Islamic Pattern Overlay */}
-          <div className="absolute inset-0 opacity-[0.15] pointer-events-none" 
+          <div className="absolute inset-0 opacity-[0.12] pointer-events-none" 
                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23064e3b' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
           />
 
@@ -273,7 +263,7 @@ const LandingPage = () => {
           <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-rose-100/50 rounded-full blur-[120px] mix-blend-multiply pointer-events-none" />
         </div>
 
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center pt-2 pb-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center pt-24 pb-12">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -285,7 +275,7 @@ const LandingPage = () => {
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2, duration: 0.5 }}
-                className="mb-12 block relative mx-auto w-fit"
+                className="mb-8 block relative mx-auto w-fit"
               >
                 {/* Neon Light Effect */}
                 {Boolean(settings.enable_neon_light) && (
@@ -305,7 +295,7 @@ const LandingPage = () => {
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="h-32 md:h-44 w-auto mx-auto drop-shadow-2xl relative z-10" 
+                  className="h-28 md:h-36 w-auto mx-auto drop-shadow-2xl relative z-10" 
                   referrerPolicy="no-referrer" 
                 />
               </motion.div>
@@ -315,17 +305,27 @@ const LandingPage = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs font-bold mb-8 shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs font-bold mb-6 shadow-sm"
             >
               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
               <span className="tracking-wide">{settings.announcement}</span>
             </motion.div>
             
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 leading-[1.1] tracking-tight font-sans text-slate-900 drop-shadow-sm">
-              <TypingTitle text={settings.title} />
-            </h1>
+            <TypingTitle text={settings.title} />
+
+            {settings.address && (
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="text-sm md:text-base text-emerald-700 font-bold mb-6 tracking-wide flex items-center justify-center gap-2"
+              >
+                <Globe className="w-4 h-4" />
+                {settings.address}
+              </motion.p>
+            )}
             
-            <p className="text-lg md:text-xl text-slate-600 mb-10 leading-relaxed max-w-2xl mx-auto font-medium font-sans">
+            <p className="text-lg md:text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto font-medium font-sans">
               {settings.description}
             </p>
           </motion.div>
