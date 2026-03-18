@@ -48,14 +48,6 @@ export function FirebaseSetup() {
     addToast("কানেকশন চেক সম্পন্ন হয়েছে", "info");
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-20">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
-      </div>
-    );
-  }
-
   const isConnected = status?.firestore === "connected";
 
   const [formData, setFormData] = useState({
@@ -66,6 +58,14 @@ export function FirebaseSetup() {
     password: ""
   });
   const [saving, setSaving] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-20">
+        <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
