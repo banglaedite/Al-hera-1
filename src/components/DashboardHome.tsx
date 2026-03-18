@@ -16,29 +16,35 @@ import {
 import { Link } from "react-router-dom";
 
 const StatCard = ({ icon: Icon, label, value, color }: any) => (
-  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-    <div className={`p-3 rounded-xl ${color}`}>
-      <Icon className="w-6 h-6 text-white" />
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className="bg-white p-8 rounded-3xl shadow-lg shadow-slate-200/30 border border-slate-100 flex items-center gap-5 hover:shadow-2xl transition-all duration-300"
+  >
+    <div className={`p-4 rounded-2xl ${color} shadow-lg`}>
+      <Icon className="w-7 h-7 text-white" />
     </div>
     <div>
-      <p className="text-sm text-slate-500 font-medium">{label}</p>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
+      <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">{label}</p>
+      <p className="text-3xl font-black text-slate-900 mt-1">{value}</p>
     </div>
-  </div>
+  </motion.div>
 );
 
 const QuickAction = ({ icon: Icon, title, description, to, color }: any) => (
-  <Link to={to} className="group">
-    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 hover:border-emerald-200 hover:shadow-md transition-all h-full flex flex-col">
-      <div className={`w-12 h-12 rounded-2xl ${color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-        <Icon className="w-6 h-6 text-white" />
+  <Link to={to} className="group h-full">
+    <motion.div 
+      whileHover={{ y: -10 }}
+      className="bg-white p-8 rounded-3xl shadow-lg shadow-slate-200/30 border border-slate-100 hover:border-emerald-300 hover:shadow-2xl transition-all duration-500 h-full flex flex-col"
+    >
+      <div className={`w-14 h-14 rounded-2xl ${color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg`}>
+        <Icon className="w-7 h-7 text-white" />
       </div>
-      <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
-      <p className="text-slate-500 text-sm mb-6 flex-grow">{description}</p>
-      <div className="flex items-center text-emerald-600 font-semibold text-sm group-hover:translate-x-1 transition-transform">
+      <h3 className="text-2xl font-black text-slate-900 mb-3">{title}</h3>
+      <p className="text-slate-600 text-sm mb-8 flex-grow leading-relaxed">{description}</p>
+      <div className="flex items-center text-emerald-700 font-bold text-sm group-hover:translate-x-2 transition-transform">
         শুরু করুন <ArrowRight className="w-4 h-4 ml-2" />
       </div>
-    </div>
+    </motion.div>
   </Link>
 );
 
@@ -50,34 +56,34 @@ export default function DashboardHome() {
   }, []);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-16">
       {/* Hero Section */}
-      <section className="relative overflow-hidden rounded-[2.5rem] bg-emerald-900 text-white p-12 md:p-20">
+      <section className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-emerald-900 to-emerald-700 text-white p-12 md:p-20 shadow-2xl">
         <div className="relative z-10 max-w-2xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <span className="inline-block px-4 py-1.5 rounded-full bg-emerald-800 text-emerald-100 text-sm font-semibold mb-6">
+            <span className="inline-block px-5 py-2 rounded-full bg-white/10 backdrop-blur-sm text-emerald-100 text-sm font-bold mb-8">
               স্বাগতম আল হেরা মাদ্রাসায়
             </span>
-            <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-6">
+            <h1 className="text-5xl md:text-7xl font-black leading-tight mb-8 tracking-tight">
               আধুনিক ও দ্বীনি শিক্ষার এক অনন্য সমন্বয়
             </h1>
-            <p className="text-emerald-100/80 text-lg mb-8 leading-relaxed">
+            <p className="text-emerald-50 text-lg mb-10 leading-relaxed max-w-lg">
               আমরা আপনার সন্তানের উজ্জ্বল ভবিষ্যৎ এবং নৈতিক চরিত্র গঠনে প্রতিশ্রুতিবদ্ধ। আমাদের ডিজিটাল ম্যানেজমেন্ট সিস্টেমের মাধ্যমে এখন সবকিছুই আরও সহজ।
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link to="/admission" className="px-8 py-4 bg-white text-emerald-900 rounded-full font-bold hover:bg-emerald-50 transition-colors">
+              <Link to="/admission" className="px-8 py-4 bg-white text-emerald-900 rounded-full font-black hover:bg-emerald-50 transition-all shadow-lg hover:shadow-emerald-900/20">
                 ভর্তি আবেদন করুন
               </Link>
               {settings.enable_recruitment && (
-                <a href="/recruitment" className="px-8 py-4 bg-emerald-700 text-white rounded-full font-bold hover:bg-emerald-600 transition-colors border border-emerald-600">
+                <a href="/recruitment" className="px-8 py-4 bg-emerald-600 text-white rounded-full font-black hover:bg-emerald-500 transition-all border border-emerald-500">
                   সিভি জমা দিন
                 </a>
               )}
-              <Link to="/parent" className="px-8 py-4 bg-emerald-800 text-white rounded-full font-bold hover:bg-emerald-700 transition-colors border border-emerald-700">
+              <Link to="/parent" className="px-8 py-4 bg-emerald-800/50 backdrop-blur-sm text-white rounded-full font-black hover:bg-emerald-800 transition-all border border-emerald-600">
                 অভিভাবক লগইন
               </Link>
             </div>
@@ -85,7 +91,7 @@ export default function DashboardHome() {
         </div>
         
         {/* Decorative Elements */}
-        <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none">
+        <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
           <GraduationCap className="w-full h-full -rotate-12 translate-x-1/4" />
         </div>
       </section>

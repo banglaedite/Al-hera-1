@@ -309,18 +309,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Admin Quick Access Strip */}
-      <div className="bg-white border-b border-slate-100 relative z-30 -mt-1">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest font-sans">এডমিন প্যানেল এক্সেস</p>
-          </div>
-          <Link to="/secret-admin-access" className="group px-5 py-2 bg-slate-50 text-slate-700 rounded-lg text-xs font-bold hover:bg-emerald-50 hover:text-emerald-700 transition-all flex items-center gap-2 border border-slate-200 shadow-sm">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" /> এডমিন লগইন <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </div>
-      </div>
+
 
       {/* Content Sections Toggle Buttons */}
       {(settings?.show_features_directly !== 1 || settings?.show_food_directly !== 1 || settings?.show_showcase_directly !== 1) && (
@@ -395,36 +384,60 @@ const LandingPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.length > 0 ? features.map((feature, i) => {
               const Icon = iconMap[feature.icon] || Star;
+              const gradients = [
+                "from-emerald-500 to-teal-400",
+                "from-blue-500 to-cyan-400",
+                "from-purple-500 to-pink-400",
+                "from-amber-500 to-orange-400",
+                "from-rose-500 to-red-400",
+                "from-indigo-500 to-blue-400"
+              ];
+              const gradient = gradients[i % gradients.length];
+              const shadowColors = [
+                "shadow-emerald-500/20",
+                "shadow-blue-500/20",
+                "shadow-purple-500/20",
+                "shadow-amber-500/20",
+                "shadow-rose-500/20",
+                "shadow-indigo-500/20"
+              ];
+              const shadowColor = shadowColors[i % shadowColors.length];
+
               return (
                 <motion.div 
                   key={feature.id}
-                  whileHover={{ scale: 1.03, y: -5 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50 flex flex-col gap-6 group relative overflow-hidden"
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  whileHover={{ scale: 1.02, y: -5 }}
+                  className={`bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl ${shadowColor} flex flex-col gap-6 group relative overflow-hidden`}
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${gradient} rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity duration-500`} />
                   
                   {feature.image_url ? (
-                    <div className="w-full h-48 rounded-2xl overflow-hidden mb-2 relative">
+                    <div className="w-full h-48 rounded-2xl overflow-hidden mb-2 relative shadow-inner">
                        <img src={feature.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" alt={feature.title} />
-                       <div className="absolute inset-0 bg-emerald-900/10 group-hover:bg-transparent transition-colors" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
                     </div>
                   ) : (
-                    <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm relative z-10">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg relative z-10 bg-gradient-to-br ${gradient} text-white transform group-hover:rotate-6 transition-transform duration-300`}>
                       <Icon className="w-8 h-8" />
                     </div>
                   )}
                   
                   <div className="relative z-10">
-                    <h3 className="text-2xl font-bold text-slate-900 mb-3 font-display">{feature.title}</h3>
-                    <p className="text-slate-500 text-lg leading-relaxed font-sans">{feature.description}</p>
+                    <h3 className={`text-2xl font-bold mb-4 font-display bg-clip-text text-transparent bg-gradient-to-r ${gradient}`}>{feature.title}</h3>
+                    <div className="p-5 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 text-lg leading-relaxed font-sans shadow-inner">
+                      {feature.description}
+                    </div>
                   </div>
                 </motion.div>
               );
             }) : (
               // Fallback if no features
               <div className="col-span-full text-center py-12 text-slate-400">
-                <p>কোন বৈশিষ্ট্য যোগ করা হয়নি। এডমিন প্যানেল থেকে যোগ করুন।</p>
+                <p>কোন বৈশিষ্ট্য যোগ করা হয়নি।</p>
               </div>
             )}
           </div>
@@ -450,42 +463,53 @@ const LandingPage = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-              {foodMenu.map((item, i) => (
+              {foodMenu.map((item, i) => {
+                const gradients = [
+                  "from-orange-500 to-amber-400",
+                  "from-rose-500 to-pink-400",
+                  "from-emerald-500 to-teal-400",
+                  "from-blue-500 to-cyan-400"
+                ];
+                const gradient = gradients[i % gradients.length];
+                
+                return (
                 <motion.div 
                   key={item.id}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.03 }}
+                  whileHover={{ y: -10, scale: 1.02 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                  className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/20 group overflow-hidden flex flex-col"
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50 group overflow-hidden flex flex-col transition-all duration-500 relative"
                 >
-                  <div className="relative h-64 w-full bg-slate-50 overflow-hidden p-4">
-                    {/* Frame Effect */}
-                    <div className="absolute inset-2 border-4 border-emerald-100 rounded-[2rem] group-hover:border-emerald-200 transition-colors" />
-                    
+                  <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500 pointer-events-none`} />
+                  
+                  <div className="relative w-full aspect-[4/3] bg-slate-100 overflow-hidden p-3">
+                    <div className={`absolute inset-2 border-2 border-transparent group-hover:border-white/50 rounded-[1.8rem] transition-colors duration-500 z-20`} />
                     <img 
                       src={item.image_url || `https://picsum.photos/seed/food-${item.id}/600/400`} 
-                      className="w-full h-full object-cover rounded-[1.5rem] group-hover:scale-105 transition-transform duration-700" 
+                      className="w-full h-full object-cover rounded-[1.5rem] group-hover:scale-110 transition-transform duration-700 relative z-10 shadow-md" 
                       referrerPolicy="no-referrer" 
                       alt={item.title} 
                     />
                   </div>
                   
-                  <div className="p-8 flex-1 flex flex-col gap-2">
-                    <h3 className="text-2xl font-black text-emerald-900">{item.title}</h3>
-                    <p className="text-slate-600 text-lg leading-relaxed font-medium line-clamp-3">
-                      {item.description}
-                    </p>
-                    <div className="mt-auto pt-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-rose-500 bg-rose-50 px-3 py-1 rounded-full">
-                        <Heart className="w-4 h-4 fill-rose-500" />
-                        <span className="text-xs font-bold">স্বাস্থ্যসম্মত</span>
+                  <div className="p-8 flex-1 flex flex-col gap-4 relative z-10">
+                    <h3 className={`text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r ${gradient}`}>{item.title}</h3>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
+                      <p className="text-slate-600 text-lg leading-relaxed font-medium">
+                        {item.description}
+                      </p>
+                    </div>
+                    <div className="mt-auto pt-2 flex items-center justify-between">
+                      <div className={`flex items-center gap-2 text-white bg-gradient-to-r ${gradient} px-4 py-2 rounded-full shadow-md transform group-hover:scale-105 transition-transform`}>
+                        <Utensils className="w-4 h-4" />
+                        <span className="text-sm font-bold tracking-wide">সুস্বাদু ও পুষ্টিকর</span>
                       </div>
                     </div>
                   </div>
                 </motion.div>
-              ))}
+              )})}
             </div>
           </div>
         </section>

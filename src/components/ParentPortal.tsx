@@ -13,6 +13,7 @@ import {
   LogOut,
   GraduationCap,
   User,
+  Users,
   History
 } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -135,40 +136,98 @@ export default function ParentPortal() {
       
       const profileData = await profileRes.json();
       setFees(profileData.fees || []);
-      
     } catch (err: any) {
       setError(err.message);
+      localStorage.removeItem("guardianPhone");
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("guardianPhone");
     setStudent(null);
     setIdentifier("");
-    localStorage.removeItem("guardianPhone");
   };
 
-  if (student) {
+  if (!student) {
     return (
-      <div className="max-w-6xl mx-auto relative">
-        {/* Payment Modal removed */}
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-100 w-full max-w-md"
+        >
+          <div className="text-center mb-10">
+            <div className="w-20 h-20 bg-emerald-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner border border-emerald-100">
+              <Users className="w-10 h-10 text-emerald-600" />
+            </div>
+            <h2 className="text-3xl font-black text-slate-900 mb-3">প্যারেন্ট পোর্টাল</h2>
+            <p className="text-slate-500 font-medium">আপনার সন্তানের তথ্য দেখতে লগইন করুন</p>
+          </div>
 
+          <form onSubmit={(e) => handleLogin(e)} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
+                  placeholder="যেমন: 01712345678"
+                  required
+                />
+                <Phone className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              </div>
+            </div>
+
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="p-4 bg-rose-50 text-rose-600 rounded-2xl text-sm font-bold flex items-center gap-2 border border-rose-100"
+              >
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                {error}
+              </motion.div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>লগইন করুন <ArrowRight className="w-5 h-5" /></>
+              )}
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
           <div>
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">ছাত্র/অভিভাবক পোর্টাল</h1>
-            <p className="text-slate-500">আপনার সন্তানের সব আপডেট এখানে দেখুন</p>
+            <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">প্যারেন্ট পোর্টাল</h1>
+            <p className="text-slate-500 font-medium">আপনার সন্তানের সব আপডেট এখানে দেখুন</p>
           </div>
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-2 px-6 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-rose-50 hover:text-rose-600 transition-colors self-start"
+            className="flex items-center gap-2 px-6 py-3 bg-white text-rose-600 rounded-2xl font-bold hover:bg-rose-50 transition-all shadow-sm border border-rose-100 self-start"
           >
             <LogOut className="w-4 h-4" /> লগ আউট
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex overflow-x-auto gap-2 mb-8 pb-2 scrollbar-hide">
+        <div className="flex overflow-x-auto gap-3 mb-10 pb-2 scrollbar-hide">
           {[
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
@@ -177,28 +236,34 @@ export default function ParentPortal() {
             { id: "payment", label: "পেমেন্ট", icon: CreditCard },
             student.is_hifz ? { id: "hifz", label: "হিফজ ট্র্যাকিং", icon: GraduationCap } : null
           ].filter(Boolean).map((tab: any) => (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all whitespace-nowrap",
+                "flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
                 activeTab === tab.id 
-                  ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20" 
-                  : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"
+                  ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
+                  : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
               )}
             >
               <tab.icon className="w-5 h-5" />
               {tab.label}
-            </button>
+            </motion.button>
           ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Student Profile Card (Left) */}
           <div className="lg:col-span-1">
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 sticky top-24">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 sticky top-24"
+            >
               <div className="flex flex-col items-center text-center">
-                <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-lg bg-slate-100 mb-6">
+                <div className="w-40 h-40 rounded-[2.5rem] overflow-hidden shadow-2xl bg-slate-100 mb-8 border-4 border-emerald-50">
                   <img 
                     src={student.photo_url || `https://picsum.photos/seed/${student.id}/200`} 
                     alt={student.name} 
@@ -206,25 +271,25 @@ export default function ParentPortal() {
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-1">{student.name}</h3>
-                <p className="text-emerald-700 font-bold mb-6">{student.class} শ্রেণী | রোল: {student.roll}</p>
+                <h3 className="text-3xl font-black text-slate-900 mb-2">{student.name}</h3>
+                <p className="text-emerald-700 font-black text-lg mb-8 bg-emerald-50 px-6 py-2 rounded-full">{student.class} শ্রেণী | রোল: {student.roll}</p>
                 
-                <div className="w-full space-y-3 pt-6 border-t border-slate-100">
+                <div className="w-full space-y-5 pt-8 border-t border-slate-100">
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">স্টুডেন্ট আইডি</span>
-                    <span className="font-bold text-slate-700">{student.id}</span>
+                    <span className="text-slate-400 font-bold">স্টুডেন্ট আইডি</span>
+                    <span className="font-black text-slate-900">{student.id}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">স্টুডেন্ট কোড</span>
-                    <span className="font-bold text-emerald-700">{student.student_code}</span>
+                    <span className="text-slate-400 font-bold">স্টুডেন্ট কোড</span>
+                    <span className="font-black text-emerald-700">{student.student_code}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">রক্তের গ্রুপ</span>
-                    <span className="font-bold text-rose-600">{student.blood_group}</span>
+                    <span className="text-slate-400 font-bold">রক্তের গ্রুপ</span>
+                    <span className="font-black text-rose-600">{student.blood_group}</span>
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Main Content Area (Right) */}
@@ -573,44 +638,6 @@ export default function ParentPortal() {
           </div>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="max-w-md mx-auto py-12">
-      <div className="text-center mb-12">
-        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
-          <LayoutDashboard className="w-10 h-10" />
-        </div>
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">লগইন করুন</h1>
-        <p className="text-slate-500">আপনার মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড দিন</p>
-      </div>
-
-      <form onSubmit={handleLogin} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড</label>
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input 
-                required
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="017XXXXXXXX অথবা example@email.com" 
-                className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-              />
-            </div>
-          </div>
-          {error && <p className="text-rose-500 text-sm font-medium text-center">{error}</p>}
-          <button 
-            disabled={loading}
-            className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "লগইন করুন"}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }

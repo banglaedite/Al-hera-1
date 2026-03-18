@@ -195,7 +195,10 @@ export default function App() {
           <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex justify-center gap-4 mb-6">
-                <BookOpen className="w-8 h-8 opacity-50" />
+                <Link to="/secret-admin-access" className="group relative p-2" title="Admin Access">
+                  <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <BookOpen className="w-10 h-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300 relative z-10 cursor-pointer" />
+                </Link>
               </div>
               <h3 className="text-xl font-bold mb-2">আল হেরা মাদ্রাসা</h3>
               <p className="text-sm opacity-70 mb-8">একটি আদর্শ দ্বীনি শিক্ষা প্রতিষ্ঠান</p>

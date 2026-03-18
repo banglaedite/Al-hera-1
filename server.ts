@@ -453,6 +453,35 @@ async function seedDatabase() {
   });
 
   // --- Parent Payment ---
+  app.post("/api/parent/pay-fee", async (req, res) => {
+    const { studentId, studentName, studentEmail, months, year, amount, method } = req.body;
+    try {
+      if (method === "udyoktapay") {
+        // In a real scenario, you would call UdyoktaPay API here
+        // For now, we simulate a payment URL
+        const payment_url = `https://example.com/payment?amount=${amount}&student=${studentId}`;
+        res.json({ payment_url });
+      } else {
+        // Manual payment
+        await firestore!.collection("fees").add({
+          student_id: studentId,
+          student_name: studentName,
+          months,
+          year,
+          amount,
+          method,
+          status: 'paid',
+          paid_date: new Date().toISOString(),
+          transaction_id: `MANUAL-${Date.now()}`
+        });
+        res.json({ success: true, message: "পেমেন্ট সফলভাবে রেকর্ড করা হয়েছে।" });
+      }
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "পেমেন্ট ব্যর্থ হয়েছে" });
+    }
+  });
+
   app.post("/api/parent/pay", async (req, res) => {
     const { feeId, transactionId, method, phone } = req.body;
     try {
@@ -2037,14 +2066,12 @@ async function seedDatabase() {
     try {
       const historySnapshot = await firestore.collection("attendance_history")
         .where("id", "==", studentId)
-        .orderBy("timestamp", "desc")
-        .limit(30)
         .get();
       
       const history = historySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 30);
       
       res.json(history);
     } catch (error) {
