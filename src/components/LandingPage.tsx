@@ -124,28 +124,51 @@ const LandingPage = () => {
         if (Array.isArray(data)) {
           setFeatures(data.filter((f: any) => f.is_active !== 0));
         } else {
-          console.error("Failed to load features:", data);
+          throw new Error("Invalid features data");
         }
       })
-      .catch((err) => console.error("Failed to load features:", err));
+      .catch((err) => {
+        console.error("Failed to load features:", err);
+        setFeatures([
+          { id: 'f1', title: 'আধুনিক শিক্ষা', description: 'আধুনিক ও দ্বীনি শিক্ষার সমন্বয়', icon: 'BookOpen' },
+          { id: 'f2', title: 'অভিজ্ঞ শিক্ষক', description: 'দক্ষ ও অভিজ্ঞ শিক্ষক মন্ডলী', icon: 'Users' },
+          { id: 'f3', title: 'নিরাপদ পরিবেশ', description: 'ছাত্রদের জন্য নিরাপদ ও মনোরম পরিবেশ', icon: 'ShieldCheck' }
+        ]);
+      });
 
     fetchWithTimeout("/api/food-menu")
       .then((res) => res.json())
       .then(data => {
         if (Array.isArray(data)) {
           setFoodMenu(data);
+        } else {
+          throw new Error("Invalid food menu data");
         }
       })
-      .catch((err) => console.error("Failed to load food menu:", err));
+      .catch((err) => {
+        console.error("Failed to load food menu:", err);
+        setFoodMenu([
+          { id: 'm1', day: 'শনিবার', breakfast: 'খিচুড়ি', lunch: 'মাছ, ডাল', dinner: 'মুরগি' },
+          { id: 'm2', day: 'রবিবার', breakfast: 'রুটি, ভাজি', lunch: 'গরু, ডাল', dinner: 'সবজি' }
+        ]);
+      });
 
     fetchWithTimeout("/api/showcase-items")
       .then((res) => res.json())
       .then(data => {
         if (Array.isArray(data)) {
           setShowcaseItems(data);
+        } else {
+          throw new Error("Invalid showcase data");
         }
       })
-      .catch((err) => console.error("Failed to load showcase items:", err));
+      .catch((err) => {
+        console.error("Failed to load showcase items:", err);
+        setShowcaseItems([
+          { id: 's1', title: 'মাদরাসা প্রাঙ্গণ', url: 'https://picsum.photos/seed/campus/800/600', type: 'image' },
+          { id: 's2', title: 'শ্রেণীকক্ষ', url: 'https://picsum.photos/seed/class/800/600', type: 'image' }
+        ]);
+      });
   }, []);
 
   if (!settings) return (

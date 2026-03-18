@@ -3241,7 +3241,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
   const fetchPendingPayments = async () => {
     setLoadingPending(true);
     try {
-      const res = await fetch("/api/admin/pending-payments");
+      const res = await fetch("/api/admin/online-payments");
       const data = await res.json();
       setPendingPayments(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -3642,7 +3642,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
           onClick={() => setActiveTab("pending")}
           className={cn("px-6 py-2 rounded-xl font-bold transition-all", activeTab === "pending" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
         >
-          পেন্ডিং পেমেন্ট
+          অনলাইন পেমেন্ট
         </button>
         <button 
           onClick={() => setActiveTab("setup")}
@@ -3654,11 +3654,11 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
 
       {activeTab === "pending" && (
         <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-          <h3 className="text-xl font-bold text-slate-900 mb-6">পেন্ডিং অনলাইন পেমেন্ট</h3>
+          <h3 className="text-xl font-bold text-slate-900 mb-6">অনলাইন পেমেন্ট হিস্টোরি</h3>
           {loadingPending ? (
             <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
           ) : pendingPayments.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 font-bold">কোন পেন্ডিং পেমেন্ট নেই</div>
+            <p className="text-center text-slate-400 py-12 font-bold">কোনো অনলাইন পেমেন্ট নেই</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -3669,6 +3669,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
                     <th className="pb-4 font-bold text-slate-500 text-sm">পরিমাণ</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm">মেথড</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm">তারিখ</th>
+                    <th className="pb-4 font-bold text-slate-500 text-sm">স্ট্যাটাস</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm text-right">অ্যাকশন</th>
                   </tr>
                 </thead>
@@ -3680,19 +3681,32 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
                       <td className="py-4 font-bold text-emerald-700">৳{payment.amount}</td>
                       <td className="py-4 uppercase text-xs font-black text-slate-500">{payment.method}</td>
                       <td className="py-4 text-slate-400 text-xs">{new Date(payment.createdAt).toLocaleString()}</td>
+                      <td className="py-4 text-xs font-bold">
+                        {payment.status === "completed" ? (
+                          <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">সফল</span>
+                        ) : payment.status === "rejected" ? (
+                          <span className="text-rose-600 bg-rose-50 px-2 py-1 rounded-lg">বাতিল</span>
+                        ) : (
+                          <span className="text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">পেন্ডিং</span>
+                        )}
+                      </td>
                       <td className="py-4 text-right space-x-2">
-                        <button 
-                          onClick={() => handleApprovePending(payment)}
-                          className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200"
-                        >
-                          এপ্রুভ
-                        </button>
-                        <button 
-                          onClick={() => handleRejectPending(payment)}
-                          className="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-200"
-                        >
-                          বাতিল
-                        </button>
+                        {payment.status === "pending" && (
+                          <>
+                            <button 
+                              onClick={() => handleApprovePending(payment)}
+                              className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200"
+                            >
+                              এপ্রুভ
+                            </button>
+                            <button 
+                              onClick={() => handleRejectPending(payment)}
+                              className="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-200"
+                            >
+                              বাতিল
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

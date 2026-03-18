@@ -9,6 +9,8 @@ import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log("Starting server with NODE_ENV:", process.env.NODE_ENV);
+
 const ADMIN_CONFIG_PATH = path.join(__dirname, "firebase-admin-config.json");
 
 // Firebase Configuration (Hardcoded for Vercel compatibility)
@@ -63,6 +65,7 @@ function getFirestoreInstance() {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY || config.private_key;
 
     if (!admin.apps.length) {
+      console.log("Initializing Firebase Admin with project:", projectId);
       const privateKeyFormatted = (privateKey || "").replace(/\\n/g, '\n');
       admin.initializeApp({
         credential: admin.credential.cert({
@@ -72,12 +75,13 @@ function getFirestoreInstance() {
         }),
         storageBucket: `${projectId}.appspot.com`
       });
-      console.log("Firebase Admin initialized with project:", projectId);
+      console.log("Firebase Admin initialized successfully.");
     }
     
     const finalDbId = dbId === "(default)" ? undefined : dbId;
-    const app = admin.app();
-    firestore = finalDbId ? getAdminFirestore(app, finalDbId) : getAdminFirestore(app);
+    const appInstance = admin.app();
+    firestore = finalDbId ? getAdminFirestore(appInstance, finalDbId) : getAdminFirestore(appInstance);
+    console.log("Firestore instance created.");
     return firestore;
   } catch (err) {
     console.error("Firebase Admin init error:", err);
@@ -86,6 +90,11 @@ function getFirestoreInstance() {
 }
 
 const app = express();
+
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -453,35 +462,6 @@ async function seedDatabase() {
   });
 
   // --- Parent Payment ---
-  app.post("/api/parent/pay-fee", async (req, res) => {
-    const { studentId, studentName, studentEmail, months, year, amount, method } = req.body;
-    try {
-      if (method === "udyoktapay") {
-        // In a real scenario, you would call UdyoktaPay API here
-        // For now, we simulate a payment URL
-        const payment_url = `https://example.com/payment?amount=${amount}&student=${studentId}`;
-        res.json({ payment_url });
-      } else {
-        // Manual payment
-        await firestore!.collection("fees").add({
-          student_id: studentId,
-          student_name: studentName,
-          months,
-          year,
-          amount,
-          method,
-          status: 'paid',
-          paid_date: new Date().toISOString(),
-          transaction_id: `MANUAL-${Date.now()}`
-        });
-        res.json({ success: true, message: "পেমেন্ট সফলভাবে রেকর্ড করা হয়েছে।" });
-      }
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "পেমেন্ট ব্যর্থ হয়েছে" });
-    }
-  });
-
   app.post("/api/parent/pay", async (req, res) => {
     const { feeId, transactionId, method, phone } = req.body;
     try {
@@ -2340,6 +2320,7 @@ async function seedDatabase() {
           return res.status(400).json({ error: "Udyokta Pay is not configured." });
         }
 
+        const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
         const payload = {
           full_name: student?.name || "Student",
           email: student?.email || "student@example.com",
@@ -2347,9 +2328,9 @@ async function seedDatabase() {
           metadata: {
             transactionId
           },
-          redirect_url: `${req.protocol}://${req.get('host')}/parent?payment=success`,
-          cancel_url: `${req.protocol}://${req.get('host')}/parent?payment=cancel`,
-          webhook_url: `${req.protocol}://${req.get('host')}/api/udyoktapay/webhook`
+          redirect_url: `${baseUrl}/parent?payment=success`,
+          cancel_url: `${baseUrl}/parent?payment=cancel`,
+          webhook_url: `${baseUrl}/api/udyoktapay/webhook`
         };
 
         const response = await fetch(udyoktaUrl, {
@@ -2367,6 +2348,37 @@ async function seedDatabase() {
         } else {
           return res.status(500).json({ error: "Failed to initiate payment with Udyokta Pay." });
         }
+      } else if (method === "live_bkash" || method === "live_nagad" || method === "live_rocket") {
+        // Direct Live Payment (Mock)
+        await firestore!.collection("pending_payments").doc(transactionId).update({ status: "completed" });
+        
+        const receiptNumber = `REC-${Date.now()}`;
+        for (const month of months) {
+          const feeData = {
+            student_id: studentId,
+            student_name: student?.name,
+            amount: amount / months.length,
+            month: month,
+            year: year,
+            status: "paid",
+            paid_date: new Date().toISOString(),
+            receipt_number: receiptNumber,
+            payment_method: method.replace("live_", "").toUpperCase()
+          };
+          await firestore!.collection("fees").add(feeData);
+        }
+        
+        await firestore!.collection("transactions").add({
+          type: "income",
+          category: "Monthly Fee",
+          amount: amount,
+          date: new Date().toISOString(),
+          description: `Monthly Fee for ${months.join(", ")} ${year} - ${student?.name}`,
+          receipt_number: receiptNumber,
+          payment_method: method.replace("live_", "").toUpperCase()
+        });
+        
+        return res.json({ success: true, transactionId, message: "পেমেন্ট সফল হয়েছে!" });
       } else {
         // Manual payment (bKash/Nagad/Rocket personal number)
         return res.json({ success: true, transactionId, message: "Please send money and provide TrxID." });
@@ -2435,13 +2447,18 @@ async function seedDatabase() {
     }
   });
 
-  app.get("/api/admin/pending-payments", async (req, res) => {
+  app.get("/api/admin/online-payments", async (req, res) => {
     try {
-      const snapshot = await firestore!.collection("pending_payments").where("status", "==", "pending").get();
+      const snapshot = await firestore!.collection("pending_payments").get();
       const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      payments.sort((a: any, b: any) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
       res.json(payments);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch pending payments" });
+      res.status(500).json({ error: "Failed to fetch online payments" });
     }
   });
 
@@ -2748,21 +2765,40 @@ async function seedDatabase() {
 // --- Server Startup ---
 const PORT = 3000;
 
-if (process.env.NODE_ENV !== "production") {
-  const { createServer: createViteServer } = await import('vite');
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  });
-  app.use(vite.middlewares);
-  app.listen(PORT, () => console.log(`Dev server: http://localhost:${PORT}`));
-} else if (!process.env.VERCEL) {
-  // Only serve static files if NOT on Vercel (e.g., local production test or other VPS)
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", env: process.env.NODE_ENV });
+});
+
+async function start() {
   const distPath = path.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
+  const isProduction = process.env.NODE_ENV === "production";
+  const hasDist = fs.existsSync(distPath);
+
+  console.log(`Starting server: isProduction=${isProduction}, hasDist=${hasDist}`);
+
+  if (!isProduction || !hasDist) {
+    console.log("Using Vite middleware for development/fallback...");
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    console.log("Serving static files from dist...");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running at http://0.0.0.0:${PORT}`);
+    });
+  }
 }
+
+start();
 
 export default app;
