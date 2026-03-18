@@ -38,6 +38,7 @@ export default function AdmissionForm() {
     whatsapp: "",
     email: "",
     className: "১ম",
+    studentId: "",
     photo_url: "",
     is_hifz: false,
     birth_cert_url: "",
@@ -177,6 +178,10 @@ export default function AdmissionForm() {
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">ছাত্রের নাম</label>
                 <input required name="name" value={formData.name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="পূর্ণ নাম লিখুন" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">স্টুডেন্ট আইডি (ঐচ্ছিক)</label>
+                <input name="studentId" value={formData.studentId} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="যেমন: AHM-1-001" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">শ্রেণী</label>

@@ -62,9 +62,14 @@ export default function FeeManagement() {
   };
 
   const fetchFees = async (id: string) => {
-    const feesRes = await fetch(`/api/fees/${id}`);
-    const feesData = await feesRes.json();
-    setFees(feesData);
+    try {
+      const feesRes = await fetch(`/api/fees/${id}`);
+      const feesData = await feesRes.json();
+      setFees(Array.isArray(feesData) ? feesData : []);
+    } catch (error) {
+      console.error("Failed to fetch fees", error);
+      setFees([]);
+    }
   };
 
   const handleMonthToggle = (month: string) => {

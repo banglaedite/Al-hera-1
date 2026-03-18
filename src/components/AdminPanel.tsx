@@ -6,7 +6,6 @@ import { RecruitmentManager } from "./RecruitmentManager";
 import { FoodMenuManager } from "./FoodMenuManager";
 import { AllStudentsManager } from "./AllStudentsManager";
 import { DatabaseResetManager } from "./DatabaseResetManager";
-import { FirebaseSetup } from "./FirebaseSetup";
 import { 
   LayoutDashboard, 
   Users, 
@@ -203,7 +202,6 @@ export default function AdminPanel() {
     { id: "features", label: "বৈশিষ্ট্য", icon: Award },
     { id: "showcase", label: "শোকেস", icon: Globe },
     { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2 },
-    { id: "firebase", label: "ফায়ারবেস সেটআপ", icon: ShieldCheck },
     { id: "settings", label: "সেটিংস", icon: Settings },
   ];
 
@@ -305,7 +303,7 @@ export default function AdminPanel() {
                         </tr>
                       </thead>
                       <tbody className="text-sm">
-                        {students.slice(0, 5).map((s) => (
+                        {students?.slice(0, 5).map((s) => (
                           <tr key={s.id} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50" onClick={() => {
                             setActiveTab("students");
                             // Need a way to trigger profile view for this student
@@ -389,10 +387,6 @@ export default function AdminPanel() {
 
             {activeTab === "delete-history" && (
               <DeleteHistory />
-            )}
-
-            {activeTab === "firebase" && (
-              <FirebaseSetup />
             )}
 
             {activeTab === "settings" && (
@@ -699,9 +693,16 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
   const [loading, setLoading] = useState(true);
 
   const fetchAdmissions = async () => {
-    const res = await fetch("/api/admin/admissions");
-    setAdmissions(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/admissions");
+      const data = await res.json();
+      setAdmissions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch admissions", error);
+      setAdmissions([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1200,17 +1201,33 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
 
   const fetchFullProfile = async (studentId: string) => {
     setLoadingProfile(true);
-    const res = await fetch(`/api/students/${studentId}/full-profile`);
-    const data = await res.json();
-    setFullProfile(data);
-    
-    // Set default selected exam to the latest one
-    if (data.results && data.results.length > 0) {
-      const exams = [...new Set(data.results.map((r: any) => r.exam_name))];
-      setSelectedResultExam(exams[exams.length - 1] as string);
+    try {
+      const res = await fetch(`/api/students/${studentId}/full-profile`);
+      const data = await res.json();
+      
+      // Ensure arrays exist to prevent undefined errors
+      const safeData = {
+        ...data,
+        fees: data.fees || [],
+        transactions: data.transactions || [],
+        results: data.results || [],
+        attendance: data.attendance || [],
+        examStats: data.examStats || {}
+      };
+      
+      setFullProfile(safeData);
+      
+      // Set default selected exam to the latest one
+      if (safeData.results && safeData.results.length > 0) {
+        const exams = [...new Set(safeData.results.map((r: any) => r.exam_name))];
+        setSelectedResultExam(exams[exams.length - 1] as string);
+      }
+    } catch (error) {
+      console.error("Failed to fetch full profile", error);
+      setFullProfile({ fees: [], transactions: [], results: [], attendance: [], examStats: {} });
+    } finally {
+      setLoadingProfile(false);
     }
-    
-    setLoadingProfile(false);
   };
 
   const handleGenerateFees = async () => {
@@ -1299,7 +1316,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
         doc.text(`Date: ${new Date().toLocaleDateString('bn-BD')}`, 14, 52);
         
         doc.text(`Student Name: ${fullProfile.student.name}`, 14, 65);
-        doc.text(`Student ID: ${fullProfile.student.id}`, 14, 72);
+        doc.text(`Student ID: ${fullProfile.student.studentId || fullProfile.student.id}`, 14, 72);
         doc.text(`Class: ${fullProfile.student.class} | Roll: ${fullProfile.student.roll}`, 14, 79);
         
         const tableData = feesToPay.map((f: any) => [
@@ -1462,6 +1479,10 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">নাম</label>
                     <input name="name" required defaultValue={isEditing ? selectedStudent.name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">স্টুডেন্ট আইডি (ঐচ্ছিক)</label>
+                    <input name="studentId" defaultValue={isEditing ? (selectedStudent.studentId || selectedStudent.id) : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: AHM-1-001" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">শ্রেণী</label>
@@ -1762,7 +1783,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                   <h3 className="text-2xl font-black text-slate-900 mb-1">{fullProfile.student.name}</h3>
                   <p className="text-emerald-600 font-bold text-lg">{fullProfile.student.class} শ্রেণী | রোল: {fullProfile.student.roll}</p>
                   <div className="mt-4 inline-block px-4 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-black uppercase tracking-widest">
-                    ID: {fullProfile.student.id}
+                    ID: {fullProfile.student.studentId || fullProfile.student.id}
                   </div>
                 </div>
 
@@ -1995,7 +2016,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>ফোন: <span className="text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.student.phone}</span></p>
                 </div>
                 <div className="inline-block px-6 py-2 bg-emerald-900 text-white rounded-xl text-sm font-black tracking-widest" style={{ backgroundColor: '#064e3b', color: '#ffffff' }}>
-                  ID: {fullProfile.student.id}
+                  ID: {fullProfile.student.studentId || fullProfile.student.id}
                 </div>
               </div>
 
@@ -2015,7 +2036,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                     <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>মাতার নাম: {fullProfile.student.mother_name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-emerald-700 font-black text-xl mb-1" style={{ color: '#047857' }}>ID: {fullProfile.student.id}</p>
+                    <p className="text-emerald-700 font-black text-xl mb-1" style={{ color: '#047857' }}>ID: {fullProfile.student.studentId || fullProfile.student.id}</p>
                     <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>শ্রেণী: {fullProfile.student.class}</p>
                     <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>রোল: {fullProfile.student.roll}</p>
                   </div>
@@ -2151,7 +2172,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                   <div>
                     <h4 className="font-black text-slate-900 text-lg group-hover:text-emerald-700 transition-colors">{s.name}</h4>
                     <p className="text-emerald-600 font-bold text-sm">{s.class} শ্রেণী | রোল: {s.roll}</p>
-                    <p className="text-[10px] text-slate-400 font-black mt-1 uppercase tracking-widest">ID: {s.id}</p>
+                    <p className="text-[10px] text-slate-400 font-black mt-1 uppercase tracking-widest">ID: {s.studentId || s.id}</p>
                   </div>
                 </div>
                 {s.whatsapp && (
@@ -2228,9 +2249,9 @@ function AttendanceManager({ settings }: { settings: any }) {
     try {
       const res = await fetch(`/api/attendance/class/${selectedClass}?date=${date}`);
       const data = await res.json();
-      setStudents(data.students);
+      setStudents(data.students || []);
       const initialAttendance: Record<string, any> = {};
-      data.attendance.forEach((a: any) => {
+      (data.attendance || []).forEach((a: any) => {
         initialAttendance[a.student_id] = {
           status: a.status,
           check_in: a.check_in,
@@ -2238,7 +2259,7 @@ function AttendanceManager({ settings }: { settings: any }) {
         };
       });
       setAttendance(initialAttendance);
-      setHasSaved(data.attendance.length > 0);
+      setHasSaved((data.attendance || []).length > 0);
     } catch (error) {
       console.error("Fetch attendance failed", error);
     } finally {
@@ -2387,7 +2408,7 @@ function AttendanceManager({ settings }: { settings: any }) {
                             </div>
                             <div>
                               <p className="font-black text-slate-900 text-sm">{s.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {s.id}</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {s.studentId || s.id}</p>
                             </div>
                           </div>
                         </td>
@@ -2483,9 +2504,10 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
     setLoading(true);
     const res = await fetch(`/api/admin/teacher-attendance?date=${date}`);
     const data = await res.json();
-    setTeachers(data);
+    const teachersData = Array.isArray(data) ? data : [];
+    setTeachers(teachersData);
     const initialAttendance: Record<string, string> = {};
-    data.forEach((t: any) => {
+    teachersData.forEach((t: any) => {
       if (t.status) initialAttendance[t.id] = t.status;
     });
     setAttendance(initialAttendance);
@@ -2629,9 +2651,10 @@ function ResultManager({ students, settings }: { students: any[], settings: any 
   const fetchExams = async () => {
     const res = await fetch("/api/exams");
     const data = await res.json();
-    setExams(data);
-    if (data.length > 0 && !selectedExam) {
-      setSelectedExam(data[0].name);
+    const examsData = Array.isArray(data) ? data : [];
+    setExams(examsData);
+    if (examsData.length > 0 && !selectedExam) {
+      setSelectedExam(examsData[0].name);
     }
   };
 
@@ -2658,7 +2681,8 @@ function ResultManager({ students, settings }: { students: any[], settings: any 
   const fetchClassSubjects = async () => {
     if (!selectedClass) return;
     const res = await fetch(`/api/subjects/${selectedClass}`);
-    setClassSubjects(await res.json());
+    const data = await res.json();
+    setClassSubjects(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
@@ -3023,7 +3047,7 @@ function ResultManager({ students, settings }: { students: any[], settings: any 
                             </td>
                             <td className="py-4">
                               <p className="font-black text-slate-900">{r.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {r.id}</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {r.studentId || r.id}</p>
                             </td>
                             <td className="py-4 font-bold text-slate-600">{r.roll}</td>
                             {viewMode === 'detailed' && (
@@ -3181,9 +3205,14 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
   const [statusClassFilter, setStatusClassFilter] = useState<string>("All");
 
   const fetchFeeSetups = async () => {
-    const res = await fetch("/api/admin/fee-setups");
-    const data = await res.json();
-    setFeeSetups(data);
+    try {
+      const res = await fetch("/api/admin/fee-setups");
+      const data = await res.json();
+      setFeeSetups(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch fee setups", error);
+      setFeeSetups([]);
+    }
   };
 
   useEffect(() => {
@@ -3214,9 +3243,10 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
     try {
       const res = await fetch("/api/admin/pending-payments");
       const data = await res.json();
-      setPendingPayments(data);
+      setPendingPayments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
+      setPendingPayments([]);
     }
     setLoadingPending(false);
   };
@@ -3389,7 +3419,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
           doc.text("Student Information", 20, 70);
           doc.setFontSize(10);
           doc.text(`Name: ${selectedStudent.name}`, 20, 80);
-          doc.text(`ID: ${selectedStudent.id}`, 20, 85);
+          doc.text(`ID: ${selectedStudent.studentId || selectedStudent.id}`, 20, 85);
           doc.text(`Class: ${selectedStudent.class}`, 20, 90);
 
           const tableData = [[`মাসিক বেতন (${selectedMonths.join(", ")} ${selectedYear})`, `BDT ${subTotal}`]];
@@ -3508,7 +3538,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
           doc.text(`Date: ${new Date().toLocaleDateString('bn-BD')}`, 14, 52);
           
           doc.text(`Student Name: ${selectedStudent.name}`, 14, 65);
-          doc.text(`Student ID: ${selectedStudent.id}`, 14, 72);
+          doc.text(`Student ID: ${selectedStudent.studentId || selectedStudent.id}`, 14, 72);
           doc.text(`Class: ${selectedStudent.class} | Roll: ${selectedStudent.roll}`, 14, 79);
           
           const tableData = paidFees.map((f: any) => [
@@ -3948,7 +3978,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
                       <img src={student.photo_url || `https://picsum.photos/seed/${student.id}/50`} className="w-10 h-10 rounded-full object-cover bg-slate-200" />
                       <div>
                         <p className="font-bold text-slate-900">{student.name}</p>
-                        <p className="text-xs text-slate-500 font-bold">ID: {student.id} | Roll: {student.roll}</p>
+                        <p className="text-xs text-slate-500 font-bold">ID: {student.studentId || student.id} | Roll: {student.roll}</p>
                       </div>
                     </div>
                   ))
@@ -4340,11 +4370,12 @@ function TransactionHistory({ settings }: { settings: any }) {
     fetch(`/api/admin/all-history?${params.toString()}`)
       .then(res => res.json())
       .then(data => {
-        setTransactions(data);
+        setTransactions(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(err => {
         console.error("Failed to fetch history", err);
+        setTransactions([]);
         setLoading(false);
       });
   };
@@ -4779,13 +4810,14 @@ function DeleteHistory() {
     try {
       const res = await fetch(`/api/admin/delete-history?${params}`);
       const data = await res.json();
-      if (reset) setHistory(data.data);
+      const historyData = Array.isArray(data.data) ? data.data : [];
+      if (reset) setHistory(historyData);
       else {
-        setHistory(prev => [...prev, ...data.data]);
+        setHistory(prev => [...prev, ...historyData]);
         setPage(p => p + 1);
       }
-      setHasMore(data.hasMore);
-      setTotal(data.total);
+      setHasMore(data.hasMore || false);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error(err);
     } finally {
@@ -4861,7 +4893,7 @@ function DeleteHistory() {
                    'বিস্তারিত তথ্য'}
                 </h4>
                 <p className="text-xs text-slate-500 font-bold mb-4">
-                  {h.type === 'student' ? `ID: ${details.id}` : 
+                  {h.type === 'student' ? `ID: ${details.studentId || details.id}` : 
                    h.type === 'income' || h.type === 'expense' ? `৳${details.amount}` :
                    ''}
                 </p>
@@ -4922,7 +4954,7 @@ function DeleteHistory() {
                         <img src={parseDetails(selectedHistory.details).photo_url || `https://picsum.photos/seed/${parseDetails(selectedHistory.details).id}/100`} className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-md" />
                         <div>
                           <h2 className="text-2xl font-black text-slate-900">{parseDetails(selectedHistory.details).name}</h2>
-                          <p className="text-emerald-600 font-bold">ID: {parseDetails(selectedHistory.details).id}</p>
+                          <p className="text-emerald-600 font-bold">ID: {parseDetails(selectedHistory.details).studentId || parseDetails(selectedHistory.details).id}</p>
                         </div>
                       </div>
                       <div className="p-4 bg-slate-50 rounded-2xl">
@@ -5165,7 +5197,7 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
       const res = await fetch("/api/admin/device-history");
       if (res.ok) {
         const data = await res.json();
-        setHistory(data);
+        setHistory(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error("Fetch history failed", error);
@@ -5330,7 +5362,7 @@ except Exception as e:
                     <div>
                       <h4 className="font-black text-slate-900">{log.name || log.id}</h4>
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                        {log.type === 'student' ? 'ছাত্র' : log.type === 'teacher' ? 'শিক্ষক' : 'অভিভাবক'} | ID: {log.id}
+                        {log.type === 'student' ? 'ছাত্র' : log.type === 'teacher' ? 'শিক্ষক' : 'অভিভাবক'} | ID: {log.studentId || log.id}
                       </p>
                     </div>
                   </div>

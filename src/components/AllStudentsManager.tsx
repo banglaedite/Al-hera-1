@@ -37,10 +37,21 @@ export function AllStudentsManager({ settings }: { settings: any }) {
       const res = await fetch(`/api/admin/archive/students/${id}/full-profile`);
       if (res.ok) {
         const data = await res.json();
-        setFullProfile(data);
+        const safeData = {
+          ...data,
+          fees: data.fees || [],
+          transactions: data.transactions || [],
+          results: data.results || [],
+          attendance: data.attendance || [],
+          examStats: data.examStats || {}
+        };
+        setFullProfile(safeData);
+      } else {
+        setFullProfile({ fees: [], transactions: [], results: [], attendance: [], examStats: {} });
       }
     } catch (error) {
       console.error("Failed to fetch profile", error);
+      setFullProfile({ fees: [], transactions: [], results: [], attendance: [], examStats: {} });
     }
     setLoadingProfile(false);
   };
@@ -104,7 +115,7 @@ export function AllStudentsManager({ settings }: { settings: any }) {
                     </div>
                     <div>
                       <p className="font-bold text-slate-900">{student.name}</p>
-                      <p className="text-xs text-slate-500 font-bold">ID: {student.id} | Roll: {student.roll}</p>
+                      <p className="text-xs text-slate-500 font-bold">ID: {student.studentId || student.id} | Roll: {student.roll}</p>
                     </div>
                   </div>
                 ))
@@ -138,7 +149,7 @@ export function AllStudentsManager({ settings }: { settings: any }) {
                       </div>
                       <div className="text-right">
                         <div className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-black tracking-widest">
-                          ID: {fullProfile.student.id}
+                          ID: {fullProfile.student.studentId || fullProfile.student.id}
                         </div>
                       </div>
                     </div>

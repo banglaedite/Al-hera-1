@@ -972,7 +972,7 @@ async function seedDatabase() {
   app.get("/api/admin/accounting/summary", async (req, res) => {
     const { start_date, end_date } = req.query;
     try {
-      let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
+      let feesQuery: any = firestore.collection("fees");
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
 
@@ -988,7 +988,9 @@ async function seedDatabase() {
         expenseQuery.get()
       ]);
 
-      const feeIncome = feesSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+      const feeIncome = feesSnapshot.docs
+        .filter(doc => doc.data().status === "paid")
+        .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
       const otherIncome = incomeSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
       const totalIncome = feeIncome + otherIncome;
       const totalExpense = expenseSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
@@ -1008,7 +1010,7 @@ async function seedDatabase() {
   app.get("/api/admin/accounting/income", async (req, res) => {
     const { start_date, end_date, limit = 50, offset = 0, search } = req.query;
     try {
-      let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
+      let feesQuery: any = firestore.collection("fees");
       let incomeQuery: any = firestore.collection("income");
 
       if (start_date && end_date) {
@@ -1021,7 +1023,9 @@ async function seedDatabase() {
         incomeQuery.get()
       ]);
 
-      const feeIncome = feesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: 'Fee' } as any));
+      const feeIncome = feesSnapshot.docs
+        .filter(doc => doc.data().status === "paid")
+        .map(doc => ({ id: doc.id, ...doc.data(), type: 'Fee' } as any));
       const otherIncome = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: 'Other' } as any));
 
       let allIncome = [...feeIncome, ...otherIncome];
@@ -1576,6 +1580,7 @@ async function seedDatabase() {
       }
 
       const studentData = {
+        studentId,
         roll,
         name,
         father_name,
@@ -1604,7 +1609,7 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/students/:id", async (req, res) => {
-    const { name, father_name, mother_name, dob, blood_group, address, phone, whatsapp, email, className, roll, is_hifz, photo_url, monthly_fee, student_code } = req.body;
+    const { name, father_name, mother_name, dob, blood_group, address, phone, whatsapp, email, className, roll, is_hifz, photo_url, monthly_fee, student_code, studentId } = req.body;
     try {
       if (student_code) {
         const existingSnapshot = await firestore.collection("students").where("student_code", "==", student_code).get();
@@ -1621,6 +1626,15 @@ async function seedDatabase() {
         monthly_fee: monthly_fee || 0, student_code,
         updated_at: new Date().toISOString()
       };
+
+      if (studentId) {
+        const existingSnapshot = await firestore.collection("students").where("studentId", "==", studentId).get();
+        const existing = existingSnapshot.docs.find(doc => doc.id !== req.params.id);
+        if (existing) {
+          return res.status(400).json({ error: "এই স্টুডেন্ট আইডি ইতিমধ্যে ব্যবহৃত হয়েছে।" });
+        }
+        updateData.studentId = studentId;
+      }
 
       await firestore.collection("students").doc(req.params.id).update(updateData);
       res.json({ success: true });
@@ -1872,10 +1886,10 @@ async function seedDatabase() {
       const attendanceSnapshot = await firestore.collection("attendance").where("date", "==", date).get();
       const attendance = attendanceSnapshot.docs.map(doc => doc.data() as any);
       
-      const result = students.map((s: any) => ({
-        ...s,
-        status: attendance.find((a: any) => a.student_id === s.id)?.status || null
-      }));
+      const result = {
+        students,
+        attendance
+      };
       
       res.json(result);
     } catch (error) {
@@ -2485,9 +2499,15 @@ async function seedDatabase() {
 
   // --- Nodemailer Email API ---
   app.post("/api/send-email", async (req, res) => {
-    const { pdfData, filename, email } = req.body;
+    const { to, subject, text, attachments, email, pdfData, filename } = req.body;
     
-    if (!email || !pdfData) {
+    const targetEmail = email || to;
+    const targetPdfData = pdfData || (attachments && attachments[0]?.content);
+    const targetFilename = filename || (attachments && attachments[0]?.filename);
+    const targetSubject = subject || "Payment Receipt - Al Hera Madrasa";
+    const targetText = text || "Please find your payment receipt attached.";
+
+    if (!targetEmail || !targetPdfData) {
       return res.status(400).json({ error: "Missing email or pdfData" });
     }
 
@@ -2502,16 +2522,16 @@ async function seedDatabase() {
         },
       });
 
-      const base64Data = pdfData.split(",")[1];
+      const base64Data = targetPdfData.split(",")[1] || targetPdfData;
 
       await transporter.sendMail({
         from: `"Al Hera Madrasa" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: "Payment Receipt - Al Hera Madrasa",
-        text: "Please find your payment receipt attached.",
+        to: targetEmail,
+        subject: targetSubject,
+        text: targetText,
         attachments: [
           {
-            filename: filename,
+            filename: targetFilename || "receipt.pdf",
             content: base64Data,
             encoding: "base64",
           },

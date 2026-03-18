@@ -10,6 +10,7 @@ import { toPng } from 'html-to-image';
 import { cn } from "../lib/utils";
 import { LoadingButton } from "./LoadingButton";
 import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export function AccountingManager({ settings, addToast }: { settings: any, addToast: (message: string, type?: 'success' | 'error' | 'info') => void }) {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0, feeIncome: 0, otherIncome: 0 });
@@ -49,25 +50,30 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
     if (endDate) params.append("end_date", endDate);
 
     const summaryRes = await fetch(`/api/admin/accounting/summary?${params}`);
-    setSummary(await summaryRes.json());
+    const summaryData = await summaryRes.json();
+    if (summaryData.error) {
+      addToast("হিসাব লোড করতে সমস্যা হয়েছে।", "error");
+    } else {
+      setSummary(summaryData);
+    }
 
     const incomeParams = new URLSearchParams(params);
     incomeParams.append("limit", "50");
     incomeParams.append("offset", reset ? "0" : incomeOffset.toString());
     const incomeRes = await fetch(`/api/admin/accounting/income?${incomeParams}`);
     const incomeData = await incomeRes.json();
-    if (reset) setIncome(incomeData.data);
-    else setIncome(prev => [...prev, ...incomeData.data]);
-    setHasMoreIncome(incomeData.hasMore);
+    if (reset) setIncome(incomeData.data || []);
+    else setIncome(prev => [...prev, ...(incomeData.data || [])]);
+    setHasMoreIncome(incomeData.hasMore || false);
 
     const expenseParams = new URLSearchParams(params);
     expenseParams.append("limit", "50");
     expenseParams.append("offset", reset ? "0" : expenseOffset.toString());
     const expenseRes = await fetch(`/api/admin/accounting/expenses?${expenseParams}`);
     const expenseData = await expenseRes.json();
-    if (reset) setExpenses(expenseData.data);
-    else setExpenses(prev => [...prev, ...expenseData.data]);
-    setHasMoreExpenses(expenseData.hasMore);
+    if (reset) setExpenses(expenseData.data || []);
+    else setExpenses(prev => [...prev, ...(expenseData.data || [])]);
+    setHasMoreExpenses(expenseData.hasMore || false);
 
     setLoading(false);
   };
@@ -201,8 +207,126 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
     }
   };
 
+  const generatePrintableHTML = () => {
+    const title = settings?.title || "Madrasa";
+    const dateRange = startDate && endDate ? `Date: ${startDate} to ${endDate}` : "";
+    
+    let html = `
+      <html>
+        <head>
+          <title>Accounting Report</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Kalpurush', 'Siyam Rupali'; padding: 20px; color: #333; }
+            h1 { text-align: center; margin-bottom: 5px; font-size: 24px; }
+            h2 { text-align: center; margin-bottom: 20px; font-size: 18px; color: #666; }
+            .date-range { text-align: center; margin-bottom: 30px; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background-color: #f8f9fa; font-weight: bold; }
+            .summary-th { background-color: #10b981; color: white; }
+            .income-th { background-color: #10b981; color: white; }
+            .expense-th { background-color: #e11d48; color: white; }
+            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; margin-top: 20px; }
+            @media print {
+              body { padding: 0; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${title}</h1>
+          <h2>Accounting Report</h2>
+          ${dateRange ? `<div class="date-range">${dateRange}</div>` : ''}
+          
+          <div class="section-title">Summary</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="summary-th">Total Income</th>
+                <th class="summary-th">Total Expense</th>
+                <th class="summary-th">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${summary.totalIncome} TK</td>
+                <td>${summary.totalExpense} TK</td>
+                <td>${summary.balance} TK</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="section-title">Income Details</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="income-th">Date</th>
+                <th class="income-th">Category/Student</th>
+                <th class="income-th">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${income.map(i => `
+                <tr>
+                  <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${i.student_name || i.category || ''}</td>
+                  <td>${i.amount} TK</td>
+                </tr>
+              `).join('')}
+              ${income.length === 0 ? '<tr><td colspan="3" style="text-align:center">No income records</td></tr>' : ''}
+            </tbody>
+          </table>
+
+          <div class="section-title">Expense Details</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="expense-th">Date</th>
+                <th class="expense-th">Category</th>
+                <th class="expense-th">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${expenses.map(e => `
+                <tr>
+                  <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${e.category || ''}</td>
+                  <td>${e.amount} TK</td>
+                </tr>
+              `).join('')}
+              ${expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">No expense records</td></tr>' : ''}
+            </tbody>
+          </table>
+          <script>
+            window.onload = () => { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+    return html;
+  };
+
+  const handleDownloadReport = () => {
+    const html = generatePrintableHTML();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `accounting_report_${new Date().toISOString().split('T')[0]}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast("HTML ফাইল ডাউনলোড হয়েছে। এটি ব্রাউজারে ওপেন করে PDF হিসেবে সেভ করতে পারেন।", "success");
+  };
+
   const handlePrint = () => {
-    window.print();
+    const html = generatePrintableHTML();
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } else {
+      addToast("পপ-আপ ব্লক করা আছে। দয়া করে পপ-আপ অ্যালাউ করুন।", "error");
+    }
   };
 
   const calculatePercentage = (part: number, total: number) => {
@@ -232,8 +356,16 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
             <Plus className="w-5 h-5" /> খরচ যোগ করুন
           </button>
           <button 
+            onClick={handleDownloadReport}
+            className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
+            title="ডাউনলোড রিপোর্ট"
+          >
+            <Download className="w-6 h-6" />
+          </button>
+          <button 
             onClick={handlePrint}
             className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
+            title="প্রিন্ট রিপোর্ট"
           >
             <Printer className="w-6 h-6" />
           </button>
@@ -380,7 +512,7 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                 <button onClick={() => setActiveView("income")} className="text-xs font-bold text-blue-600 hover:underline">সব দেখুন</button>
               </div>
               <div className="space-y-4">
-                {income.slice(0, 5).map(i => (
+                {income?.slice(0, 5).map(i => (
                   <div key={`summary-income-${i.id}`} onClick={() => setSelectedTransaction(i)} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
@@ -406,7 +538,7 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                 <button onClick={() => setActiveView("expense")} className="text-xs font-bold text-blue-600 hover:underline">সব দেখুন</button>
               </div>
               <div className="space-y-4">
-                {expenses.slice(0, 5).map(e => (
+                {expenses?.slice(0, 5).map(e => (
                   <div key={`summary-expense-${e.id}`} onClick={() => setSelectedTransaction(e)} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center">

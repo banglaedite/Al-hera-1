@@ -23,7 +23,7 @@ import {
   Calendar,
   Utensils
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
 
 function TypingTitle({ text }: { text: string }) {
@@ -86,13 +86,15 @@ function TypingTitle({ text }: { text: string }) {
       {/* Filled Text (Foreground) */}
       <span className="relative text-slate-900 whitespace-pre-wrap">
         {text.substring(0, filledLength)}
-        {filledLength < text.length && (
-          <motion.span 
-            animate={{ opacity: [1, 0] }} 
-            transition={{ repeat: Infinity, duration: 0.8 }}
-            className="inline-block w-1.5 md:w-2 h-[0.8em] bg-emerald-500 mx-1 align-baseline"
-          />
-        )}
+        <span className="relative">
+          {filledLength < text.length && (
+            <motion.span 
+              animate={{ opacity: [1, 0] }} 
+              transition={{ repeat: Infinity, duration: 0.8 }}
+              className="absolute left-0 top-0 w-1.5 md:w-2 h-[0.8em] bg-emerald-500 ml-1 mt-[0.1em]"
+            />
+          )}
+        </span>
         <span className="opacity-0">{text.substring(filledLength)}</span>
       </span>
     </div>
@@ -105,6 +107,7 @@ const iconMap: any = {
 };
 
 const LandingPage = () => {
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<any>(null);
   const [features, setFeatures] = useState<any[]>([]);
   const [foodMenu, setFoodMenu] = useState<any[]>([]);
@@ -113,6 +116,15 @@ const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
+    // Check if user is already logged in and redirect
+    if (localStorage.getItem("isAdmin") === "true") {
+      navigate("/secret-admin-access");
+      return;
+    } else if (localStorage.getItem("guardianPhone")) {
+      navigate("/parent");
+      return;
+    }
+
     const fetchWithTimeout = (url: string, timeout = 15000) => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);

@@ -18,7 +18,7 @@ import {
 import { cn } from "../lib/utils";
 
 export default function ParentPortal() {
-  const [identifier, setIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState(() => localStorage.getItem("guardianPhone") || "");
   const [loading, setLoading] = useState(false);
   const [student, setStudent] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -83,11 +83,17 @@ export default function ParentPortal() {
 
   useEffect(() => {
     fetch("/api/site-settings").then(res => res.json()).then(setSettings);
+    
+    // Auto login if identifier exists in localStorage
+    const savedIdentifier = localStorage.getItem("guardianPhone");
+    if (savedIdentifier) {
+      handleLogin(null, savedIdentifier);
+    }
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!identifier) return;
+  const handleLogin = async (e: React.FormEvent | null, loginIdentifier: string = identifier) => {
+    if (e) e.preventDefault();
+    if (!loginIdentifier) return;
     
     setLoading(true);
     setError("");
@@ -96,7 +102,7 @@ export default function ParentPortal() {
       const response = await fetch("/api/parent-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier })
+        body: JSON.stringify({ identifier: loginIdentifier })
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -104,6 +110,7 @@ export default function ParentPortal() {
       }
       const data = await response.json();
       setStudent(data);
+      localStorage.setItem("guardianPhone", loginIdentifier);
       
       // Fetch related data
       const [attRes, resRes, hifzRes, profileRes, deviceRes] = await Promise.all([
@@ -114,10 +121,18 @@ export default function ParentPortal() {
         fetch(`/api/parent/device-history/${data.id}`)
       ]);
       
-      setAttendance(await attRes.json());
-      setResults(await resRes.json());
-      setHifzRecords(await hifzRes.json());
-      setDeviceHistory(await deviceRes.json());
+      const attData = await attRes.json();
+      setAttendance(Array.isArray(attData) ? attData : []);
+      
+      const resData = await resRes.json();
+      setResults(Array.isArray(resData) ? resData : []);
+      
+      const hifzData = await hifzRes.json();
+      setHifzRecords(Array.isArray(hifzData) ? hifzData : []);
+      
+      const deviceData = await deviceRes.json();
+      setDeviceHistory(Array.isArray(deviceData) ? deviceData : []);
+      
       const profileData = await profileRes.json();
       setFees(profileData.fees || []);
       
@@ -131,6 +146,7 @@ export default function ParentPortal() {
   const handleLogout = () => {
     setStudent(null);
     setIdentifier("");
+    localStorage.removeItem("guardianPhone");
   };
 
   if (student) {
@@ -379,7 +395,7 @@ export default function ParentPortal() {
                         </div>
                         <div className="text-right">
                           <p className="font-black text-slate-900 text-lg">{log.time}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">ডিভাইস আইডি: {log.id.slice(-4)}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">ডিভাইস আইডি: {log.id?.slice(-4)}</p>
                         </div>
                       </div>
                     )) : (

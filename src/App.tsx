@@ -37,7 +37,7 @@ const NoticeBoard = () => {
         const res = await fetch("/api/notices");
         if (res.ok) {
           const data = await res.json();
-          setNotices(data);
+          setNotices(Array.isArray(data) ? data : []);
         }
       } catch (err) {
         console.error("Failed to load notices:", err);
@@ -78,7 +78,7 @@ const Navbar = () => {
         const res = await fetch("/api/site-settings");
         if (res.ok) {
           const data = await res.json();
-          if (Object.keys(data).length > 0) setSettings(data);
+          if (data && typeof data === 'object' && Object.keys(data).length > 0) setSettings(data);
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
