@@ -3,7 +3,7 @@ import {
   DollarSign, Plus, Search, TrendingUp, TrendingDown, 
   Printer, Download, Calendar, Filter, MoreVertical,
   Share2, Mail, MessageCircle, PieChart, ArrowUpRight, ArrowDownRight,
-  Trash2
+  Trash2, X as CloseIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toPng } from 'html-to-image';
@@ -299,7 +299,12 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
             </tbody>
           </table>
           <script>
-            window.onload = () => { window.print(); }
+            window.onload = () => { 
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, 1000);
+            }
           </script>
         </body>
       </html>
@@ -698,83 +703,88 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
 
         {selectedTransaction && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden">
-              <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center print:hidden">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+              <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 print:hidden">
                 <h3 className="text-xl font-black text-slate-900">মানি রিসিট</h3>
-                <button onClick={() => setSelectedTransaction(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <button onClick={() => setSelectedTransaction(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                  <CloseIcon className="w-6 h-6" />
+                </button>
               </div>
-              <div id="transaction-detail" className="p-8 space-y-8 bg-white relative">
-                {/* Receipt Header */}
-                <div className="flex items-center gap-4 border-b-2 border-slate-900 pb-6">
-                  {settings?.logo_url && (
-                    <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
-                  )}
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                    <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
-                    <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">
-                      মানি রিসিট
+              
+              <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+                <div id="transaction-detail" className="space-y-8 bg-white relative">
+                  {/* Receipt Header */}
+                  <div className="flex items-center gap-4 border-b-2 border-slate-900 pb-6">
+                    {settings?.logo_url && (
+                      <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                    )}
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                      <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                      <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedTransaction.id.toString().padStart(6, '0')}</p>
-                  </div>
-                </div>
-
-                {/* Receipt Body */}
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-8">
-                    <div className="space-y-1 border-b border-slate-100 pb-2">
-                      <p className="text-[10px] font-black uppercase text-slate-400">তারিখ</p>
-                      <p className="font-bold text-slate-900">{new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}</p>
-                    </div>
-                    <div className="space-y-1 border-b border-slate-100 pb-2">
-                      <p className="text-[10px] font-black uppercase text-slate-400">ছাত্রের নাম/উৎস</p>
-                      <p className="font-bold text-slate-900">{selectedTransaction.student_name || "অন্যান্য"}</p>
-                    </div>
-                    <div className="space-y-1 border-b border-slate-100 pb-2">
-                      <p className="text-[10px] font-black uppercase text-slate-400">ক্যাটাগরি</p>
-                      <p className="font-bold text-slate-900">{selectedTransaction.category}</p>
-                    </div>
-                    <div className="space-y-1 border-b border-slate-100 pb-2">
-                      <p className="text-[10px] font-black uppercase text-slate-400">লেনদেনের ধরণ</p>
-                      <p className="font-bold text-slate-900">{(selectedTransaction.paid_date || selectedTransaction.type === 'Other') ? "আয়" : "ব্যয়"}</p>
+                    <div className="text-right">
+                      <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">
+                        মানি রিসিট
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedTransaction.id.toString().padStart(6, '0')}</p>
                     </div>
                   </div>
 
-                  <div className="p-6 bg-slate-50 rounded-3xl border-2 border-slate-100 border-dashed">
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">বিবরণ/উদ্দেশ্য</p>
-                    <p className="font-bold text-slate-900 leading-relaxed">{selectedTransaction.purpose || selectedTransaction.description || "-"}</p>
-                  </div>
+                  {/* Receipt Body */}
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-1 border-b border-slate-100 pb-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">তারিখ</p>
+                        <p className="font-bold text-slate-900">{new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}</p>
+                      </div>
+                      <div className="space-y-1 border-b border-slate-100 pb-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">ছাত্রের নাম/উৎস</p>
+                        <p className="font-bold text-slate-900">{selectedTransaction.student_name || "অন্যান্য"}</p>
+                      </div>
+                      <div className="space-y-1 border-b border-slate-100 pb-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">ক্যাটাগরি</p>
+                        <p className="font-bold text-slate-900">{selectedTransaction.category}</p>
+                      </div>
+                      <div className="space-y-1 border-b border-slate-100 pb-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">লেনদেনের ধরণ</p>
+                        <p className="font-bold text-slate-900">{(selectedTransaction.paid_date || selectedTransaction.type === 'Other') ? "আয়" : "ব্যয়"}</p>
+                      </div>
+                    </div>
 
-                  <div className="flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl shadow-lg">
-                    <p className="font-bold uppercase tracking-widest text-xs">মোট পরিমাণ</p>
-                    <h2 className="text-3xl font-black">৳{selectedTransaction.amount}</h2>
-                  </div>
-                </div>
+                    <div className="p-6 bg-slate-50 rounded-3xl border-2 border-slate-100 border-dashed">
+                      <p className="text-[10px] font-black uppercase text-slate-400 mb-2">বিবরণ/উদ্দেশ্য</p>
+                      <p className="font-bold text-slate-900 leading-relaxed">{selectedTransaction.purpose || selectedTransaction.description || "-"}</p>
+                    </div>
 
-                {/* Signatures */}
-                <div className="grid grid-cols-2 gap-12 pt-12">
-                  <div className="text-center">
-                    <div className="border-t border-slate-300 pt-2">
-                      <p className="text-[10px] font-black text-slate-500 uppercase">আদায়কারীর স্বাক্ষর</p>
+                    <div className="flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl shadow-lg">
+                      <p className="font-bold uppercase tracking-widest text-xs">মোট পরিমাণ</p>
+                      <h2 className="text-3xl font-black">৳{selectedTransaction.amount}</h2>
                     </div>
                   </div>
-                  <div className="text-center">
-                    <div className="border-t border-slate-300 pt-2">
-                      <p className="text-[10px] font-black text-slate-500 uppercase">পরিচালক স্বাক্ষর</p>
+
+                  {/* Signatures */}
+                  <div className="grid grid-cols-2 gap-12 pt-12">
+                    <div className="text-center">
+                      <div className="border-t border-slate-300 pt-2">
+                        <p className="text-[10px] font-black text-slate-500 uppercase">আদায়কারীর স্বাক্ষর</p>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="border-t border-slate-300 pt-2">
+                        <p className="text-[10px] font-black text-slate-500 uppercase">পরিচালক স্বাক্ষর</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Footer */}
-                <div className="text-center pt-8 border-t border-slate-50">
-                  <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Powered by Madrasa Management System</p>
+                  {/* Footer */}
+                  <div className="text-center pt-8 border-t border-slate-50">
+                    <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Powered by Madrasa Management System</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-8 bg-slate-50 border-t border-slate-100 grid grid-cols-5 gap-2 print:hidden">
+              <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-5 gap-2 sticky bottom-0 z-20 print:hidden">
                 <button onClick={() => window.print()} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
                   <Printer className="w-5 h-5 text-slate-600" />
                   <span className="text-[10px] font-bold">প্রিন্ট</span>
@@ -844,7 +854,9 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                       }
                     }
                     const text = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
-                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                    const cleanPhone = selectedTransaction.student_phone ? selectedTransaction.student_phone.replace(/[^0-9]/g, '') : '';
+                    const phone = cleanPhone.startsWith('0') ? '88' + cleanPhone : cleanPhone;
+                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
                   }}
                   className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all"
                 >
@@ -855,6 +867,12 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                   onClick={async () => {
                     const element = document.getElementById('transaction-detail');
                     if (!element) return;
+
+                    let targetEmail = selectedTransaction.student_email || "";
+                    if (!targetEmail) {
+                      targetEmail = window.prompt("দয়া করে প্রাপকের ইমেইল এড্রেসটি দিন:", "");
+                      if (!targetEmail) return;
+                    }
 
                     const toastId = addToast("ইমেইল পাঠানো হচ্ছে...", "info");
 
@@ -888,7 +906,7 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          to: "", // User will need to provide email if not available
+                          to: targetEmail,
                           subject: `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`,
                           text: `আসসালামু আলাইকুম,\nআপনার পেমেন্ট সফল হয়েছে। রিসিটটি সংযুক্ত করা হলো।\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nধন্যবাদ।`,
                           attachments: [
@@ -904,18 +922,17 @@ export function AccountingManager({ settings, addToast }: { settings: any, addTo
                       if (response.ok) {
                         addToast("ইমেইল সফলভাবে পাঠানো হয়েছে।", "success");
                       } else {
-                        // If to is empty, mailto fallback
-                        const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
-                        const body = `লেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
-                        window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
-                        addToast("ইমেইল পাঠানোর উইন্ডো ওপেন হয়েছে।", "info");
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || "ইমেইল পাঠাতে ব্যর্থ হয়েছে।");
                       }
                     } catch (err) {
                       console.error("Email sending failed", err);
+                      addToast("ইমেইল পাঠাতে সমস্যা হয়েছে। দয়া করে সেটিংস চেক করুন।", "error");
+                      
                       // Fallback to mailto
                       const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
                       const body = `লেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
-                      window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+                      window.open(`mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
                     }
                   }}
                   className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all"

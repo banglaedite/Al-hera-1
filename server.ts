@@ -245,6 +245,26 @@ async function seedDatabase() {
     console.error("Critical error during database seeding:", e);
   }
 
+  // --- Sequential Serial Number Helper ---
+  async function getNextSerial(prefix: string = "AHM") {
+    const db = getFirestoreInstance();
+    const counterRef = db.collection("counters").doc("transactions");
+    
+    return await db.runTransaction(async (transaction: any) => {
+      const counterDoc = await transaction.get(counterRef);
+      let nextNum = 1;
+      
+      if (counterDoc.exists) {
+        nextNum = (counterDoc.data().lastNum || 0) + 1;
+      }
+      
+      transaction.set(counterRef, { lastNum: nextNum }, { merge: true });
+      
+      const paddedNum = nextNum.toString().padStart(4, '0');
+      return `${prefix}-${paddedNum}`;
+    });
+  }
+
   // --- Exams ---
   app.get("/api/exams", async (req, res) => {
     try {
@@ -353,8 +373,11 @@ async function seedDatabase() {
   app.post("/api/admin/transactions", async (req, res) => {
     try {
       const data = req.body;
+      if (!data.transaction_id || data.transaction_id.startsWith('TXN-')) {
+        data.transaction_id = await getNextSerial("AHM");
+      }
       const docRef = await firestore!.collection("transactions").add(data);
-      res.json({ success: true, id: docRef.id });
+      res.json({ success: true, id: docRef.id, transaction_id: data.transaction_id });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to create transaction" });
@@ -492,8 +515,9 @@ async function seedDatabase() {
   app.post("/api/donations", async (req, res) => {
     const { donor_name, amount, category, transaction_id } = req.body;
     try {
-      await firestore!.collection("donations").add({ donor_name, amount, category, transaction_id, date: new Date().toISOString() });
-      res.json({ success: true });
+      const finalTrxId = transaction_id || await getNextSerial("AHM");
+      await firestore!.collection("donations").add({ donor_name, amount, category, transaction_id: finalTrxId, date: new Date().toISOString() });
+      res.json({ success: true, transaction_id: finalTrxId });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to add donation" });
@@ -685,6 +709,7 @@ async function seedDatabase() {
       nagad_number, rocket_number, enable_bkash, enable_nagad, enable_rocket, enable_recruitment, address,
       smtp_host, smtp_port, smtp_user, smtp_pass, sender_email,
       firebase_service_account,
+      udyoktapay_api_key, udyoktapay_api_url,
       show_features_directly, show_food_directly, show_showcase_directly, showcase_content,
       admission_rules,
       enable_neon_light, neon_light_color, neon_light_effect
@@ -698,6 +723,8 @@ async function seedDatabase() {
         enable_recruitment: enable_recruitment ? 1 : 0, address: address || "",
         smtp_host: smtp_host || "", smtp_port: smtp_port || "", smtp_user: smtp_user || "", smtp_pass: smtp_pass || "", sender_email: sender_email || "",
         firebase_service_account: firebase_service_account || "",
+        udyoktapay_api_key: udyoktapay_api_key || "",
+        udyoktapay_api_url: udyoktapay_api_url || "",
         show_features_directly: show_features_directly ? 1 : 0, 
         show_food_directly: show_food_directly ? 1 : 0, 
         show_showcase_directly: show_showcase_directly ? 1 : 0, 
@@ -832,6 +859,126 @@ async function seedDatabase() {
     }
   });
 
+  // --- Classes ---
+  app.get("/api/classes", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("classes").orderBy("order").get();
+      const classes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(classes);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch classes" });
+    }
+  });
+
+  app.post("/api/classes", async (req, res) => {
+    const { name, order, password } = req.body;
+    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("classes").add({ name, order: order || 0 });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add class" });
+    }
+  });
+
+  app.put("/api/classes/:id", async (req, res) => {
+    const { name, order, password } = req.body;
+    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("classes").doc(req.params.id).update({ name, order });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update class" });
+    }
+  });
+
+  app.delete("/api/classes/:id", async (req, res) => {
+    const { password } = req.body;
+    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("classes").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete class" });
+    }
+  });
+
+  // --- Sub Admins ---
+  app.get("/api/sub-admins", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("sub_admins").get();
+      const subAdmins = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(subAdmins);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sub-admins" });
+    }
+  });
+
+  app.post("/api/sub-admins", async (req, res) => {
+    const { email, permissions, password } = req.body;
+    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("sub_admins").add({ email, permissions });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add sub-admin" });
+    }
+  });
+
+  app.put("/api/sub-admins/:id", async (req, res) => {
+    const { email, permissions, password } = req.body;
+    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("sub_admins").doc(req.params.id).update({ email, permissions });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update sub-admin" });
+    }
+  });
+
+  app.delete("/api/sub-admins/:id", async (req, res) => {
+    const { password } = req.body;
+    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("sub_admins").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete sub-admin" });
+    }
+  });
+
+  app.post("/api/admin-login", async (req, res) => {
+    const { identifier } = req.body;
+    const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
+    
+    if (identifier === adminPassword || identifier === "১২৩৪") {
+      return res.json({ success: true, role: "admin", permissions: ["all"] });
+    }
+
+    try {
+      const snapshot = await firestore.collection("sub_admins").where("email", "==", identifier).get();
+      if (!snapshot.empty) {
+        const subAdmin = snapshot.docs[0].data();
+        return res.json({ success: true, role: "sub_admin", permissions: subAdmin.permissions });
+      }
+      res.status(401).json({ error: "ভুল পাসওয়ার্ড বা ইমেইল!" });
+    } catch (error) {
+      res.status(500).json({ error: "লগইন করতে সমস্যা হয়েছে" });
+    }
+  });
+
   // --- Teachers ---
   app.get("/api/admin/teachers", async (req, res) => {
     try {
@@ -845,9 +992,9 @@ async function seedDatabase() {
   });
 
   app.post("/api/admin/teachers", async (req, res) => {
-    const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid } = req.body;
+    const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id } = req.body;
     try {
-      await firestore!.collection("teachers").add({ name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid });
+      await firestore!.collection("teachers").add({ name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id: biometric_id || null, created_at: new Date().toISOString() });
       res.json({ success: true });
     } catch (e) {
       console.error(e);
@@ -856,9 +1003,9 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/teachers/:id", async (req, res) => {
-    const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid } = req.body;
+    const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id } = req.body;
     try {
-      await firestore.collection("teachers").doc(req.params.id).update({ name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid });
+      await firestore.collection("teachers").doc(req.params.id).update({ name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id: biometric_id || null, updated_at: new Date().toISOString() });
       res.json({ success: true });
     } catch (e) {
       console.error(e);
@@ -1406,7 +1553,7 @@ async function seedDatabase() {
     const { fee_ids, paid_amounts, discount, total_paid, payment_method } = req.body;
     try {
       const batch = firestore.batch();
-      const transactionId = `TRX-${Date.now()}`;
+      const transactionId = await getNextSerial("AHM");
       
       for (const id of fee_ids) {
         const amount = paid_amounts[id];
@@ -1424,7 +1571,7 @@ async function seedDatabase() {
         batch.update(feeRef, updateData);
       }
       await batch.commit();
-      res.json({ success: true });
+      res.json({ success: true, transaction_id: transactionId });
     } catch (error) {
       console.error("Fee payment error:", error);
       res.status(500).json({ error: "Failed to process payment" });
@@ -1601,10 +1748,11 @@ async function seedDatabase() {
         whatsapp,
         email,
         class: className,
-        is_hifz: (is_hifz || className === "হিফজ") ? 1 : 0,
+        is_hifz: (is_hifz || className?.includes("হিফজ") || className?.includes("হেফজ")) ? 1 : 0,
         photo_url,
         monthly_fee: monthly_fee || 0,
         student_code: studentCode,
+        biometric_id: req.body.biometric_id || null,
         deleted_at: null,
         created_at: new Date().toISOString()
       };
@@ -1631,8 +1779,9 @@ async function seedDatabase() {
       const updateData: any = {
         name, father_name, mother_name, dob, 
         blood_group, address, phone, whatsapp, email, class: className, 
-        roll, is_hifz: (is_hifz || className === "হিফজ") ? 1 : 0, photo_url, 
+        roll, is_hifz: (is_hifz || className?.includes("হিফজ") || className?.includes("হেফজ")) ? 1 : 0, photo_url, 
         monthly_fee: monthly_fee || 0, student_code,
+        biometric_id: req.body.biometric_id || null,
         updated_at: new Date().toISOString()
       };
 
@@ -2041,6 +2190,116 @@ async function seedDatabase() {
     }
   });
 
+  // --- Attendance Push (For Biometric Machines) ---
+  app.post("/api/attendance/push", async (req, res) => {
+    const { biometric_id, timestamp, method } = req.body;
+    const now = timestamp ? new Date(timestamp) : new Date();
+    const date = now.toISOString().split('T')[0];
+    const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+    try {
+      // 1. Find Student or Teacher by biometric_id
+      let person: any = null;
+      let type: 'student' | 'teacher' = 'student';
+
+      const studentSnapshot = await firestore.collection("students").where("biometric_id", "==", biometric_id).where("deleted_at", "==", null).get();
+      if (!studentSnapshot.empty) {
+        person = { id: studentSnapshot.docs[0].id, ...studentSnapshot.docs[0].data() };
+        type = 'student';
+      } else {
+        const teacherSnapshot = await firestore.collection("teachers").where("biometric_id", "==", biometric_id).where("deleted_at", "==", null).get();
+        if (!teacherSnapshot.empty) {
+          person = { id: teacherSnapshot.docs[0].id, ...teacherSnapshot.docs[0].data() };
+          type = 'teacher';
+        }
+      }
+
+      if (!person) {
+        return res.status(404).json({ error: "No student or teacher found with this biometric ID" });
+      }
+
+      let collectionName = type === 'teacher' ? 'teacher_attendance' : 'attendance';
+      let idField = type === 'teacher' ? 'teacher_id' : 'student_id';
+      let docId = `${person.id}_${date}`;
+
+      const docRef = firestore.collection(collectionName).doc(docId);
+      const doc = await docRef.get();
+
+      if (!doc.exists) {
+        // Check-in
+        await docRef.set({
+          [idField]: person.id,
+          date,
+          status: 'present',
+          check_in: time,
+          check_out: null,
+          method: method || 'device',
+          updated_at: now.toISOString()
+        });
+        res.json({ success: true, action: 'check_in', person: person.name, type });
+      } else {
+        // Check-out
+        await docRef.update({
+          check_out: time,
+          updated_at: now.toISOString()
+        });
+        res.json({ success: true, action: 'check_out', person: person.name, type });
+      }
+
+      // Log to history
+      await firestore.collection("attendance_history").add({
+        person_id: person.id,
+        name: person.name,
+        type,
+        date,
+        time,
+        action: doc.exists ? 'check_out' : 'check_in',
+        method: method || 'device',
+        timestamp: now.toISOString()
+      });
+
+    } catch (error) {
+      console.error("Attendance push error:", error);
+      res.status(500).json({ error: "Failed to record attendance" });
+    }
+  });
+
+  // --- Biometric Registration ---
+  app.post("/api/admin/biometric/register", async (req, res) => {
+    const { id, type, biometric_id, biometricId } = req.body;
+    const finalBiometricId = biometric_id || biometricId;
+    try {
+      const collectionName = type === 'teacher' ? 'teachers' : 'students';
+      await firestore.collection(collectionName).doc(id).update({
+        biometric_id: finalBiometricId,
+        updated_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Biometric registration error:", error);
+      res.status(500).json({ error: "Failed to register biometric ID" });
+    }
+  });
+
+  app.get("/api/admin/biometric/history", async (req, res) => {
+    try {
+      const historySnapshot = await firestore.collection("attendance_history")
+        .orderBy("timestamp", "desc")
+        .limit(100)
+        .get();
+      
+      const history = historySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      res.json(history);
+    } catch (error) {
+      console.error("Fetch biometric history error:", error);
+      res.status(500).json({ error: "Failed to fetch biometric history" });
+    }
+  });
+
   app.get("/api/parent/device-history/:studentId", async (req, res) => {
     const { studentId } = req.params;
     try {
@@ -2159,11 +2418,15 @@ async function seedDatabase() {
   });
 
   app.post("/api/notices", async (req, res) => {
-    const { title, content } = req.body;
+    const { title, content, image_url, link_url, width, height } = req.body;
     try {
       await firestore.collection("notices").add({
         title,
         content,
+        image_url: image_url || null,
+        link_url: link_url || null,
+        width: width || null,
+        height: height || null,
         is_active: 1,
         date: new Date().toISOString(),
         created_at: new Date().toISOString()
@@ -2175,11 +2438,15 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/notices/:id", async (req, res) => {
-    const { title, content, is_active } = req.body;
+    const { title, content, is_active, image_url, link_url, width, height } = req.body;
     try {
       await firestore.collection("notices").doc(req.params.id).update({
         title,
         content,
+        image_url: image_url || null,
+        link_url: link_url || null,
+        width: width || null,
+        height: height || null,
         is_active: is_active !== undefined ? Number(is_active) : 1,
         updated_at: new Date().toISOString()
       });
@@ -2284,10 +2551,30 @@ async function seedDatabase() {
     }
   });
 
-  app.post("/api/parent/pay-fee", async (req, res) => {
-    const { studentId, months, year, amount, method } = req.body;
+  app.get("/api/parent/payment-history/:id", async (req, res) => {
     try {
-      const settingsDoc = await firestore!.collection("settings").doc("general").get();
+      const snapshot = await firestore!.collection("pending_payments")
+        .where("studentId", "==", req.params.id)
+        .get();
+      const history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      history.sort((a: any, b: any) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+      res.json(history);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch payment history" });
+    }
+  });
+
+  app.post("/api/parent/pay-fee", async (req, res) => {
+    const { 
+      studentId, months, year, amount, method, 
+      transactionId: manualTrxID, senderPhone, reference
+    } = req.body;
+    try {
+      const settingsDoc = await firestore!.collection("site_settings").doc("1").get();
       const settings = settingsDoc.data() || {};
       
       const studentDoc = await firestore!.collection("students").doc(studentId).get();
@@ -2295,7 +2582,7 @@ async function seedDatabase() {
       const student = studentDoc.data();
 
       // Create a pending transaction
-      const transactionId = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const transactionId = await getNextSerial("AHM");
       
       const pendingPayment = {
         transactionId,
@@ -2307,14 +2594,17 @@ async function seedDatabase() {
         amount,
         method,
         status: "pending",
+        manualTrxID: manualTrxID || null,
+        senderPhone: senderPhone || null,
+        reference: reference || null,
         createdAt: new Date().toISOString()
       };
       
       await firestore!.collection("pending_payments").doc(transactionId).set(pendingPayment);
 
       if (method === "udyoktapay") {
-        const udyoktaKey = settings.udyoktapay_api_key || process.env.UDYOKTAPAY_API_KEY;
-        const udyoktaUrl = settings.udyoktapay_api_url || process.env.UDYOKTAPAY_API_URL;
+        const udyoktaKey = settings.udyoktapay_api_key || "M0HfKk78miHmrHbLCGUCPPs4JzUUDUkBYAtFWbif";
+        const udyoktaUrl = settings.udyoktapay_api_url || "https://alhera.paymently.io/api/checkout-v2";
 
         if (!udyoktaKey || !udyoktaUrl) {
           return res.status(400).json({ error: "Udyokta Pay is not configured." });
@@ -2323,7 +2613,8 @@ async function seedDatabase() {
         const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
         const payload = {
           full_name: student?.name || "Student",
-          email: student?.email || "student@example.com",
+          email: student?.email || "student@gmail.com",
+          mobile_number: student?.guardian_phone || student?.phone || "01700000000",
           amount: amount,
           metadata: {
             transactionId
@@ -2333,55 +2624,36 @@ async function seedDatabase() {
           webhook_url: `${baseUrl}/api/udyoktapay/webhook`
         };
 
+        console.log("Initiating Udyokta Pay with URL:", udyoktaUrl);
         const response = await fetch(udyoktaUrl, {
           method: "POST",
           headers: {
             "RT-UDYOKTAPAY-API-KEY": udyoktaKey,
-            "Content-Type": "application/json"
+            "X-API-KEY": udyoktaKey,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
           },
           body: JSON.stringify(payload)
         });
 
         const data = await response.json();
-        if (data.status && data.payment_url) {
+        console.log("Udyokta Pay Initiation Response:", data);
+        
+        if ((data.status === true || data.status === "success" || data.payment_url) && data.payment_url) {
           return res.json({ payment_url: data.payment_url });
         } else {
-          return res.status(500).json({ error: "Failed to initiate payment with Udyokta Pay." });
+          console.error("Udyokta Pay initiation failed:", data);
+          return res.status(500).json({ error: data.message || "Failed to initiate payment with Udyokta Pay." });
         }
-      } else if (method === "live_bkash" || method === "live_nagad" || method === "live_rocket") {
-        // Direct Live Payment (Mock)
-        await firestore!.collection("pending_payments").doc(transactionId).update({ status: "completed" });
-        
-        const receiptNumber = `REC-${Date.now()}`;
-        for (const month of months) {
-          const feeData = {
-            student_id: studentId,
-            student_name: student?.name,
-            amount: amount / months.length,
-            month: month,
-            year: year,
-            status: "paid",
-            paid_date: new Date().toISOString(),
-            receipt_number: receiptNumber,
-            payment_method: method.replace("live_", "").toUpperCase()
-          };
-          await firestore!.collection("fees").add(feeData);
-        }
-        
-        await firestore!.collection("transactions").add({
-          type: "income",
-          category: "Monthly Fee",
-          amount: amount,
-          date: new Date().toISOString(),
-          description: `Monthly Fee for ${months.join(", ")} ${year} - ${student?.name}`,
-          receipt_number: receiptNumber,
-          payment_method: method.replace("live_", "").toUpperCase()
-        });
-        
-        return res.json({ success: true, transactionId, message: "পেমেন্ট সফল হয়েছে!" });
-      } else {
+      } else if (method.startsWith("manual_")) {
         // Manual payment (bKash/Nagad/Rocket personal number)
-        return res.json({ success: true, transactionId, message: "Please send money and provide TrxID." });
+        return res.json({ 
+          success: true, 
+          transactionId, 
+          message: "আপনার পেমেন্ট রিকোয়েস্ট গ্রহণ করা হয়েছে। এডমিন ভেরিফাই করলে আপনার ফি পেইড হয়ে যাবে।" 
+        });
+      } else {
+        return res.status(400).json({ error: "Invalid payment method" });
       }
 
     } catch (error) {
@@ -2391,18 +2663,20 @@ async function seedDatabase() {
   });
 
   app.post("/api/udyoktapay/webhook", async (req, res) => {
-    const { status, metadata, amount } = req.body;
+    const { status, metadata, amount, invoice_id } = req.body;
+    console.log("Udyokta Pay Webhook Received:", req.body);
     
     try {
-      const apiKeyHeader = req.headers['rt-udyoktapay-api-key'];
-      const settingsDoc = await firestore!.collection("settings").doc("general").get();
+      const apiKeyHeader = req.headers['rt-udyoktapay-api-key'] || req.headers['x-api-key'];
+      const settingsDoc = await firestore!.collection("site_settings").doc("1").get();
       const settings = settingsDoc.data() || {};
       
       if (apiKeyHeader !== settings.udyoktapay_api_key) {
+        console.warn("Udyokta Pay Webhook Unauthorized:", apiKeyHeader);
         return res.status(401).send("Unauthorized");
       }
 
-      if (status === "COMPLETED" && metadata?.transactionId) {
+      if ((status === "COMPLETED" || status === "success") && metadata?.transactionId) {
         const txDoc = await firestore!.collection("pending_payments").doc(metadata.transactionId).get();
         if (txDoc.exists) {
           const txData = txDoc.data();
@@ -2411,7 +2685,7 @@ async function seedDatabase() {
             await firestore!.collection("pending_payments").doc(metadata.transactionId).update({ status: "completed" });
             
             // Create fee records
-            const receiptNumber = `REC-${Date.now()}`;
+            const receiptNumber = await getNextSerial("AHM");
             for (const month of txData.months) {
               const feeData = {
                 student_id: txData.studentId,
@@ -2447,6 +2721,81 @@ async function seedDatabase() {
     }
   });
 
+  app.post("/api/udyoktapay/verify", async (req, res) => {
+    const { invoice_id } = req.body;
+    
+    try {
+      const settingsDoc = await firestore!.collection("site_settings").doc("1").get();
+      const settings = settingsDoc.data() || {};
+      const udyoktaKey = settings.udyoktapay_api_key || process.env.UDYOKTAPAY_API_KEY || "M0HfKk78miHmrHbLCGUCPPs4JzUUDUkBYAtFWbif";
+      const udyoktaUrl = settings.udyoktapay_api_url || process.env.UDYOKTAPAY_API_URL || "https://alhera.paymently.io/api/checkout-v2";
+      
+      // Construct verify URL from checkout URL
+      const verifyUrl = udyoktaUrl.replace("checkout-v2", "verify-payment").replace("checkout", "verify-payment");
+      
+      const response = await fetch(verifyUrl, {
+        method: "POST",
+        headers: {
+          "RT-UDYOKTAPAY-API-KEY": udyoktaKey,
+          "X-API-KEY": udyoktaKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ invoice_id })
+      });
+
+      const data = await response.json();
+      console.log("Udyokta Pay Verification Response:", data);
+
+      if ((data.status === "COMPLETED" || data.status === "success") && data.metadata?.transactionId) {
+        const txDoc = await firestore!.collection("pending_payments").doc(data.metadata.transactionId).get();
+        if (txDoc.exists) {
+          const txData = txDoc.data();
+          if (txData?.status === "pending") {
+            // Mark as paid
+            await firestore!.collection("pending_payments").doc(data.metadata.transactionId).update({ status: "completed" });
+            
+            // Create fee records
+            const receiptNumber = await getNextSerial("AHM");
+            for (const month of txData.months) {
+              const feeData = {
+                student_id: txData.studentId,
+                student_name: txData.studentName,
+                amount: txData.amount / txData.months.length,
+                month: month,
+                year: txData.year,
+                status: "paid",
+                paid_date: new Date().toISOString(),
+                receipt_number: receiptNumber,
+                payment_method: "Udyokta Pay"
+              };
+              await firestore!.collection("fees").add(feeData);
+            }
+            
+            // Add to transactions
+            await firestore!.collection("transactions").add({
+              type: "income",
+              category: "Monthly Fee",
+              amount: txData.amount,
+              date: new Date().toISOString(),
+              description: `Monthly Fee for ${txData.months.join(", ")} ${txData.year} - ${txData.studentName}`,
+              receipt_number: receiptNumber,
+              payment_method: "Udyokta Pay"
+            });
+            
+            return res.json({ success: true, message: "পেমেন্ট সফলভাবে যাচাই করা হয়েছে!" });
+          } else if (txData?.status === "completed") {
+            return res.json({ success: true, message: "পেমেন্ট ইতিমধ্যে সম্পন্ন হয়েছে।" });
+          }
+        }
+      }
+      
+      res.json({ success: false, message: "পেমেন্ট যাচাই করা যায়নি বা পেন্ডিং আছে।" });
+    } catch (error) {
+      console.error("Verification error:", error);
+      res.status(500).json({ error: "Error verifying payment" });
+    }
+  });
+
   app.get("/api/admin/online-payments", async (req, res) => {
     try {
       const snapshot = await firestore!.collection("pending_payments").get();
@@ -2471,7 +2820,7 @@ async function seedDatabase() {
       const txData = txDoc.data();
       await firestore!.collection("pending_payments").doc(id).update({ status: "completed" });
       
-      const receiptNumber = `REC-${Date.now()}`;
+      const receiptNumber = await getNextSerial("AHM");
       for (const month of txData?.months) {
         await firestore!.collection("fees").add({
           student_id: txData?.studentId,
@@ -2559,20 +2908,24 @@ async function seedDatabase() {
     }
 
     try {
+      const db = getFirestoreInstance();
+      const settingsSnapshot = await db.collection("site_settings").limit(1).get();
+      const siteSettings = settingsSnapshot.docs[0]?.data() || {};
+
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || "smtp.gmail.com",
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: process.env.SMTP_SECURE === "true",
+        host: siteSettings.smtp_host || process.env.SMTP_HOST || "smtp.gmail.com",
+        port: parseInt(siteSettings.smtp_port || process.env.SMTP_PORT || "587"),
+        secure: (siteSettings.smtp_port === 465) || (process.env.SMTP_SECURE === "true"),
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          user: siteSettings.smtp_user || process.env.SMTP_USER,
+          pass: siteSettings.smtp_pass || process.env.SMTP_PASS,
         },
       });
 
       const base64Data = targetPdfData.split(",")[1] || targetPdfData;
 
       await transporter.sendMail({
-        from: `"Al Hera Madrasa" <${process.env.SMTP_USER}>`,
+        from: `"Al Hera Madrasa" <${siteSettings.sender_email || siteSettings.smtp_user || process.env.SMTP_USER}>`,
         to: targetEmail,
         subject: targetSubject,
         text: targetText,

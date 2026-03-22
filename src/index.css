@@ -68,36 +68,44 @@
 
 @media print {
   @page {
-    size: A5;
+    size: A4;
     margin: 10mm;
   }
   
+  /* Hide everything by default */
   body * {
     visibility: hidden !important;
   }
   
+  /* Show only specific printable elements and their children */
   #history-receipt, #history-receipt *,
-  #payment-receipt, #payment-receipt * {
+  #payment-receipt, #payment-receipt *,
+  #salary-receipt, #salary-receipt *,
+  #transaction-detail, #transaction-detail *,
+  #id-card-template, #id-card-template *,
+  #marksheet-template, #marksheet-template *,
+  .print-only, .print-only * {
     visibility: visible !important;
   }
   
-  #history-receipt, #payment-receipt {
-    position: fixed !important;
+  /* Position the printable element at the top left */
+  #history-receipt, #payment-receipt, #salary-receipt, #transaction-detail, #id-card-template, #marksheet-template, .print-only {
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    height: auto !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 20px !important;
     border: none !important;
     box-shadow: none !important;
-    transform: none !important;
     z-index: 9999 !important;
     background: white !important;
+    display: block !important;
   }
 
-  /* Hide modal backgrounds and buttons during print */
-  .fixed.inset-0, button, .no-print {
+  /* Ensure hidden elements stay hidden even if they are children of visible elements */
+  .print\:hidden, .no-print, button, .fixed.inset-0 {
     display: none !important;
+    visibility: hidden !important;
   }
 }

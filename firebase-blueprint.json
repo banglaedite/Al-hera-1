@@ -21,6 +21,7 @@
         "is_hifz": { "type": "number" },
         "admission_date": { "type": "string" },
         "monthly_fee": { "type": "number" },
+        "biometric_id": { "type": "string", "description": "ID for biometric/RFID attendance machine" },
         "deleted_at": { "type": "string" }
       },
       "required": ["id", "name", "class", "roll"]
@@ -60,7 +61,10 @@
         "id": { "type": "string" },
         "student_id": { "type": "string" },
         "date": { "type": "string" },
-        "status": { "type": "string" }
+        "status": { "type": "string" },
+        "check_in": { "type": "string", "description": "Time of check-in" },
+        "check_out": { "type": "string", "description": "Time of check-out" },
+        "method": { "type": "string", "description": "Method of attendance (Face, Finger, Card, Manual)" }
       },
       "required": ["id", "student_id", "date", "status"]
     },
@@ -175,6 +179,7 @@
         "email": { "type": "string" },
         "dob": { "type": "string" },
         "join_date": { "type": "string" },
+        "biometric_id": { "type": "string", "description": "ID for biometric/RFID attendance machine" },
         "nid": { "type": "string" }
       },
       "required": ["id", "name"]

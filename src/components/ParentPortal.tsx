@@ -27,6 +27,7 @@ export default function ParentPortal() {
   const [results, setResults] = useState<any[]>([]);
   const [hifzRecords, setHifzRecords] = useState<any[]>([]);
   const [fees, setFees] = useState<any[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
@@ -36,13 +37,15 @@ export default function ParentPortal() {
   const [paying, setPaying] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
   
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  
   // Live Payment Modal State
   const [showLivePayment, setShowLivePayment] = useState(false);
   const [livePaymentMethod, setLivePaymentMethod] = useState("");
   const [livePaymentStep, setLivePaymentStep] = useState(1);
   const [livePaymentPhone, setLivePaymentPhone] = useState("");
-  const [livePaymentOTP, setLivePaymentOTP] = useState("");
-  const [livePaymentPIN, setLivePaymentPIN] = useState("");
+  const [livePaymentTrxID, setLivePaymentTrxID] = useState("");
+  const [livePaymentReference, setLivePaymentReference] = useState("");
 
   const monthsList = [
     "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
@@ -57,12 +60,16 @@ export default function ParentPortal() {
     setLivePaymentMethod(method);
     setLivePaymentStep(1);
     setLivePaymentPhone("");
-    setLivePaymentOTP("");
-    setLivePaymentPIN("");
+    setLivePaymentTrxID("");
+    setLivePaymentReference("");
     setShowLivePayment(true);
   };
 
   const processLivePayment = async () => {
+    if (!livePaymentTrxID || !livePaymentReference) {
+      alert("Transaction ID এবং Reference দিন");
+      return;
+    }
     setPaying(true);
     setPaymentMessage("");
     try {
@@ -77,7 +84,10 @@ export default function ParentPortal() {
           months: selectedPayMonths,
           year: selectedYear,
           amount,
-          method: `live_${livePaymentMethod}`
+          method: `manual_${livePaymentMethod}`,
+          transactionId: livePaymentTrxID,
+          senderPhone: livePaymentPhone,
+          reference: livePaymentReference
         })
       });
       const data = await res.json();
@@ -86,10 +96,14 @@ export default function ParentPortal() {
         setPaymentMessage(data.message);
         setShowLivePayment(false);
         setSelectedPayMonths([]);
-        // Refresh fees
-        const profileRes = await fetch(`/api/students/${student.id}/full-profile`);
+        // Refresh fees and history
+        const [profileRes, historyRes] = await Promise.all([
+          fetch(`/api/students/${student.id}/full-profile`),
+          fetch(`/api/parent/payment-history/${student.id}`)
+        ]);
         const profileData = await profileRes.json();
         setFees(profileData.fees || []);
+        setPaymentHistory(await historyRes.json());
       } else {
         alert(data.error || "পেমেন্ট ব্যর্থ হয়েছে");
       }
@@ -124,7 +138,14 @@ export default function ParentPortal() {
       const data = await res.json();
       
       if (method === "udyoktapay" && data.payment_url) {
-        window.location.href = data.payment_url;
+        // Open payment gateway in a new tab to avoid iframe/security blocking
+        const paymentWindow = window.open(data.payment_url, '_blank');
+        if (!paymentWindow) {
+          // If popup is blocked, try same window as fallback
+          window.location.href = data.payment_url;
+        } else {
+          setPaymentMessage("পেমেন্ট গেটওয়ে নতুন ট্যাবে ওপেন হয়েছে। পেমেন্ট শেষ করে এখানে ফিরে আসুন।");
+        }
       } else if (data.success) {
         setPaymentMessage(data.message);
         // Refresh fees after manual payment instruction
@@ -147,6 +168,36 @@ export default function ParentPortal() {
     const savedIdentifier = localStorage.getItem("guardianPhone");
     if (savedIdentifier) {
       handleLogin(null, savedIdentifier);
+    }
+
+    // Handle payment verification from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get("payment");
+    const invoiceId = urlParams.get("invoice_id");
+
+    if (paymentStatus === "success" && invoiceId) {
+      setPaymentMessage("পেমেন্ট যাচাই করা হচ্ছে, দয়া করে অপেক্ষা করুন...");
+      fetch("/api/udyoktapay/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_id: invoiceId })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setPaymentMessage(data.message);
+          // Remove query params from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else {
+          setPaymentMessage(data.message);
+        }
+      })
+      .catch(() => {
+        setPaymentMessage("পেমেন্ট যাচাই করতে সমস্যা হয়েছে।");
+      });
+    } else if (paymentStatus === "cancel") {
+      setPaymentMessage("পেমেন্ট বাতিল করা হয়েছে।");
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -172,12 +223,15 @@ export default function ParentPortal() {
       localStorage.setItem("guardianPhone", loginIdentifier);
       
       // Fetch related data
-      const [attRes, resRes, hifzRes, profileRes, deviceRes] = await Promise.all([
+      const [attRes, resRes, hifzRes, profileRes, deviceRes, noticeRes, historyRes, settingsRes] = await Promise.all([
         fetch(`/api/attendance/${data.id}`),
         fetch(`/api/results/${data.id}`),
         fetch(`/api/hifz/${data.id}`),
         fetch(`/api/students/${data.id}/full-profile`),
-        fetch(`/api/parent/device-history/${data.id}`)
+        fetch(`/api/parent/device-history/${data.id}`),
+        fetch("/api/notices"),
+        fetch(`/api/parent/payment-history/${data.id}`),
+        fetch("/api/settings")
       ]);
       
       const attData = await attRes.json();
@@ -194,6 +248,15 @@ export default function ParentPortal() {
       
       const profileData = await profileRes.json();
       setFees(profileData.fees || []);
+
+      const noticeData = await noticeRes.json();
+      setNotices(Array.isArray(noticeData) ? noticeData : []);
+
+      const historyData = await historyRes.json();
+      setPaymentHistory(Array.isArray(historyData) ? historyData : []);
+
+      const settingsData = await settingsRes.json();
+      setSettings(settingsData);
     } catch (err: any) {
       setError(err.message);
       localStorage.removeItem("guardianPhone");
@@ -291,7 +354,9 @@ export default function ParentPortal() {
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
             { id: "results", label: "রেজাল্ট", icon: BookOpen },
+            { id: "notices", label: "নোটিশ", icon: Bell },
             { id: "payment", label: "পেমেন্ট", icon: CreditCard },
+            { id: "payment-history", label: "পেমেন্ট হিস্টোরি", icon: History },
             student.is_hifz ? { id: "hifz", label: "হিফজ ট্র্যাকিং", icon: GraduationCap } : null
           ].filter(Boolean).map((tab: any) => (
             <motion.button
@@ -615,47 +680,71 @@ export default function ParentPortal() {
                         </div>
                       )}
 
-                      <h4 className="font-bold text-slate-900 mb-4">পেমেন্ট মেথড নির্বাচন করুন</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        {settings?.udyoktapay_api_key && settings?.udyoktapay_api_url && (
-                          <button 
-                            disabled={paying}
-                            onClick={() => handlePayment("udyoktapay")}
-                            className="p-4 border rounded-2xl font-bold text-emerald-700 border-emerald-200 bg-emerald-100 hover:bg-emerald-200 transition-colors flex justify-center items-center gap-2"
-                          >
-                            {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : "Udyokta Pay"}
-                          </button>
-                        )}
-                        {settings?.enable_bkash ? (
+                      <h4 className="font-bold text-slate-900 mb-6 text-center">পেমেন্ট মেথড নির্বাচন করুন</h4>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-3">
                           <button 
                             disabled={paying}
                             onClick={() => initiateLivePayment("bkash")}
-                            className="p-4 border rounded-2xl font-bold text-pink-600 border-pink-100 bg-pink-50 hover:bg-pink-100 transition-colors flex flex-col items-center gap-1"
+                            className="p-4 bg-white border-2 border-pink-50 hover:border-pink-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
                           >
-                            <span>বিকাশ</span>
+                            <img src="https://www.logo.wine/a/logo/BKash/BKash-Icon-Logo.wine.svg" className="w-10 h-10 group-hover:scale-110 transition-transform" alt="bkash" />
+                            <span className="text-xs font-bold text-pink-600">বিকাশ</span>
                           </button>
-                        ) : null}
-                        {settings?.enable_nagad ? (
+                          
                           <button 
                             disabled={paying}
                             onClick={() => initiateLivePayment("nagad")}
-                            className="p-4 border rounded-2xl font-bold text-orange-600 border-orange-100 bg-orange-50 hover:bg-orange-100 transition-colors flex flex-col items-center gap-1"
+                            className="p-4 bg-white border-2 border-orange-50 hover:border-orange-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
                           >
-                            <span>নগদ</span>
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Nagad_Logo.svg/1200px-Nagad_Logo.svg.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
+                            <span className="text-xs font-bold text-orange-600">নগদ</span>
                           </button>
-                        ) : null}
-                        {settings?.enable_rocket ? (
+
                           <button 
                             disabled={paying}
                             onClick={() => initiateLivePayment("rocket")}
-                            className="p-4 border rounded-2xl font-bold text-purple-600 border-purple-100 bg-purple-50 hover:bg-purple-100 transition-colors flex flex-col items-center gap-1"
+                            className="p-4 bg-white border-2 border-purple-50 hover:border-purple-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
                           >
-                            <span>রকেট</span>
+                            <img src="https://www.rocket.com.bd/assets/images/rocket-logo.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="rocket" />
+                            <span className="text-xs font-bold text-purple-600">রকেট</span>
                           </button>
-                        ) : null}
+                        </div>
                       </div>
                     </div>
                   )}
+                </motion.div>
+              )}
+
+              {activeTab === "payment-history" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-8">পেমেন্ট হিস্টোরি</h3>
+                  <div className="space-y-4">
+                    {paymentHistory.length > 0 ? paymentHistory.map((payment, i) => (
+                      <div key={payment.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900">{payment.months.join(", ")} {payment.year}</p>
+                          <p className="text-xs text-slate-500 uppercase">{payment.method} • {new Date(payment.createdAt).toLocaleDateString('bn-BD')}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-emerald-700">৳{payment.amount}</p>
+                          <span className={cn(
+                            "text-[10px] font-bold px-2 py-1 rounded-full",
+                            payment.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                            payment.status === "rejected" ? "bg-rose-100 text-rose-700" :
+                            "bg-amber-100 text-amber-700"
+                          )}>
+                            {payment.status === "completed" ? "এপ্রুভড" : payment.status === "rejected" ? "বাতিল" : "পেন্ডিং"}
+                          </span>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="text-center py-20">
+                        <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">এখনো কোন পেমেন্ট হিস্টোরি নেই</p>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               )}
 
@@ -689,6 +778,41 @@ export default function ParentPortal() {
                   </div>
                 </motion.div>
               )}
+
+              {activeTab === "notices" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-8">নোটিশ বোর্ড</h3>
+                  <div className="space-y-6">
+                    {notices.length > 0 ? notices.map((notice, i) => (
+                      <div key={i} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                        <div className="flex justify-between items-start mb-4">
+                          <h4 className="text-lg font-bold text-slate-900">{notice.title}</h4>
+                          <span className="text-[10px] font-black text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-100">
+                            {new Date(notice.date).toLocaleDateString('bn-BD')}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 whitespace-pre-line leading-relaxed">{notice.content}</p>
+                        {notice.image_url && (
+                          <a href={notice.link_url || "#"} target="_blank" rel="noopener noreferrer" className="block mt-4">
+                            <img 
+                              src={notice.image_url} 
+                              alt={notice.title} 
+                              className="rounded-2xl object-cover w-full" 
+                              style={{ maxWidth: notice.width ? `${notice.width}px` : '100%', height: notice.height ? `${notice.height}px` : 'auto' }}
+                              referrerPolicy="no-referrer"
+                            />
+                          </a>
+                        )}
+                      </div>
+                    )) : (
+                      <div className="text-center py-20">
+                        <Bell className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">এখনো কোন নোটিশ পাওয়া যায়নি</p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
         </div>
@@ -714,97 +838,74 @@ export default function ParentPortal() {
             <div className="p-8">
               {livePaymentStep === 1 && (
                 <div className="space-y-6">
-                  <p className="text-center text-slate-600 font-medium">আপনার {livePaymentMethod} একাউন্ট নাম্বার দিন</p>
-                  <input 
-                    type="text" 
-                    placeholder="e.g 01XXXXXXXXX"
-                    className="w-full text-center text-2xl tracking-widest p-4 border-b-2 border-slate-200 focus:border-slate-800 outline-none transition-colors"
-                    value={livePaymentPhone}
-                    onChange={(e) => setLivePaymentPhone(e.target.value)}
-                  />
+                  <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-sm font-bold text-slate-700 whitespace-pre-wrap">
+                      {livePaymentMethod === "bkash" && settings?.bkash_instructions}
+                      {livePaymentMethod === "nagad" && settings?.nagad_instructions}
+                      {livePaymentMethod === "rocket" && settings?.rocket_instructions}
+                    </p>
+                  </div>
+
+                  <div className="text-center space-y-2">
+                    <p className="text-slate-600 font-medium">নিচের নাম্বারে টাকা পাঠিয়ে TrxID দিন</p>
+                    <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                      <p className="text-sm text-slate-500 font-bold uppercase">{livePaymentMethod} Number (Personal)</p>
+                      <p className="text-2xl font-black text-slate-900">
+                        {livePaymentMethod === "bkash" ? settings?.bkash_number : 
+                         livePaymentMethod === "nagad" ? settings?.nagad_number : 
+                         settings?.rocket_number || "Not Set"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-2">আপনার {livePaymentMethod} নাম্বার</label>
+                      <input 
+                        type="text" 
+                        placeholder="01XXXXXXXXX"
+                        className="w-full p-4 bg-slate-50 border rounded-2xl font-bold"
+                        value={livePaymentPhone}
+                        onChange={(e) => setLivePaymentPhone(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-2">Transaction ID (TrxID)</label>
+                      <input 
+                        type="text" 
+                        placeholder="ABC123XYZ"
+                        className="w-full p-4 bg-slate-50 border rounded-2xl font-bold uppercase"
+                        value={livePaymentTrxID}
+                        onChange={(e) => setLivePaymentTrxID(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-2">Reference</label>
+                      <input 
+                        type="text" 
+                        placeholder="Reference"
+                        className="w-full p-4 bg-slate-50 border rounded-2xl font-bold"
+                        value={livePaymentReference}
+                        onChange={(e) => setLivePaymentReference(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {settings?.payment_special_note && (
+                    <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                      <p className="text-xs font-bold text-amber-800 whitespace-pre-wrap">{settings?.payment_special_note}</p>
+                    </div>
+                  )}
+
                   <div className="flex gap-4 pt-4">
                     <button 
                       onClick={() => setShowLivePayment(false)}
                       className="flex-1 py-4 font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
                     >
-                      Cancel
+                      বাতিল
                     </button>
                     <button 
-                      onClick={() => {
-                        if (livePaymentPhone.length >= 11) setLivePaymentStep(2);
-                        else alert("সঠিক নাম্বার দিন");
-                      }}
-                      className={cn(
-                        "flex-1 py-4 font-bold text-white rounded-xl transition-colors",
-                        livePaymentMethod === "bkash" ? "bg-[#E2136E] hover:bg-[#c4105f]" : 
-                        livePaymentMethod === "nagad" ? "bg-[#F7941D] hover:bg-[#d67f18]" : 
-                        "bg-[#8C1515] hover:bg-[#6b1010]"
-                      )}
-                    >
-                      Proceed
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {livePaymentStep === 2 && (
-                <div className="space-y-6">
-                  <p className="text-center text-slate-600 font-medium">আপনার মোবাইলে পাঠানো OTP দিন</p>
-                  <input 
-                    type="text" 
-                    placeholder="XXXXXX"
-                    className="w-full text-center text-3xl tracking-[0.5em] p-4 border-b-2 border-slate-200 focus:border-slate-800 outline-none transition-colors"
-                    value={livePaymentOTP}
-                    onChange={(e) => setLivePaymentOTP(e.target.value)}
-                  />
-                  <div className="flex gap-4 pt-4">
-                    <button 
-                      onClick={() => setLivePaymentStep(1)}
-                      className="flex-1 py-4 font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                    >
-                      Back
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (livePaymentOTP.length >= 4) setLivePaymentStep(3);
-                        else alert("সঠিক OTP দিন");
-                      }}
-                      className={cn(
-                        "flex-1 py-4 font-bold text-white rounded-xl transition-colors",
-                        livePaymentMethod === "bkash" ? "bg-[#E2136E] hover:bg-[#c4105f]" : 
-                        livePaymentMethod === "nagad" ? "bg-[#F7941D] hover:bg-[#d67f18]" : 
-                        "bg-[#8C1515] hover:bg-[#6b1010]"
-                      )}
-                    >
-                      Proceed
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {livePaymentStep === 3 && (
-                <div className="space-y-6">
-                  <p className="text-center text-slate-600 font-medium">আপনার {livePaymentMethod} PIN দিন</p>
-                  <input 
-                    type="password" 
-                    placeholder="••••"
-                    className="w-full text-center text-3xl tracking-[0.5em] p-4 border-b-2 border-slate-200 focus:border-slate-800 outline-none transition-colors"
-                    value={livePaymentPIN}
-                    onChange={(e) => setLivePaymentPIN(e.target.value)}
-                  />
-                  <div className="flex gap-4 pt-4">
-                    <button 
-                      onClick={() => setLivePaymentStep(2)}
-                      className="flex-1 py-4 font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
-                      disabled={paying}
-                    >
-                      Back
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (livePaymentPIN.length >= 4) processLivePayment();
-                        else alert("সঠিক PIN দিন");
-                      }}
+                      onClick={processLivePayment}
                       disabled={paying}
                       className={cn(
                         "flex-1 py-4 font-bold text-white rounded-xl transition-colors flex justify-center items-center gap-2",
@@ -813,7 +914,7 @@ export default function ParentPortal() {
                         "bg-[#8C1515] hover:bg-[#6b1010]"
                       )}
                     >
-                      {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm Payment"}
+                      {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : "পেমেন্ট নিশ্চিত করুন"}
                     </button>
                   </div>
                 </div>

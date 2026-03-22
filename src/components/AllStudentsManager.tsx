@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Users, X as CloseIcon, Download, Printer, FileText } from "lucide-react";
 
-export function AllStudentsManager({ settings }: { settings: any }) {
+export function AllStudentsManager({ settings, classesList }: { settings: any, classesList: string[] }) {
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClass, setSelectedClass] = useState("All");
@@ -11,7 +11,7 @@ export function AllStudentsManager({ settings }: { settings: any }) {
   const [loading, setLoading] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
-  const classes = ["All", "১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = ["All", ...classesList];
 
   const fetchStudents = async () => {
     setLoading(true);

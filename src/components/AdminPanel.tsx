@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { TeacherManager } from "./TeacherManager";
+import { BiometricManager } from "./BiometricManager";
 import { AccountingManager } from "./AccountingManager";
 import { RecruitmentManager } from "./RecruitmentManager";
 import { FoodMenuManager } from "./FoodMenuManager";
@@ -43,6 +44,7 @@ import {
   Star,
   Clock,
   History,
+  Fingerprint,
   ChevronDown,
   MessageCircle,
   Mail,
@@ -115,17 +117,26 @@ export default function AdminPanel() {
   const [students, setStudents] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  const [classes, setClasses] = useState<any[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem("isAdmin") === "true");
+  const [adminRole, setAdminRole] = useState(() => localStorage.getItem("adminRole") || "admin");
+  const [adminPermissions, setAdminPermissions] = useState<string[]>(() => {
+    const perms = localStorage.getItem("adminPermissions");
+    return perms ? JSON.parse(perms) : ["all"];
+  });
   const [password, setPassword] = useState("");
   const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     localStorage.setItem("isAdmin", isAuthenticated.toString());
+    localStorage.setItem("adminRole", adminRole);
+    localStorage.setItem("adminPermissions", JSON.stringify(adminPermissions));
     if (isAuthenticated) {
       fetchStats();
       fetchStudents();
       fetchNotices();
       fetchSettings();
+      fetchClasses();
     }
   }, [isAuthenticated]);
 
@@ -143,16 +154,39 @@ export default function AdminPanel() {
     setSettings(data);
   };
 
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch("/api/classes");
+      if (res.ok) setClasses(await res.json());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const p = password.trim();
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-    if (p === adminPassword || p === "১২৩৪") { // Simple secret password
-      setIsAuthenticated(true);
-    } else {
-      addToast("ভুল পাসওয়ার্ড!", "error");
+    const identifier = password.trim();
+    
+    try {
+      const res = await fetch("/api/admin-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setIsAuthenticated(true);
+        setAdminRole(data.role);
+        setAdminPermissions(data.permissions);
+      } else {
+        const err = await res.json();
+        addToast(err.error || "ভুল পাসওয়ার্ড বা ইমেইল!", "error");
+      }
+    } catch (error) {
+      addToast("লগইন করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -183,27 +217,32 @@ export default function AdminPanel() {
     if (Array.isArray(data)) setNotices(data);
   };
 
-  const tabs = [
+  const allTabs = [
     { id: "dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
-    { id: "admissions", label: "ভর্তি আবেদন", icon: UserPlus },
-    { id: "students", label: "ছাত্র তালিকা", icon: Users },
-    { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users },
-    { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck },
-    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History },
-    { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck },
-    { id: "results", label: "রেজাল্ট", icon: BookOpen },
-    { id: "teachers", label: "শিক্ষক", icon: Users },
-    { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard },
-    { id: "recruitment", label: "নিয়োগ", icon: UserPlus },
-    { id: "food-menu", label: "খাবারের তালিকা", icon: BookOpen },
-    { id: "fees", label: "বেতন ও ফি", icon: CreditCard },
-    { id: "history", label: "হিস্টোরি", icon: Clock },
-    { id: "notices", label: "নোটিশ", icon: Bell },
-    { id: "features", label: "বৈশিষ্ট্য", icon: Award },
-    { id: "showcase", label: "শোকেস", icon: Globe },
+    { id: "admissions", label: "ভর্তি আবেদন", icon: UserPlus, permission: "admission" },
+    { id: "students", label: "ছাত্র তালিকা", icon: Users, permission: "admission" },
+    { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users, permission: "admission" },
+    { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
+    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "student_attendance" },
+    { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
+    { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "result" },
+    { id: "teachers", label: "শিক্ষক", icon: Users, permission: "teacher_attendance" },
+    { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "teacher_attendance" },
+    { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard, permission: "fee_collection" },
+    { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "teacher_attendance" },
+    { id: "food-menu", label: "খাবারের তালিকা", icon: BookOpen, permission: "notice" },
+    { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fee_collection" },
+    { id: "history", label: "হিস্টোরি", icon: Clock, permission: "fee_collection" },
+    { id: "notices", label: "নোটিশ", icon: Bell, permission: "notice" },
+    { id: "features", label: "বৈশিষ্ট্য", icon: Award, permission: "notice" },
+    { id: "showcase", label: "শোকেস", icon: Globe, permission: "notice" },
     { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2 },
     { id: "settings", label: "সেটিংস", icon: Settings },
   ];
+
+  const tabs = adminRole === "admin" 
+    ? allTabs 
+    : allTabs.filter(tab => !tab.permission || adminPermissions.includes(tab.permission));
 
   if (!isAuthenticated) {
     return (
@@ -224,7 +263,7 @@ export default function AdminPanel() {
                 type={showPassword ? "text" : "password"} 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="পাসওয়ার্ড"
+                placeholder="পাসওয়ার্ড বা সাব-এডমিন ইমেইল"
                 className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
               />
               <button 
@@ -325,6 +364,10 @@ export default function AdminPanel() {
               <TeacherManager addToast={addToast} settings={settings} />
             )}
 
+            {activeTab === "biometric" && (
+              <BiometricManager addToast={addToast} />
+            )}
+
             {activeTab === "accounting" && (
               <AccountingManager settings={settings} addToast={addToast} />
             )}
@@ -342,15 +385,15 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "students" && (
-              <StudentManager settings={settings} onUpdate={fetchStudents} />
+              <StudentManager settings={settings} onUpdate={fetchStudents} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
             )}
 
             {activeTab === "all-students" && (
-              <AllStudentsManager settings={settings} />
+              <AllStudentsManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
             )}
 
             {activeTab === "attendance" && (
-              <AttendanceManager settings={settings} />
+              <AttendanceManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
             )}
 
             {activeTab === "device-attendance" && (
@@ -362,11 +405,11 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "results" && (
-              <ResultManager students={students} settings={settings} />
+              <ResultManager students={students} settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
             )}
 
             {activeTab === "fees" && (
-              <FeeManager students={students} settings={settings} onUpdate={fetchStats} initialStudentId={initialStudentId} />
+              <FeeManager students={students} settings={settings} onUpdate={fetchStats} initialStudentId={initialStudentId} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
             )}
 
             {activeTab === "history" && (
@@ -391,7 +434,7 @@ export default function AdminPanel() {
 
             {activeTab === "settings" && (
               <div className="space-y-8">
-                <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} />
+                <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
                 <DatabaseResetManager />
               </div>
             )}
@@ -757,12 +800,263 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
     );
   }
 
-function SettingsManager({ settings, setSettings, onUpdate }: any) {
+function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
+  const { addToast } = useToast();
+  const [newClassName, setNewClassName] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleAddClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClassName.trim() || !password) return addToast("ক্লাসের নাম এবং পাসওয়ার্ড দিন", "error");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/classes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newClassName, order: classes.length, password })
+      });
+      if (res.ok) {
+        addToast("ক্লাস যুক্ত করা হয়েছে", "success");
+        setNewClassName("");
+        setPassword("");
+        fetchClasses();
+      } else {
+        const err = await res.json();
+        addToast(err.error || "সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleClass = async (id: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/classes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+      if (res.ok) {
+        addToast("ক্লাসের স্ট্যাটাস আপডেট করা হয়েছে", "success");
+        fetchClasses();
+      } else {
+        const err = await res.json();
+        addToast(err.error || "সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
+    }
+  };
+
+  const handleDeleteClass = async (id: string) => {
+    const pwd = prompt("ক্লাসটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+    try {
+      const res = await fetch(`/api/classes/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
+      if (res.ok) {
+        addToast("ক্লাস ডিলিট করা হয়েছে", "success");
+        fetchClasses();
+      } else {
+        const err = await res.json();
+        addToast(err.error || "সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden p-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-black text-slate-900">ক্লাস সমূহ</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><CloseIcon className="w-6 h-6" /></button>
+        </div>
+        
+        <form onSubmit={handleAddClass} className="mb-8 space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <h4 className="font-bold text-slate-700">নতুন ক্লাস যুক্ত করুন</h4>
+          <input value={newClassName} onChange={(e) => setNewClassName(e.target.value)} placeholder="ক্লাসের নাম (যেমন: ১ম)" className="w-full p-3 border rounded-xl" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="এডমিন পাসওয়ার্ড" className="w-full p-3 border rounded-xl" />
+          <LoadingButton loading={loading} type="submit" className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700">
+            <Plus className="w-5 h-5 inline mr-2" /> যুক্ত করুন
+          </LoadingButton>
+        </form>
+
+        <div className="space-y-2">
+          {classes.map((c: any) => (
+            <div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-xl">
+              <span className="font-bold text-slate-800">{c.name}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleToggleClass(c.id, c.is_active)} className={`p-2 rounded-lg ${c.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  {c.is_active ? 'সক্রিয়' : 'হাইড'}
+                </button>
+                <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="w-5 h-5" /></button>
+              </div>
+            </div>
+          ))}
+          {classes.length === 0 && <p className="text-center text-slate-500 py-4">কোনো ক্লাস নেই</p>}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function SubAdminManagerModal({ isOpen, onClose }: any) {
+  const { addToast } = useToast();
+  const [subAdmins, setSubAdmins] = useState<any[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const availablePermissions = [
+    { id: "admission", label: "ভর্তি আবেদন ও ছাত্র তালিকা" },
+    { id: "fee_collection", label: "বেতন ও ফি আদায়" },
+    { id: "student_attendance", label: "ছাত্র হাজিরা" },
+    { id: "teacher_attendance", label: "শিক্ষক হাজিরা" },
+    { id: "result", label: "রেজাল্ট" },
+    { id: "notice", label: "নোটিশ" }
+  ];
+
+  const fetchSubAdmins = async () => {
+    try {
+      const res = await fetch("/api/sub-admins");
+      if (res.ok) setSubAdmins(await res.json());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchSubAdmins();
+  }, [isOpen]);
+
+  const handleTogglePermission = (id: string) => {
+    setPermissions(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+  };
+
+  const handleAddSubAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim() || !password) return addToast("ইমেইল এবং পাসওয়ার্ড দিন", "error");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/sub-admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail, permissions, password })
+      });
+      if (res.ok) {
+        addToast("সাব-এডমিন যুক্ত করা হয়েছে", "success");
+        setNewEmail("");
+        setPassword("");
+        setPermissions([]);
+        fetchSubAdmins();
+      } else {
+        const err = await res.json();
+        addToast(err.error || "সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSubAdmin = async (id: string) => {
+    const pwd = prompt("সাব-এডমিন ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+    try {
+      const res = await fetch(`/api/sub-admins/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
+      if (res.ok) {
+        addToast("সাব-এডমিন ডিলিট করা হয়েছে", "success");
+        fetchSubAdmins();
+      } else {
+        const err = await res.json();
+        addToast(err.error || "সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden p-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-black text-slate-900">সাব-এডমিন ম্যানেজমেন্ট</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><CloseIcon className="w-6 h-6" /></button>
+        </div>
+        
+        <form onSubmit={handleAddSubAdmin} className="mb-8 space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+          <h4 className="font-bold text-slate-700">নতুন সাব-এডমিন যুক্ত করুন</h4>
+          <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="জিমেইল এড্রেস" className="w-full p-3 border rounded-xl" />
+          
+          <div className="space-y-2">
+            <label className="font-bold text-sm text-slate-600">পারমিশন সিলেক্ট করুন:</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {availablePermissions.map(p => (
+                <label key={p.id} className="flex items-center gap-2 p-3 bg-white border rounded-xl cursor-pointer hover:bg-slate-50">
+                  <input type="checkbox" checked={permissions.includes(p.id)} onChange={() => handleTogglePermission(p.id)} className="w-4 h-4 text-emerald-600 rounded" />
+                  <span className="text-sm font-medium text-slate-700">{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="মেইন এডমিন পাসওয়ার্ড" className="w-full p-3 border rounded-xl" />
+          
+          <LoadingButton loading={loading} type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">
+            <Plus className="w-5 h-5 inline mr-2" /> যুক্ত করুন
+          </LoadingButton>
+        </form>
+
+        <div className="space-y-3">
+          <h4 className="font-bold text-slate-700">বর্তমান সাব-এডমিনগণ</h4>
+          {subAdmins.map((admin: any) => (
+            <div key={admin.id} className="p-4 bg-white border rounded-xl">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-bold text-slate-800">{admin.email}</span>
+                <button onClick={() => handleDeleteSubAdmin(admin.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="w-5 h-5" /></button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {admin.permissions.map((p: string) => (
+                  <span key={p} className="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md font-medium">
+                    {availablePermissions.find(ap => ap.id === p)?.label || p}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          {subAdmins.length === 0 && <p className="text-center text-slate-500 py-4">কোনো সাব-এডমিন নেই</p>}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasses }: any) {
   const { addToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showClassModal, setShowClassModal] = useState(false);
+  const [showSubAdminModal, setShowSubAdminModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
 
   const handleAdvancedSettingsClick = () => {
@@ -806,7 +1100,17 @@ function SettingsManager({ settings, setSettings, onUpdate }: any) {
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 relative">
-      <h3 className="text-2xl font-bold text-slate-900 mb-8">ওয়েবসাইট সেটিংস</h3>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <h3 className="text-2xl font-bold text-slate-900">ওয়েবসাইট সেটিংস</h3>
+        <div className="flex gap-3">
+          <button type="button" onClick={() => setShowClassModal(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold hover:bg-emerald-200 transition-all">
+            <BookOpen className="w-5 h-5" /> ক্লাস সমূহ
+          </button>
+          <button type="button" onClick={() => setShowSubAdminModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all">
+            <Users className="w-5 h-5" /> সাব-এডমিন
+          </button>
+        </div>
+      </div>
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -914,6 +1218,28 @@ function SettingsManager({ settings, setSettings, onUpdate }: any) {
             <label className="text-sm font-bold text-slate-700">ফেসবুক পেজ লিঙ্ক</label>
             <input value={settings.facebook_url || ""} onChange={(e) => setSettings({...settings, facebook_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">ইউটিউব চ্যানেল লিঙ্ক</label>
+            <input value={settings.youtube_url || ""} onChange={(e) => setSettings({...settings, youtube_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মুহতামিম সাহেবের স্বাক্ষর (PNG URL)</label>
+            <input value={settings.muhtamim_signature_url || ""} onChange={(e) => setSettings({...settings, muhtamim_signature_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/signature.png" />
+          </div>
+          <div className="space-y-2 flex items-center gap-3">
+            <input type="checkbox" id="show_signature" checked={!!settings.show_muhtamim_signature} onChange={(e) => setSettings({...settings, show_muhtamim_signature: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
+            <label htmlFor="show_signature" className="text-sm font-bold text-slate-700">রশিদে মুহতামিম সাহেবের স্বাক্ষর দেখান</label>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-sm font-bold text-slate-700">ক্লাস সমূহ (কমা দিয়ে আলাদা করুন)</label>
+            <input 
+              value={settings.available_classes || "প্লে, নার্সারি, প্রথম, দ্বিতীয়, তৃতীয়, চতুর্থ, পঞ্চম, হিফজ"} 
+              onChange={(e) => setSettings({...settings, available_classes: e.target.value})} 
+              className="w-full p-4 bg-slate-50 border rounded-2xl" 
+              placeholder="যেমন: প্লে, নার্সারি, প্রথম, দ্বিতীয়, তৃতীয়, চতুর্থ, পঞ্চম, ষষ্ঠ, সপ্তম, অষ্টম, নবম, দশম, হিফজ, কিতাব খানা"
+            />
+            <p className="text-xs text-slate-500 mt-1">এই ক্লাসগুলো পুরো সিস্টেমে ড্রপডাউনে দেখাবে।</p>
+          </div>
         </div>
 
         <div className="border-t border-slate-100 pt-8">
@@ -939,28 +1265,92 @@ function SettingsManager({ settings, setSettings, onUpdate }: any) {
                 </div>
               </div>
               <div className="border-t border-slate-100 pt-8">
-                <h4 className="text-lg font-black text-slate-900 mb-4">পেমেন্ট গেটওয়ে (Udyokta Pay)</h4>
+                <h4 className="text-lg font-black text-slate-900 mb-4">ম্যানুয়াল পেমেন্ট নম্বর (Manual Payment)</h4>
                 <p className="text-sm text-slate-500 mb-4 font-bold">
-                  উদ্যোক্তা পে (Udyokta Pay) ব্যবহার করে সরাসরি আপনার বিকাশ/নগদ/রকেট পার্সোনাল নাম্বারে পেমেন্ট রিসিভ করতে পারবেন।
+                  আপনার পার্সোনাল বিকাশ, নগদ এবং রকেট নম্বর দিন যেখানে অভিভাবকরা টাকা পাঠাবে।
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Udyokta Pay API Key</label>
+                    <label className="text-sm font-bold text-slate-700">বিকাশ নম্বর (Personal)</label>
                     <input 
-                      type="password"
-                      value={settings.udyoktapay_api_key || ""} 
-                      onChange={(e) => setSettings({...settings, udyoktapay_api_key: e.target.value})} 
+                      value={settings.bkash_number || ""} 
+                      onChange={(e) => setSettings({...settings, bkash_number: e.target.value})} 
                       className="w-full p-4 bg-slate-50 border rounded-2xl" 
-                      placeholder="Enter API Key" 
+                      placeholder="01XXXXXXXXX" 
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Udyokta Pay API URL</label>
+                    <label className="text-sm font-bold text-slate-700">নগদ নম্বর (Personal)</label>
                     <input 
-                      value={settings.udyoktapay_api_url || ""} 
-                      onChange={(e) => setSettings({...settings, udyoktapay_api_url: e.target.value})} 
+                      value={settings.nagad_number || ""} 
+                      onChange={(e) => setSettings({...settings, nagad_number: e.target.value})} 
                       className="w-full p-4 bg-slate-50 border rounded-2xl" 
-                      placeholder="https://your-domain.udyoktapay.com/api/v1/checkout" 
+                      placeholder="01XXXXXXXXX" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">রকেট নম্বর (Personal)</label>
+                    <input 
+                      value={settings.rocket_number || ""} 
+                      onChange={(e) => setSettings({...settings, rocket_number: e.target.value})} 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl" 
+                      placeholder="01XXXXXXXXX" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">বিকাশ পেমেন্ট নিয়মাবলী</label>
+                    <textarea 
+                      value={settings.bkash_instructions || ""} 
+                      onChange={(e) => setSettings({...settings, bkash_instructions: e.target.value})} 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl h-32" 
+                      placeholder="কিভাবে পেমেন্ট করবে তার নিয়ম..." 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">নগদ পেমেন্ট নিয়মাবলী</label>
+                    <textarea 
+                      value={settings.nagad_instructions || ""} 
+                      onChange={(e) => setSettings({...settings, nagad_instructions: e.target.value})} 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl h-32" 
+                      placeholder="কিভাবে পেমেন্ট করবে তার নিয়ম..." 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">রকেট পেমেন্ট নিয়মাবলী</label>
+                    <textarea 
+                      value={settings.rocket_instructions || ""} 
+                      onChange={(e) => setSettings({...settings, rocket_instructions: e.target.value})} 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl h-32" 
+                      placeholder="কিভাবে পেমেন্ট করবে তার নিয়ম..." 
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-2">
+                  <label className="text-sm font-bold text-slate-700">বিশেষ দ্রষ্টব্য (পেমেন্ট পেজের নিচে দেখাবে)</label>
+                  <textarea 
+                    value={settings.payment_special_note || ""} 
+                    onChange={(e) => setSettings({...settings, payment_special_note: e.target.value})} 
+                    className="w-full p-4 bg-slate-50 border rounded-2xl h-24" 
+                    placeholder="বিশেষ দ্রষ্টব্য..." 
+                  />
+                </div>
+                <div className="mt-6 border-t border-slate-100 pt-8">
+                  <h4 className="text-lg font-black text-slate-900 mb-4">মুহতামিম সাহেবের স্বাক্ষর</h4>
+                  <div className="flex items-center gap-4 mb-4">
+                    <input type="checkbox" checked={!!settings.enable_signature} onChange={(e) => setSettings({...settings, enable_signature: e.target.checked ? 1 : 0})} className="w-6 h-6" />
+                    <label className="text-sm font-bold text-slate-700">স্বাক্ষর চালু করুন</label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">স্বাক্ষরের ছবি (PNG URL)</label>
+                    <input 
+                      value={settings.signature_url || ""} 
+                      onChange={(e) => setSettings({...settings, signature_url: e.target.value})} 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl" 
+                      placeholder="https://example.com/signature.png" 
                     />
                   </div>
                 </div>
@@ -997,6 +1387,18 @@ function SettingsManager({ settings, setSettings, onUpdate }: any) {
           </div>
         )}
       </AnimatePresence>
+
+      <ClassManagerModal 
+        isOpen={showClassModal} 
+        onClose={() => setShowClassModal(false)} 
+        classes={classes} 
+        fetchClasses={fetchClasses} 
+      />
+      
+      <SubAdminManagerModal 
+        isOpen={showSubAdminModal} 
+        onClose={() => setShowSubAdminModal(false)} 
+      />
     </div>
   );
 }
@@ -1059,9 +1461,10 @@ const downloadPDF = async (elementId: string, fileName: string, addToast: any, s
 };
 
 const sendEmailWithPDF = async (elementId: string, student: any, transactionId: string, total: number, addToast: any) => {
-  if (!student.email) {
-    addToast("ছাত্রের ইমেইল অ্যাড্রেস নেই!", "error");
-    return;
+  let targetEmail = student.email || "";
+  if (!targetEmail) {
+    targetEmail = window.prompt("ছাত্রের ইমেইল অ্যাড্রেস নেই! দয়া করে ইমেইল অ্যাড্রেসটি দিন:", "");
+    if (!targetEmail) return;
   }
 
   const element = document.getElementById(elementId);
@@ -1093,7 +1496,7 @@ const sendEmailWithPDF = async (elementId: string, student: any, transactionId: 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        to: student.email,
+        to: targetEmail,
         subject: "পেমেন্ট রশিদ - আল-হেরা মাদ্রাসা",
         text: `আসসালামু আলাইকুম। আপনার পেমেন্ট সফল হয়েছে। রশিদ নং: ${transactionId}, মোট পরিমাণ: ৳${total}। রশিদটি সংযুক্ত করা হলো।`,
         attachments: [{ filename, content: pdfBase64, encoding: 'base64' }]
@@ -1103,11 +1506,17 @@ const sendEmailWithPDF = async (elementId: string, student: any, transactionId: 
     if (response.ok) {
       addToast("ইমেইল সফলভাবে পাঠানো হয়েছে!", "success");
     } else {
-      addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
+      const errorData = await response.json();
+      throw new Error(errorData.error || "ইমেইল পাঠাতে সমস্যা হয়েছে!");
     }
   } catch (error) {
     console.error("Email error:", error);
-    addToast("ইমেইল পাঠাতে সমস্যা হয়েছে!", "error");
+    addToast("ইমেইল পাঠাতে সমস্যা হয়েছে! দয়া করে সেটিংস চেক করুন।", "error");
+    
+    // Fallback to mailto
+    const subject = encodeURIComponent("পেমেন্ট রশিদ - আল-হেরা মাদ্রাসা");
+    const body = encodeURIComponent(`আসসালামু আলাইকুম। আপনার পেমেন্ট সফল হয়েছে। রশিদ নং: ${transactionId}, মোট পরিমাণ: ৳${total}।`);
+    window.open(`mailto:${targetEmail}?subject=${subject}&body=${body}`, '_blank');
   } finally {
     element.className = originalClass;
     element.setAttribute('style', originalStyle);
@@ -1120,9 +1529,9 @@ const printElement = (elementId: string) => {
   
   const clone = element.cloneNode(true) as HTMLElement;
   clone.classList.remove('hidden');
-  clone.style.width = '800px';
-  clone.style.margin = '0 auto';
-  clone.style.padding = '20px';
+  clone.style.width = '100%';
+  clone.style.margin = '0';
+  clone.style.padding = '0';
   
   const printWindow = window.open('', '_blank');
   if (printWindow) {
@@ -1133,17 +1542,30 @@ const printElement = (elementId: string) => {
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
-            body { font-family: 'Hind Siliguri', sans-serif; background: white; }
-            @media print { .no-print { display: none; } }
+            body { font-family: 'Hind Siliguri', sans-serif; background: white; margin: 0; padding: 20px; }
+            @media print { 
+              .no-print { display: none !important; } 
+              body { padding: 0; }
+            }
           </style>
         </head>
         <body>
-          <div class="p-8">${clone.outerHTML}</div>
+          <div class="w-full">${clone.outerHTML}</div>
           <script>
+            // Wait for Tailwind and images to load
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, 1000);
+            };
+            // Fallback if onload doesn't fire
             setTimeout(() => {
-              window.print();
-              window.close();
-            }, 500);
+              if (!window.closed) {
+                window.print();
+                window.close();
+              }
+            }, 3000);
           </script>
         </body>
       </html>
@@ -1152,7 +1574,7 @@ const printElement = (elementId: string) => {
   }
 };
 
-function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () => void }) {
+function StudentManager({ settings, onUpdate, classesList }: { settings: any, onUpdate: () => void, classesList: string[] }) {
   const { addToast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClass, setSelectedClass] = useState("All");
@@ -1191,7 +1613,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
     fetchStudents();
   }, []);
 
-  const classes = ["All", "১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = ["All", ...(classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"])];
 
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1400,7 +1822,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
     
     try {
       // Handle Hifz class logic
-      if (data.className === "হিফজ") {
+      if (data.className?.includes("হিফজ") || data.className?.includes("হেফজ")) {
         data.is_hifz = 1;
       } else {
         data.is_hifz = 0;
@@ -1435,7 +1857,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
     
     try {
       // Handle Hifz class logic
-      if (data.className === "হিফজ") {
+      if (data.className?.includes("হিফজ") || data.className?.includes("হেফজ")) {
         data.is_hifz = 1;
       } else {
         data.is_hifz = 0;
@@ -1539,6 +1961,10 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">মাসিক বেতন (টাকা)</label>
                     <input name="monthly_fee" type="number" defaultValue={isEditing ? selectedStudent.monthly_fee : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: 500" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">বায়োমেট্রিক আইডি (মেশিন আইডি)</label>
+                    <input name="biometric_id" defaultValue={isEditing ? selectedStudent.biometric_id : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: 101" />
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-bold text-slate-700">স্টুডেন্ট আইডি (AHXX)</label>
@@ -2229,7 +2655,7 @@ function StudentManager({ settings, onUpdate }: { settings: any, onUpdate: () =>
   );
 };
 
-function AttendanceManager({ settings }: { settings: any }) {
+function AttendanceManager({ settings, classesList }: { settings: any, classesList: string[] }) {
   const { addToast } = useToast();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedClass, setSelectedClass] = useState("");
@@ -2241,7 +2667,7 @@ function AttendanceManager({ settings }: { settings: any }) {
   const [hasSaved, setHasSaved] = useState(false);
   const [filter, setFilter] = useState<'all' | 'present' | 'absent'>('all');
 
-  const classes = ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
 
   const fetchAttendance = async () => {
     if (!selectedClass) return;
@@ -2623,7 +3049,7 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
   );
 }
 
-function ResultManager({ students, settings }: { students: any[], settings: any }) {
+function ResultManager({ students, settings, classesList }: { students: any[], settings: any, classesList: string[] }) {
   const { addToast } = useToast();
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedExam, setSelectedExam] = useState("প্রথম সাময়িক");
@@ -2646,7 +3072,7 @@ function ResultManager({ students, settings }: { students: any[], settings: any 
   const [newExamName, setNewExamName] = useState("");
   const [isAddingExam, setIsAddingExam] = useState(false);
 
-  const classes = ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
 
   const fetchExams = async () => {
     const res = await fetch("/api/exams");
@@ -2848,7 +3274,7 @@ function ResultManager({ students, settings }: { students: any[], settings: any 
           </table>
           <div className="flex justify-between mt-24">
             <div className="text-center border-t-2 border-slate-900 pt-2 w-48">
-              <p className="font-black text-slate-900">পরিচালক স্বাক্ষর</p>
+              <p className="font-black text-slate-900">মুহতামিম সাহেবের স্বাক্ষর</p>
             </div>
             <div className="text-center border-t-2 border-slate-900 pt-2 w-48">
               <p className="font-black text-slate-900">শ্রেণী শিক্ষকের স্বাক্ষর</p>
@@ -3162,9 +3588,9 @@ function ResultManager({ students, settings }: { students: any[], settings: any 
 };
 
 
-function FeeManager({ students, settings, onUpdate, initialStudentId }: { students: any[], settings: any, onUpdate: () => void, initialStudentId?: string }) {
+function FeeManager({ students, settings, onUpdate, initialStudentId, classesList }: { students: any[], settings: any, onUpdate: () => void, initialStudentId?: string, classesList: string[] }) {
   const { addToast } = useToast();
-  const classes = ["All", "১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = ["All", ...(classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"])];
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const monthsBn = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
@@ -3179,6 +3605,9 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
   const [paying, setPaying] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
+
+  const [confirmApprove, setConfirmApprove] = useState<any>(null);
+  const [confirmReject, setConfirmReject] = useState<any>(null);
 
   // Monthly Fee State
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
@@ -3252,8 +3681,15 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
   };
 
   const handleApprovePending = async (payment: any) => {
+    setConfirmApprove(payment);
+  };
+
+  const executeApprovePending = async () => {
+    if (!confirmApprove) return;
+    const payment = confirmApprove;
+    setConfirmApprove(null);
     try {
-      const res = await fetch(`/api/admin/pending-payments/${payment.transactionId}/approve`, {
+      const res = await fetch(`/api/admin/pending-payments/${payment.id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
@@ -3278,9 +3714,15 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
   };
 
   const handleRejectPending = async (payment: any) => {
-    if (!confirm("আপনি কি নিশ্চিত যে এই পেমেন্টটি বাতিল করতে চান?")) return;
+    setConfirmReject(payment);
+  };
+
+  const executeRejectPending = async () => {
+    if (!confirmReject) return;
+    const payment = confirmReject;
+    setConfirmReject(null);
     try {
-      const res = await fetch(`/api/admin/pending-payments/${payment.transactionId}/reject`, {
+      const res = await fetch(`/api/admin/pending-payments/${payment.id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
@@ -3499,6 +3941,9 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
       });
       
       if (res.ok) {
+        const payData = await res.json();
+        const transactionId = payData.transaction_id || `TRX-${Date.now()}`;
+        
         // Prepare Receipt Data
         const paidFees = studentFees.filter(f => selectedFeeIds.includes(f.id)).map(f => ({
           ...f,
@@ -3512,7 +3957,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
           discount: generalFeeDiscount,
           total: totalPaid,
           date: new Date().toISOString(),
-          transactionId: `TRX-${Date.now()}`
+          transactionId: transactionId
         });
         
         setShowReceipt(true);
@@ -3522,7 +3967,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
 
         if (settings.auto_whatsapp && selectedStudent.whatsapp) {
           const doc = new jsPDF();
-          const transactionId = `TRX-${Date.now()}`;
+          // Use the same transactionId
           
           doc.setFontSize(20);
           doc.setTextColor(6, 78, 59);
@@ -3631,6 +4076,18 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
 
   return (
     <div className="space-y-8">
+      <ConfirmModal 
+        isOpen={!!confirmApprove} 
+        message="আপনি কি নিশ্চিত যে এই পেমেন্টটি এপ্রুভ করতে চান?" 
+        onConfirm={executeApprovePending} 
+        onCancel={() => setConfirmApprove(null)} 
+      />
+      <ConfirmModal 
+        isOpen={!!confirmReject} 
+        message="আপনি কি নিশ্চিত যে এই পেমেন্টটি বাতিল করতে চান?" 
+        onConfirm={executeRejectPending} 
+        onCancel={() => setConfirmReject(null)} 
+      />
       <div className="flex gap-4 bg-white p-2 rounded-2xl w-fit shadow-sm border border-slate-100">
         <button 
           onClick={() => setActiveTab("collection")}
@@ -3668,6 +4125,8 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
                     <th className="pb-4 font-bold text-slate-500 text-sm">মাস ও বছর</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm">পরিমাণ</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm">মেথড</th>
+                    <th className="pb-4 font-bold text-slate-500 text-sm">TrxID / Phone</th>
+                    <th className="pb-4 font-bold text-slate-500 text-sm">রেফারেন্স</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm">তারিখ</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm">স্ট্যাটাস</th>
                     <th className="pb-4 font-bold text-slate-500 text-sm text-right">অ্যাকশন</th>
@@ -3675,11 +4134,24 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {pendingPayments.map((payment) => (
-                    <tr key={payment.transactionId}>
+                    <tr key={payment.id}>
                       <td className="py-4 font-bold text-slate-900">{payment.studentName}</td>
                       <td className="py-4 text-slate-600">{payment.months.join(", ")} {payment.year}</td>
                       <td className="py-4 font-bold text-emerald-700">৳{payment.amount}</td>
                       <td className="py-4 uppercase text-xs font-black text-slate-500">{payment.method}</td>
+                      <td className="py-4">
+                        {payment.transactionId && (
+                          <div className="text-xs font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded inline-block">
+                            {payment.transactionId}
+                          </div>
+                        )}
+                        {payment.senderPhone && (
+                          <div className="text-[10px] text-slate-500 mt-1">
+                            Phone: {payment.senderPhone}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-4 text-slate-600 text-xs font-bold">{payment.reference || "-"}</td>
                       <td className="py-4 text-slate-400 text-xs">{new Date(payment.createdAt).toLocaleString()}</td>
                       <td className="py-4 text-xs font-bold">
                         {payment.status === "completed" ? (
@@ -4222,135 +4694,144 @@ function FeeManager({ students, settings, onUpdate, initialStudentId }: { studen
       <AnimatePresence>
         {showReceipt && receiptData && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden my-4 max-h-[95vh] flex flex-col">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-20">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                   <CheckCircle2 className="w-6 h-6 text-emerald-500" /> পেমেন্ট সফল হয়েছে
                 </h3>
-                <button onClick={() => setShowReceipt(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><CloseIcon className="w-6 h-6" /></button>
+                <button onClick={() => setShowReceipt(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><CloseIcon className="w-6 h-6" /></button>
               </div>
               
-              <div className="p-8">
-                <div id="payment-receipt" className="bg-white p-8 border-4 border-slate-900 rounded-3xl relative overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+                <div id="payment-receipt" className="bg-white p-6 border-4 border-slate-900 rounded-3xl relative overflow-hidden">
                   <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-8 border-b-2 border-slate-900 pb-6">
-                      <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-between mb-6 border-b-2 border-slate-900 pb-4">
+                      <div className="flex items-center gap-3">
                         {settings?.logo_url && (
-                          <img src={settings.logo_url} className="w-16 h-16 object-contain" alt="Logo" referrerPolicy="no-referrer" />
+                          <img src={settings.logo_url} className="w-12 h-12 object-contain" alt="Logo" referrerPolicy="no-referrer" />
                         )}
                         <div>
-                          <h2 className="text-2xl font-black text-slate-900 leading-tight">আল-হেরা মাদ্রাসা মধুপুর</h2>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{settings?.address || "মাদরাসা ঠিকানা এখানে"}</p>
+                          <h2 className="text-xl font-black text-slate-900 leading-tight">আল-হেরা মাদ্রাসা মধুপুর</h2>
+                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{settings?.address || "মাদরাসা ঠিকানা এখানে"}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">টাকা জমার রশিদ</div>
-                        <p className="text-[10px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
+                        <div className="inline-block px-2 py-0.5 bg-slate-900 text-white text-[8px] font-black rounded-md uppercase tracking-widest mb-1">টাকা জমার রশিদ</div>
+                        <p className="text-[8px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6 mb-8">
-                      <div className="space-y-4">
-                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ছাত্রের নাম</p>
-                          <p className="font-black text-slate-900">{receiptData.student.name}</p>
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="space-y-3">
+                        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">ছাত্রের নাম</p>
+                          <p className="text-sm font-black text-slate-900">{receiptData.student.name}</p>
                         </div>
-                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">শ্রেণী ও রোল</p>
-                          <p className="font-black text-slate-900">{receiptData.student.class} | রোল: {receiptData.student.roll}</p>
+                        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">শ্রেণী ও রোল</p>
+                          <p className="text-sm font-black text-slate-900">{receiptData.student.class} | রোল: {receiptData.student.roll}</p>
                         </div>
                       </div>
-                      <div className="space-y-4">
-                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">আইডি নম্বর</p>
-                          <p className="font-black text-slate-900">{receiptData.student.id}</p>
+                      <div className="space-y-3">
+                        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">আইডি নম্বর</p>
+                          <p className="text-sm font-black text-slate-900">{receiptData.student.id}</p>
                         </div>
-                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">তারিখ</p>
-                          <p className="font-black text-slate-900">{new Date(receiptData.date).toLocaleDateString('bn-BD')}</p>
+                        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">তারিখ</p>
+                          <p className="text-sm font-black text-slate-900">{new Date(receiptData.date).toLocaleDateString('bn-BD')}</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-2 border-slate-900 rounded-2xl overflow-hidden mb-8">
+                    <div className="border-2 border-slate-900 rounded-xl overflow-hidden mb-6">
                       <table className="w-full">
                         <thead>
                           <tr className="bg-slate-900 text-white">
-                            <th className="text-left p-4 font-black text-xs uppercase tracking-widest">বিবরণ</th>
-                            <th className="text-right p-4 font-black text-xs uppercase tracking-widest">পরিমাণ</th>
+                            <th className="text-left p-2 px-3 font-black text-[10px] uppercase tracking-widest">বিবরণ</th>
+                            <th className="text-right p-2 px-3 font-black text-[10px] uppercase tracking-widest">পরিমাণ</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {receiptData.fees.map((fee: any, idx: number) => (
                             <tr key={idx}>
-                              <td className="p-4 text-sm font-bold text-slate-700">{fee.category}</td>
-                              <td className="p-4 text-sm font-black text-slate-900 text-right">৳{fee.paidAmount}</td>
+                              <td className="p-2 px-3 text-xs font-bold text-slate-700">{fee.category}</td>
+                              <td className="p-2 px-3 text-xs font-black text-slate-900 text-right">৳{fee.paidAmount}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot className="border-t-2 border-slate-900">
                           <tr className="bg-slate-50">
-                            <td className="p-2 px-4 text-xs font-bold text-slate-500">উপ-মোট (Subtotal)</td>
-                            <td className="p-2 px-4 text-xs font-bold text-slate-500 text-right">৳{receiptData.subTotal || receiptData.total}</td>
+                            <td className="p-1 px-3 text-[10px] font-bold text-slate-500">উপ-মোট (Subtotal)</td>
+                            <td className="p-1 px-3 text-[10px] font-bold text-slate-500 text-right">৳{receiptData.subTotal || receiptData.total}</td>
                           </tr>
                           {receiptData.discount > 0 && (
                             <tr className="bg-slate-50">
-                              <td className="p-2 px-4 text-xs font-bold text-rose-500">ডিসকাউন্ট (Discount)</td>
-                              <td className="p-2 px-4 text-xs font-bold text-rose-500 text-right">- ৳{receiptData.discount}</td>
+                              <td className="p-1 px-3 text-[10px] font-bold text-rose-500">ডিসকাউন্ট (Discount)</td>
+                              <td className="p-1 px-3 text-[10px] font-bold text-rose-500 text-right">- ৳{receiptData.discount}</td>
                             </tr>
                           )}
                           <tr className="bg-slate-100">
-                            <td className="p-4 font-black text-slate-900">সর্বমোট আদায় (Net Total)</td>
-                            <td className="p-4 font-black text-emerald-600 text-right text-xl">৳{receiptData.total}</td>
+                            <td className="p-2 px-3 font-black text-slate-900 text-sm">সর্বমোট আদায় (Net Total)</td>
+                            <td className="p-2 px-3 font-black text-emerald-600 text-right text-lg">৳{receiptData.total}</td>
                           </tr>
                         </tfoot>
                       </table>
                     </div>
 
-                    <div className="mt-16 flex justify-between items-end px-4">
+                    <div className="mt-12 flex justify-between items-end px-4">
                       <div className="text-center">
-                        <div className="w-40 border-t-2 border-slate-900 mb-2"></div>
-                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">আদায়কারীর স্বাক্ষর</p>
+                        <div className="w-32 border-t-2 border-slate-900 mb-1"></div>
+                        <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest">আদায়কারীর স্বাক্ষর</p>
                       </div>
-                      <div className="text-center">
-                        <div className="w-40 border-t-2 border-slate-900 mb-2"></div>
-                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">মাদ্রাসা পরিচালক</p>
+                      <div className="text-center relative">
+                        {settings?.show_muhtamim_signature && settings?.muhtamim_signature_url && (
+                          <img 
+                            src={settings.muhtamim_signature_url} 
+                            className="absolute bottom-4 left-1/2 -translate-x-1/2 w-20 h-10 object-contain pointer-events-none" 
+                            alt="Signature" 
+                            referrerPolicy="no-referrer"
+                          />
+                        )}
+                        <div className="w-32 border-t-2 border-slate-900 mb-1"></div>
+                        <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest">মুহতামিম সাহেবের স্বাক্ষর</p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-center">
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3 justify-center sticky bottom-0 z-20">
                 <button 
                   onClick={() => window.print()}
-                  className="px-6 py-3 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all shadow-lg shadow-slate-200"
+                  className="px-5 py-2.5 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all text-sm"
                 >
-                  <Printer className="w-5 h-5" /> প্রিন্ট করুন
+                  <Printer className="w-4 h-4" /> প্রিন্ট করুন
                 </button>
                 <button 
                   onClick={() => downloadPDF('payment-receipt', `Receipt_${receiptData.transactionId}.pdf`, addToast, 'a5')}
-                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+                  className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all text-sm"
                 >
-                  <Download className="w-5 h-5" /> PDF ডাউনলোড
+                  <Download className="w-4 h-4" /> PDF ডাউনলোড
                 </button>
                 <button 
                   onClick={async () => {
                     await downloadPDF('payment-receipt', `Receipt_${receiptData.transactionId}.pdf`, addToast, 'a5');
-                    const text = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরশিদ নং: ${receiptData.transactionId}\nমোট পরিমাণ: ৳${receiptData.total}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
+                    const details = receiptData.fees.map((item: any) => `${item.category}: ৳${item.paidAmount}`).join('\n');
+                    const text = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরশিদ নং: ${receiptData.transactionId}\nতারিখ: ${new Date(receiptData.date).toLocaleDateString('bn-BD')}\n\nবিস্তারিত:\n${details}\n------------------\nমোট পরিমাণ: ৳${receiptData.total}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
                     const cleanPhone = receiptData.student.whatsapp ? receiptData.student.whatsapp.replace(/[^0-9]/g, '') : '';
                     const phone = cleanPhone.startsWith('0') ? '88' + cleanPhone : cleanPhone;
                     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
                   }}
-                  className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-200"
+                  className="px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-green-700 transition-all text-sm"
                 >
-                  <MessageCircle className="w-5 h-5" /> WhatsApp শেয়ার
+                  <MessageCircle className="w-4 h-4" /> WhatsApp শেয়ার
                 </button>
                 <button 
-                  onClick={() => sendEmailWithPDF('payment-receipt', receiptData.student, receiptData.transactionId, receiptData.total, addToast)}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                  onClick={() => setShowReceipt(false)}
+                  className="px-5 py-2.5 bg-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-300 transition-all text-sm"
                 >
-                  <Mail className="w-5 h-5" /> Gmail পাঠান
+                  বন্ধ করুন
                 </button>
               </div>
             </motion.div>
@@ -4586,9 +5067,9 @@ function TransactionHistory({ settings }: { settings: any }) {
       {/* Receipt Modal */}
       <AnimatePresence>
         {showReceipt && receiptData && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden my-8">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden my-4 max-h-[95vh] flex flex-col">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-20">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
                     <FileText className="w-6 h-6" />
@@ -4600,7 +5081,7 @@ function TransactionHistory({ settings }: { settings: any }) {
                 </button>
               </div>
               
-              <div className="p-8">
+              <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
                 <div id="history-receipt" className="bg-white p-8 border-4 border-slate-900 rounded-3xl relative overflow-hidden">
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-8 border-b-2 border-slate-900 pb-6">
@@ -4674,14 +5155,14 @@ function TransactionHistory({ settings }: { settings: any }) {
                       </div>
                       <div className="text-center">
                         <div className="w-40 border-t-2 border-slate-900 mb-2"></div>
-                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">মাদ্রাসা পরিচালক</p>
+                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">মুহতামিম সাহেব</p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-center">
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-center sticky bottom-0 z-20">
                 <button 
                   onClick={() => window.print()}
                   className="px-6 py-3 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all shadow-lg shadow-slate-200"
@@ -4718,13 +5199,15 @@ function TransactionHistory({ settings }: { settings: any }) {
         )}
       </AnimatePresence>
       {selectedStudentProfile && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden my-4 max-h-[95vh] flex flex-col">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-20">
               <h3 className="text-2xl font-black text-slate-900">ছাত্রের প্রোফাইল</h3>
-              <button onClick={() => setSelectedStudentProfile(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">✕</button>
+              <button onClick={() => setSelectedStudentProfile(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <CloseIcon className="w-6 h-6" />
+              </button>
             </div>
-            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
               <div className="text-center mb-6">
                 <img src={selectedStudentProfile.student.photo_url || `https://picsum.photos/seed/${selectedStudentProfile.student.id}/200`} className="w-32 h-32 rounded-3xl mx-auto object-cover shadow-lg mb-4" referrerPolicy="no-referrer" />
                 <h3 className="text-2xl font-black text-slate-900">{selectedStudentProfile.student.name}</h3>

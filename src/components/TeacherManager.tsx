@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2 } from "lucide-react";
+import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2, X as CloseIcon } from "lucide-react";
 import jsPDF from "jspdf";
 import { toPng } from 'html-to-image';
 
@@ -275,6 +275,10 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                   <input name="nid" defaultValue={selectedTeacher?.nid} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                 </div>
                 <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">বায়োমেট্রিক আইডি (মেশিন আইডি)</label>
+                  <input name="biometric_id" defaultValue={selectedTeacher?.biometric_id} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: 201" />
+                </div>
+                <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">ছবির ইউআরএল</label>
                   <input name="photo_url" defaultValue={selectedTeacher?.photo_url} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                 </div>
@@ -489,78 +493,83 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
       {/* Salary Receipt Modal */}
       {selectedSalary && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden">
-            <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center print:hidden">
+          <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 print:hidden">
               <h3 className="text-xl font-black text-slate-900">বেতন রিসিট</h3>
-              <button onClick={() => setSelectedSalary(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+              <button onClick={() => setSelectedSalary(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                <CloseIcon className="w-6 h-6" />
+              </button>
             </div>
-            <div id="salary-receipt" className="p-8 space-y-8 bg-white relative">
-              {/* Receipt Header */}
-              <div className="flex items-center gap-4 border-b-2 border-slate-900 pb-6">
-                {settings?.logo_url && (
-                  <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
-                )}
-                <div className="flex-1">
-                  <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                  <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
-                  <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
-                </div>
-                <div className="text-right">
-                  <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">
-                    বেতন রিসিট
+            
+            <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+              <div id="salary-receipt" className="space-y-8 bg-white relative">
+                {/* Receipt Header */}
+                <div className="flex items-center gap-4 border-b-2 border-slate-900 pb-6">
+                  {settings?.logo_url && (
+                    <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                  )}
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                    <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                    <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedSalary.id.toString().substring(0, 6)}</p>
-                </div>
-              </div>
-
-              {/* Receipt Body */}
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-8">
-                  <div className="space-y-1 border-b border-slate-100 pb-2">
-                    <p className="text-[10px] font-black uppercase text-slate-400">তারিখ</p>
-                    <p className="font-bold text-slate-900">{new Date(selectedSalary.created_at || Date.now()).toLocaleDateString('bn-BD')}</p>
-                  </div>
-                  <div className="space-y-1 border-b border-slate-100 pb-2">
-                    <p className="text-[10px] font-black uppercase text-slate-400">শিক্ষকের নাম</p>
-                    <p className="font-bold text-slate-900">{selectedTeacher?.name}</p>
-                  </div>
-                  <div className="space-y-1 border-b border-slate-100 pb-2">
-                    <p className="text-[10px] font-black uppercase text-slate-400">মাস ও বছর</p>
-                    <p className="font-bold text-slate-900">{selectedSalary.month} {selectedSalary.year}</p>
-                  </div>
-                  <div className="space-y-1 border-b border-slate-100 pb-2">
-                    <p className="text-[10px] font-black uppercase text-slate-400">প্রদানকারী</p>
-                    <p className="font-bold text-slate-900">{selectedSalary.given_by || "অ্যাডমিন"}</p>
+                  <div className="text-right">
+                    <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">
+                      বেতন রিসিট
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedSalary.id.toString().substring(0, 6)}</p>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl shadow-lg">
-                  <p className="font-bold uppercase tracking-widest text-xs">মোট পরিমাণ</p>
-                  <h2 className="text-3xl font-black">৳{selectedSalary.amount}</h2>
-                </div>
-              </div>
+                {/* Receipt Body */}
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-1 border-b border-slate-100 pb-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">তারিখ</p>
+                      <p className="font-bold text-slate-900">{new Date(selectedSalary.created_at || Date.now()).toLocaleDateString('bn-BD')}</p>
+                    </div>
+                    <div className="space-y-1 border-b border-slate-100 pb-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">শিক্ষকের নাম</p>
+                      <p className="font-bold text-slate-900">{selectedTeacher?.name}</p>
+                    </div>
+                    <div className="space-y-1 border-b border-slate-100 pb-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">মাস ও বছর</p>
+                      <p className="font-bold text-slate-900">{selectedSalary.month} {selectedSalary.year}</p>
+                    </div>
+                    <div className="space-y-1 border-b border-slate-100 pb-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">প্রদানকারী</p>
+                      <p className="font-bold text-slate-900">{selectedSalary.given_by || "অ্যাডমিন"}</p>
+                    </div>
+                  </div>
 
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-12 pt-12">
-                <div className="text-center">
-                  <div className="border-t border-slate-300 pt-2">
-                    <p className="text-[10px] font-black text-slate-500 uppercase">শিক্ষকের স্বাক্ষর</p>
+                  <div className="flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl shadow-lg">
+                    <p className="font-bold uppercase tracking-widest text-xs">মোট পরিমাণ</p>
+                    <h2 className="text-3xl font-black">৳{selectedSalary.amount}</h2>
                   </div>
                 </div>
-                <div className="text-center">
-                  <div className="border-t border-slate-300 pt-2">
-                    <p className="text-[10px] font-black text-slate-500 uppercase">পরিচালক স্বাক্ষর</p>
+
+                {/* Signatures */}
+                <div className="grid grid-cols-2 gap-12 pt-12">
+                  <div className="text-center">
+                    <div className="border-t border-slate-300 pt-2">
+                      <p className="text-[10px] font-black text-slate-500 uppercase">শিক্ষকের স্বাক্ষর</p>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="border-t border-slate-300 pt-2">
+                      <p className="text-[10px] font-black text-slate-500 uppercase">পরিচালক স্বাক্ষর</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Footer */}
-              <div className="text-center pt-8 border-t border-slate-50">
-                <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Powered by Madrasa Management System</p>
+                {/* Footer */}
+                <div className="text-center pt-8 border-t border-slate-50">
+                  <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Powered by Madrasa Management System</p>
+                </div>
               </div>
             </div>
 
-            <div className="p-8 bg-slate-50 border-t border-slate-100 grid grid-cols-4 gap-2 print:hidden">
+            <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-4 gap-2 sticky bottom-0 z-20 print:hidden">
               <button onClick={() => window.print()} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
                 <Printer className="w-5 h-5 text-slate-600" />
                 <span className="text-[10px] font-bold">প্রিন্ট</span>

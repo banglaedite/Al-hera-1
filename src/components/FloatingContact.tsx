@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MessageCircle, Phone, Facebook, X, MessageSquare } from "lucide-react";
+import { MessageCircle, Phone, Facebook, X, MessageSquare, Youtube } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLocation } from "react-router-dom";
 
@@ -35,7 +35,13 @@ const FloatingContact = () => {
       color: "bg-blue-600",
       href: settings.facebook_url,
     },
-  ];
+    {
+      icon: Youtube,
+      label: "ইউটিউব",
+      color: "bg-red-600",
+      href: settings.youtube_url,
+    },
+  ].filter(action => action.href);
 
   return (
     <div className="fixed bottom-6 right-6 z-[100]">
