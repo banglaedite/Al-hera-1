@@ -19,9 +19,9 @@ import { useToast } from "./ToastContext";
 
 const MONTHS = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
-export default function FeeManagement() {
+export default function FeeManagement({ students, settings, onUpdate, initialStudentId, classesList }: any) {
   const { addToast } = useToast();
-  const [studentId, setStudentId] = useState("");
+  const [studentId, setStudentId] = useState(initialStudentId || "");
   const [loading, setLoading] = useState(false);
   const [student, setStudent] = useState<any>(null);
   const [fees, setFees] = useState<any[]>([]);
@@ -34,12 +34,19 @@ export default function FeeManagement() {
   const [isPaying, setIsPaying] = useState(false);
 
   useEffect(() => {
+    if (initialStudentId) {
+      handleSearch(new Event('submit') as any);
+    }
+  }, [initialStudentId]);
+
+  useEffect(() => {
     setTotalAmount(selectedMonths.length * amountPerMonth);
   }, [selectedMonths, amountPerMonth]);
 
   const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!studentId) return;
+    if (e) e.preventDefault();
+    const idToSearch = studentId || initialStudentId;
+    if (!idToSearch) return;
     
     setLoading(true);
     setError("");
@@ -48,12 +55,12 @@ export default function FeeManagement() {
     setSelectedMonths([]);
 
     try {
-      const studentRes = await fetch(`/api/students/${studentId}`);
+      const studentRes = await fetch(`/api/students/${idToSearch}`);
       if (!studentRes.ok) throw new Error("ছাত্র খুঁজে পাওয়া যায়নি");
       const studentData = await studentRes.json();
       setStudent(studentData);
 
-      await fetchFees(studentId);
+      await fetchFees(idToSearch);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -130,6 +137,7 @@ export default function FeeManagement() {
         addToast("পেমেন্ট সফল হয়েছে", "success");
         setSelectedMonths([]);
         await fetchFees(student.id);
+        if (onUpdate) onUpdate();
         
         // Generate receipt automatically using central utility
         generateMonthlyReceipt({
@@ -138,7 +146,7 @@ export default function FeeManagement() {
           months: selectedMonths,
           year: selectedYear,
           amount: totalAmount
-        }, student, sendEmail, addToast);
+        }, student, sendEmail, addToast, settings);
       }
     } catch (err) {
       console.error("Payment failed", err);
@@ -159,10 +167,11 @@ export default function FeeManagement() {
       if (response.ok) {
         addToast("পেমেন্ট সফল হয়েছে", "success");
         await fetchFees(student.id);
+        if (onUpdate) onUpdate();
         
         // Generate receipt automatically
         const updatedFee = { ...fee, status: 'paid', paid_date: new Date().toISOString(), transaction_id: transactionId };
-        generateReceipt(updatedFee, student, sendEmail, addToast);
+        generateReceipt(updatedFee, student, sendEmail, addToast, settings);
       }
     } catch (err) {
       console.error("Payment failed", err);

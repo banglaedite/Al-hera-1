@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2, X as CloseIcon } from "lucide-react";
+import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2, X as CloseIcon, Save } from "lucide-react";
 import jsPDF from "jspdf";
 import { toPng } from 'html-to-image';
 
@@ -56,7 +56,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
     });
     const data = await res.json();
     if (data.success) {
-      addToast("শিক্ষক ডিলিট হয়েছে", "success");
+      addToast("শিক্ষক আর্কাইভ করা হয়েছে", "success");
       setIsDeleting(null);
       setDeletePassword("");
       fetch("/api/admin/teachers").then(res => res.json()).then(setTeachers);
@@ -287,8 +287,8 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                   <textarea name="address" defaultValue={selectedTeacher?.address} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                 </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-lg hover:bg-emerald-700 transition-all">
-                সেভ করুন
+              <button type="submit" className="flex items-center justify-center gap-2 w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
+                <Save className="w-6 h-6" /> সেভ করুন
               </button>
             </form>
           </div>
@@ -557,7 +557,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                   </div>
                   <div className="text-center">
                     <div className="border-t border-slate-300 pt-2">
-                      <p className="text-[10px] font-black text-slate-500 uppercase">পরিচালক স্বাক্ষর</p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase">মুহতামিমের স্বাক্ষর</p>
                     </div>
                   </div>
                 </div>

@@ -1,0 +1,2 @@
+840:                  style={{ width: `${Math.min(100, (summary.totalIncome / (prevSummary.totalIncome || 1)) * 100)}%` }}
+863:                  style={{ width: `${Math.min(100, (summary.totalExpense / (prevSummary.totalExpense || 1)) * 100)}%` }}

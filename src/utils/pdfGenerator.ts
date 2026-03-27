@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import html2canvas from "html2canvas";
 
-export const generateMonthlyReceipt = (data: any, student: any, sendEmail: any, addToast: any) => {
+export const generateMonthlyReceipt = async (data: any, student: any, sendEmail: any, addToast: any, settings?: any) => {
     const doc = new jsPDF('p', 'mm', 'a5');
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
@@ -11,7 +11,7 @@ export const generateMonthlyReceipt = (data: any, student: any, sendEmail: any, 
     doc.rect(0, 0, pageWidth, 30, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
-    doc.text("AL HERA MADRASA", pageWidth / 2, 18, { align: "center" });
+    doc.text(settings?.title || "AL HERA MADRASA", pageWidth / 2, 18, { align: "center" });
     doc.setFontSize(8);
     doc.text("Monthly Fee Receipt", pageWidth / 2, 24, { align: "center" });
     
@@ -46,6 +46,24 @@ export const generateMonthlyReceipt = (data: any, student: any, sendEmail: any, 
     doc.setFontSize(12);
     doc.text(`BDT ${data.amount}.00`, pageWidth - margin, finalY, { align: "right" });
     
+    // QR Code Integration
+    if (settings?.qr_code_url) {
+      try {
+        const qrImg = new Image();
+        qrImg.crossOrigin = "Anonymous";
+        qrImg.src = settings.qr_code_url;
+        await new Promise((resolve, reject) => {
+          qrImg.onload = resolve;
+          qrImg.onerror = reject;
+        });
+        doc.addImage(qrImg, 'PNG', pageWidth - margin - 25, finalY + 10, 25, 25);
+        doc.setFontSize(6);
+        doc.text("Scan to Verify", pageWidth - margin - 12.5, finalY + 38, { align: "center" });
+      } catch (e) {
+        console.error("Failed to add QR code to PDF", e);
+      }
+    }
+
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.text("This is a computer-generated receipt. No signature required.", pageWidth / 2, 190, { align: "center" });
@@ -57,11 +75,14 @@ export const generateMonthlyReceipt = (data: any, student: any, sendEmail: any, 
     if (student.email) {
       sendEmail(pdfData, filename, student.email, addToast);
     } else {
-      addToast("ছাত্রের ইমেইল অ্যাড্রেস নেই!", "error");
+      const manualEmail = window.prompt("ছাত্রের ইমেইল অ্যাড্রেস নেই! দয়া করে ইমেইল অ্যাড্রেসটি দিন:", "");
+      if (manualEmail) {
+        sendEmail(pdfData, filename, manualEmail, addToast);
+      }
     }
 };
 
-export const generateReceipt = (fee: any, student: any, sendEmail: any, addToast: any) => {
+export const generateReceipt = async (fee: any, student: any, sendEmail: any, addToast: any, settings?: any) => {
     const doc = new jsPDF('p', 'mm', 'a5');
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
@@ -70,7 +91,7 @@ export const generateReceipt = (fee: any, student: any, sendEmail: any, addToast
     doc.rect(0, 0, pageWidth, 30, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
-    doc.text("AL HERA MADRASA", pageWidth / 2, 18, { align: "center" });
+    doc.text(settings?.title || "AL HERA MADRASA", pageWidth / 2, 18, { align: "center" });
     doc.setFontSize(8);
     doc.text("Digital Payment Receipt", pageWidth / 2, 24, { align: "center" });
     
@@ -105,6 +126,24 @@ export const generateReceipt = (fee: any, student: any, sendEmail: any, addToast
     doc.setFontSize(12);
     doc.text(`BDT ${fee.amount}.00`, pageWidth - margin, finalY, { align: "right" });
     
+    // QR Code Integration
+    if (settings?.qr_code_url) {
+      try {
+        const qrImg = new Image();
+        qrImg.crossOrigin = "Anonymous";
+        qrImg.src = settings.qr_code_url;
+        await new Promise((resolve, reject) => {
+          qrImg.onload = resolve;
+          qrImg.onerror = reject;
+        });
+        doc.addImage(qrImg, 'PNG', pageWidth - margin - 25, finalY + 10, 25, 25);
+        doc.setFontSize(6);
+        doc.text("Scan to Verify", pageWidth - margin - 12.5, finalY + 38, { align: "center" });
+      } catch (e) {
+        console.error("Failed to add QR code to PDF", e);
+      }
+    }
+
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.text("This is a computer-generated receipt. No signature required.", pageWidth / 2, 190, { align: "center" });
@@ -116,7 +155,10 @@ export const generateReceipt = (fee: any, student: any, sendEmail: any, addToast
     if (student.email) {
       sendEmail(pdfData, filename, student.email, addToast);
     } else {
-      addToast("ছাত্রের ইমেইল অ্যাড্রেস নেই!", "error");
+      const manualEmail = window.prompt("ছাত্রের ইমেইল অ্যাড্রেস নেই! দয়া করে ইমেইল অ্যাড্রেসটি দিন:", "");
+      if (manualEmail) {
+        sendEmail(pdfData, filename, manualEmail, addToast);
+      }
     }
 };
 

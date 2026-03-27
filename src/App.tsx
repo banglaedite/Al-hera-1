@@ -104,7 +104,7 @@ const Navbar = () => {
             <div className="bg-emerald-900 p-2 rounded-xl shadow-lg shadow-emerald-900/20">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-black tracking-tight font-display text-slate-900">
+            <span className="text-2xl font-black tracking-tight font-display text-emerald-900 drop-shadow-sm bg-clip-text text-transparent bg-gradient-to-r from-emerald-900 to-emerald-600">
               {settings?.title || "আল হেরা মাদরাসা"}
             </span>
           </div>

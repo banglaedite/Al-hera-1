@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Hind+Siliguri:wght@300;400;500;600;700&family=Noto+Serif+Bengali:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Hind+Siliguri:wght@300;400;500;600;700&family=Noto+Serif+Bengali:wght@400;500;600;700;900&family=Anek+Bangla:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Hind Siliguri", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Noto Serif Bengali", "Outfit", sans-serif;
+  --font-display: "Noto Serif Bengali", "Anek Bangla", "Outfit", sans-serif;
   --font-luckiest: "Luckiest Guy", cursive;
 }
 
@@ -84,7 +84,8 @@
   #transaction-detail, #transaction-detail *,
   #id-card-template, #id-card-template *,
   #marksheet-template, #marksheet-template *,
-  .print-only, .print-only * {
+  .print-only, .print-only *,
+  .print-header, .print-header * {
     visibility: visible !important;
   }
   
@@ -95,17 +96,37 @@
     top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 20px !important;
+    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
-    z-index: 9999 !important;
+    z-index: 99999 !important;
     background: white !important;
     display: block !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
-  /* Ensure hidden elements stay hidden even if they are children of visible elements */
-  .print\:hidden, .no-print, button, .fixed.inset-0 {
+  /* Ensure parents of printable elements don't hide them */
+  .fixed.inset-0, .absolute.inset-0, .relative {
+    display: block !important;
+    visibility: visible !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  /* Hide non-printable modal chrome */
+  .fixed.inset-0 > div:not(:has(#history-receipt)):not(:has(#payment-receipt)):not(:has(#salary-receipt)):not(:has(#transaction-detail)):not(:has(#id-card-template)):not(:has(#marksheet-template)):not(:has(.print-only)),
+  .bg-slate-900\/60, .backdrop-blur-sm, .sticky, .border-b, .border-t, button, .no-print, .print\:hidden {
     display: none !important;
     visibility: hidden !important;
+  }
+
+  /* Fix for multi-page issue */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
   }
 }

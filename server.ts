@@ -213,7 +213,9 @@ async function seedDatabase() {
           enable_rocket: 1,
           show_features_as_buttons: 1,
           show_food_as_buttons: 1,
-          show_showcase_as_buttons: 1
+          show_showcase_as_buttons: 1,
+          qr_code_url: "",
+          admin_password: "1234"
         });
         console.log("Default site settings seeded.");
       }
@@ -233,6 +235,40 @@ async function seedDatabase() {
           await db.collection("features").add(feature);
         }
         console.log("Default features seeded.");
+      }
+
+      const classesSnapshot = await db.collection("classes").get();
+      const existingClasses = classesSnapshot.docs.map(doc => doc.data().name);
+      const defaultClasses = ["প্রথম শ্রেণি", "দ্বিতীয় শ্রেণি", "তৃতীয় শ্রেণি", "চতুর্থ শ্রেণি", "পঞ্চম শ্রেণি", "ষষ্ঠ শ্রেণি", "সপ্তম শ্রেণি", "অষ্টম শ্রেণি", "নবম শ্রেণি", "দশম শ্রেণি"];
+      
+      let orderCounter = classesSnapshot.docs.length + 1;
+      let seededAny = false;
+      for (const className of defaultClasses) {
+        if (!existingClasses.includes(className)) {
+          await db.collection("classes").add({ name: className, order: orderCounter++, is_active: true });
+          seededAny = true;
+        }
+      }
+      if (seededAny) {
+        console.log("Missing default classes seeded.");
+      }
+
+      const incomeCatSnapshot = await db.collection("income_categories").get();
+      if (incomeCatSnapshot.empty) {
+        console.log("Seeding default income categories...");
+        const defaultIncomeCats = ["মাসিক বেতন", "ভর্তি ফি", "সেশন ফি", "পরীক্ষা ফি", "দান", "অন্যান্য"];
+        for (const cat of defaultIncomeCats) {
+          await db.collection("income_categories").add({ name: cat });
+        }
+      }
+
+      const expenseCatSnapshot = await db.collection("expense_categories").get();
+      if (expenseCatSnapshot.empty) {
+        console.log("Seeding default expense categories...");
+        const defaultExpenseCats = ["শিক্ষক বেতন", "স্টাফ বেতন", "ভাড়া", "বিদ্যুৎ বিল", "মেরামত", "আপ্যায়ন", "অন্যান্য"];
+        for (const cat of defaultExpenseCats) {
+          await db.collection("expense_categories").add({ name: cat });
+        }
       }
     } catch (error) {
       console.error("Seeding error:", error);
@@ -294,7 +330,7 @@ async function seedDatabase() {
   app.get("/api/admin/all-history", async (req, res) => {
     try {
       const { start_date, end_date } = req.query;
-      let feesQuery: any = firestore!.collection("fees").where("status", "==", "paid");
+      let feesQuery: any = firestore!.collection("fees");
       let incomeQuery: any = firestore!.collection("income");
       let expensesQuery: any = firestore!.collection("expenses");
 
@@ -319,17 +355,19 @@ async function seedDatabase() {
 
       feesSnap.docs.forEach(doc => {
         const data = doc.data();
-        allData.push({
-          id: doc.id,
-          type: 'fee',
-          date: data.paid_date,
-          amount: data.amount,
-          category: data.category,
-          student_name: data.student_name,
-          student_id: data.student_id,
-          transaction_id: data.transaction_id,
-          ...data
-        });
+        if (data.status === "paid") {
+          allData.push({
+            id: doc.id,
+            type: 'fee',
+            date: data.paid_date,
+            amount: data.amount,
+            category: data.category,
+            student_name: data.student_name,
+            student_id: data.student_id,
+            transaction_id: data.transaction_id,
+            ...data
+          });
+        }
       });
 
       incomeSnap.docs.forEach(doc => {
@@ -467,9 +505,18 @@ async function seedDatabase() {
 
   // --- Delete History ---
   app.get("/api/admin/delete-history", async (req, res) => {
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, start_date, end_date } = req.query;
     try {
-      const snapshot = await firestore.collection("delete_history").orderBy("deleted_at", "desc").get();
+      let query: any = firestore.collection("delete_history");
+      if (start_date) {
+        query = query.where("deleted_at", ">=", start_date);
+      }
+      if (end_date) {
+        query = query.where("deleted_at", "<=", end_date + "T23:59:59.999Z");
+      }
+      query = query.orderBy("deleted_at", "desc");
+      
+      const snapshot = await query.get();
       const allHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const total = allHistory.length;
       const history = allHistory.slice(Number(offset), Number(offset) + Number(limit));
@@ -480,6 +527,7 @@ async function seedDatabase() {
         hasMore: Number(offset) + Number(limit) < total
       });
     } catch (error) {
+      console.error("Error fetching delete history:", error);
       res.status(500).json({ error: "Failed to fetch delete history" });
     }
   });
@@ -591,7 +639,7 @@ async function seedDatabase() {
         const feesSnapshot = await firestore!.collection("transactions")
           .where("student_id", "==", student.id)
           .where("paid_date", ">=", `${month}-01`)
-          .where("paid_date", "<=", `${month}-31`)
+          .where("paid_date", "<=", `${month}-31T23:59:59.999Z`)
           .get();
         
         const fee = feesSnapshot.docs[0]?.data();
@@ -712,7 +760,8 @@ async function seedDatabase() {
       udyoktapay_api_key, udyoktapay_api_url,
       show_features_directly, show_food_directly, show_showcase_directly, showcase_content,
       admission_rules,
-      enable_neon_light, neon_light_color, neon_light_effect
+      enable_neon_light, neon_light_color, neon_light_effect,
+      admin_password
     } = req.body;
     try {
       await firestore!.collection("site_settings").doc("1").set({
@@ -732,7 +781,8 @@ async function seedDatabase() {
         admission_rules: admission_rules || "",
         enable_neon_light: enable_neon_light ? 1 : 0,
         neon_light_color: neon_light_color || "#10b981",
-        neon_light_effect: neon_light_effect || "pulse"
+        neon_light_effect: neon_light_effect || "pulse",
+        admin_password: admin_password || ""
       }, { merge: true });
       res.json({ success: true });
     } catch (error) {
@@ -884,14 +934,65 @@ async function seedDatabase() {
   });
 
   app.put("/api/classes/:id", async (req, res) => {
-    const { name, order, password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    const { name, order, is_active, password } = req.body;
+    
+    // If updating name or order, require password
+    if (name !== undefined || order !== undefined) {
+      if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+        return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+      }
     }
+
     try {
-      await firestore.collection("classes").doc(req.params.id).update({ name, order });
+      const classRef = firestore.collection("classes").doc(req.params.id);
+      const classDoc = await classRef.get();
+      if (!classDoc.exists) {
+        return res.status(404).json({ error: "Class not found" });
+      }
+      const oldName = classDoc.data()?.name;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (order !== undefined) updateData.order = order;
+      if (is_active !== undefined) updateData.is_active = is_active;
+      
+      await classRef.update(updateData);
+
+      // If name changed, update related records
+      if (name !== undefined && oldName && name !== oldName) {
+        let batch = firestore.batch();
+        let count = 0;
+
+        const addUpdate = async (ref: any, data: any) => {
+          batch.update(ref, data);
+          count++;
+          if (count >= 400) {
+            await batch.commit();
+            batch = firestore.batch();
+            count = 0;
+          }
+        };
+
+        const studentsSnap = await firestore.collection("students").where("class", "==", oldName).get();
+        for (const doc of studentsSnap.docs) await addUpdate(doc.ref, { class: name });
+
+        const subjectsSnap = await firestore.collection("subjects").where("class", "==", oldName).get();
+        for (const doc of subjectsSnap.docs) await addUpdate(doc.ref, { class: name });
+
+        const incomeSnap = await firestore.collection("income").where("class_name", "==", oldName).get();
+        for (const doc of incomeSnap.docs) await addUpdate(doc.ref, { class_name: name });
+
+        const expensesSnap = await firestore.collection("expenses").where("class_name", "==", oldName).get();
+        for (const doc of expensesSnap.docs) await addUpdate(doc.ref, { class_name: name });
+        
+        if (count > 0) {
+          await batch.commit();
+        }
+      }
+
       res.json({ success: true });
     } catch (error) {
+      console.error(error);
       res.status(500).json({ error: "Failed to update class" });
     }
   });
@@ -982,7 +1083,7 @@ async function seedDatabase() {
   // --- Teachers ---
   app.get("/api/admin/teachers", async (req, res) => {
     try {
-      const teachersSnapshot = await firestore!.collection("teachers").get();
+      const teachersSnapshot = await firestore!.collection("teachers").where("deleted_at", "==", null).get();
       const teachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(teachers);
     } catch (error) {
@@ -991,10 +1092,26 @@ async function seedDatabase() {
     }
   });
 
+  app.get("/api/admin/archive/teachers", async (req, res) => {
+    try {
+      const teachersSnapshot = await firestore!.collection("teachers").where("deleted_at", "!=", null).get();
+      const teachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(teachers);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch archived teachers" });
+    }
+  });
+
   app.post("/api/admin/teachers", async (req, res) => {
     const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id } = req.body;
     try {
-      await firestore!.collection("teachers").add({ name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id: biometric_id || null, created_at: new Date().toISOString() });
+      await firestore!.collection("teachers").add({ 
+        name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, 
+        biometric_id: biometric_id || null, 
+        created_at: new Date().toISOString(),
+        deleted_at: null
+      });
       res.json({ success: true });
     } catch (e) {
       console.error(e);
@@ -1065,11 +1182,13 @@ async function seedDatabase() {
           details: JSON.stringify({ id: teacherDoc.id, ...teacherDoc.data() }),
           deleted_at: new Date().toISOString()
         });
-        await firestore.collection("teachers").doc(req.params.id).delete();
+        await firestore.collection("teachers").doc(req.params.id).update({
+          deleted_at: new Date().toISOString()
+        });
       }
       res.json({ success: true });
     } catch (e) {
-      res.status(500).json({ error: "Failed to delete teacher" });
+      res.status(500).json({ error: "Failed to archive teacher" });
     }
   });
 
@@ -1125,6 +1244,246 @@ async function seedDatabase() {
     }
   });
 
+  app.use((req, res, next) => {
+    if (!firestore) {
+      getFirestoreInstance();
+    }
+    next();
+  });
+
+  app.get("/api/admin/accounting/income-categories", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("income_categories").get();
+      const categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch income categories" });
+    }
+  });
+
+  app.post("/api/admin/accounting/income-categories", async (req, res) => {
+    const { name, password } = req.body;
+    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password !== adminPassword && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      const docRef = await firestore.collection("income_categories").add({ name, is_hidden: false });
+      res.json({ id: docRef.id, name, is_hidden: false });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add income category" });
+    }
+  });
+
+  app.put("/api/admin/accounting/income-categories/:id", async (req, res) => {
+    const { name, is_hidden, password } = req.body;
+    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password !== adminPassword && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      const docRef = firestore.collection("income_categories").doc(req.params.id);
+      const doc = await docRef.get();
+      if (!doc.exists) return res.status(404).json({ error: "Category not found" });
+      
+      const oldData = doc.data();
+      await docRef.update({ name, is_hidden });
+
+      if (name && oldData?.name && name !== oldData.name) {
+        const incomeSnapshot = await firestore.collection("income").where("category", "==", oldData.name).get();
+        const docs = incomeSnapshot.docs;
+        for (let i = 0; i < docs.length; i += 500) {
+          const batch = firestore.batch();
+          docs.slice(i, i + 500).forEach(d => {
+            batch.update(d.ref, { category: name });
+          });
+          await batch.commit();
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update income category" });
+    }
+  });
+
+  app.delete("/api/admin/accounting/income-categories/:id", async (req, res) => {
+    const { password } = req.body;
+    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password !== adminPassword && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("income_categories").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete income category" });
+    }
+  });
+
+  app.get("/api/admin/accounting/expense-categories", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("expense_categories").get();
+      const categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch expense categories" });
+    }
+  });
+
+  app.post("/api/admin/accounting/expense-categories", async (req, res) => {
+    const { name, password } = req.body;
+    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password !== adminPassword && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      const docRef = await firestore.collection("expense_categories").add({ name, is_hidden: false });
+      res.json({ id: docRef.id, name, is_hidden: false });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add expense category" });
+    }
+  });
+
+  app.put("/api/admin/accounting/expense-categories/:id", async (req, res) => {
+    const { name, is_hidden, password } = req.body;
+    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password !== adminPassword && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      const docRef = firestore.collection("expense_categories").doc(req.params.id);
+      const doc = await docRef.get();
+      if (!doc.exists) return res.status(404).json({ error: "Category not found" });
+      
+      const oldData = doc.data();
+      await docRef.update({ name, is_hidden });
+
+      if (name && oldData?.name && name !== oldData.name) {
+        const expenseSnapshot = await firestore.collection("expenses").where("category", "==", oldData.name).get();
+        const docs = expenseSnapshot.docs;
+        for (let i = 0; i < docs.length; i += 500) {
+          const batch = firestore.batch();
+          docs.slice(i, i + 500).forEach(d => {
+            batch.update(d.ref, { category: name });
+          });
+          await batch.commit();
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update expense category" });
+    }
+  });
+
+  app.delete("/api/admin/accounting/expense-categories/:id", async (req, res) => {
+    const { password } = req.body;
+    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password !== adminPassword && password !== "১২৩৪") {
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    }
+    try {
+      await firestore.collection("expense_categories").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete expense category" });
+    }
+  });
+
+  app.get("/api/admin/accounting/reports/category", async (req, res) => {
+    const { month, category } = req.query;
+    try {
+      let incomeQuery: any = firestore.collection("income");
+      let expenseQuery: any = firestore.collection("expenses");
+
+      if (month) {
+        const startDate = `${month}-01`;
+        const endDate = `${month}-31T23:59:59.999Z`;
+        incomeQuery = incomeQuery.where("date", ">=", startDate).where("date", "<=", endDate);
+        expenseQuery = expenseQuery.where("date", ">=", startDate).where("date", "<=", endDate);
+      }
+
+      const [incomeSnapshot, expenseSnapshot] = await Promise.all([
+        incomeQuery.get(),
+        expenseQuery.get()
+      ]);
+
+      let incomeData = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      let expenseData = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+
+      if (category) {
+        incomeData = incomeData.filter(item => item.category === category);
+        expenseData = expenseData.filter(item => item.category === category);
+      }
+
+      res.json({ income: incomeData, expenses: expenseData });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Failed to fetch category report" });
+    }
+  });
+
+  app.get("/api/admin/accounting/reports/class", async (req, res) => {
+    const { class_name } = req.query;
+    try {
+      let incomeQuery: any = firestore.collection("income");
+      let expenseQuery: any = firestore.collection("expenses");
+
+      if (class_name) {
+        incomeQuery = incomeQuery.where("class_name", "==", class_name);
+        expenseQuery = expenseQuery.where("class_name", "==", class_name);
+      }
+
+      const [incomeSnapshot, expenseSnapshot] = await Promise.all([
+        incomeQuery.get(),
+        expenseQuery.get()
+      ]);
+
+      const incomeData = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const expenseData = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      let feesData: any[] = [];
+      if (class_name) {
+        const studentsSnapshot = await firestore.collection("students").where("class", "==", class_name).get();
+        const studentIds = studentsSnapshot.docs.map(doc => doc.id);
+        
+        if (studentIds.length > 0) {
+          // Fetch fees in chunks of 30 due to 'in' query limits
+          const chunks = [];
+          for (let i = 0; i < studentIds.length; i += 30) {
+            chunks.push(studentIds.slice(i, i + 30));
+          }
+          
+          const feePromises = chunks.map(chunk => 
+            firestore.collection("fees").where("student_id", "in", chunk).get()
+          );
+          
+          const feeSnapshots = await Promise.all(feePromises);
+          feeSnapshots.forEach(snap => {
+            snap.docs.forEach(doc => {
+              feesData.push({ id: doc.id, ...doc.data() });
+            });
+          });
+        }
+      } else {
+        const feesSnapshot = await firestore.collection("fees").get();
+        feesData = feesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+
+      res.json({ fees: feesData, income: incomeData, expenses: expenseData });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Failed to fetch class report" });
+    }
+  });
+
   app.get("/api/admin/accounting/summary", async (req, res) => {
     const { start_date, end_date } = req.query;
     try {
@@ -1132,10 +1491,15 @@ async function seedDatabase() {
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
 
-      if (start_date && end_date) {
-        feesQuery = feesQuery.where("paid_date", ">=", start_date).where("paid_date", "<=", end_date);
-        incomeQuery = incomeQuery.where("date", ">=", start_date).where("date", "<=", end_date);
-        expenseQuery = expenseQuery.where("date", ">=", start_date).where("date", "<=", end_date);
+      if (start_date) {
+        feesQuery = feesQuery.where("paid_date", ">=", start_date);
+        incomeQuery = incomeQuery.where("date", ">=", start_date);
+        expenseQuery = expenseQuery.where("date", ">=", start_date);
+      }
+      if (end_date) {
+        feesQuery = feesQuery.where("paid_date", "<=", end_date + "T23:59:59.999Z");
+        incomeQuery = incomeQuery.where("date", "<=", end_date + "T23:59:59.999Z");
+        expenseQuery = expenseQuery.where("date", "<=", end_date + "T23:59:59.999Z");
       }
 
       const [feesSnapshot, incomeSnapshot, expenseSnapshot] = await Promise.all([
@@ -1151,14 +1515,40 @@ async function seedDatabase() {
       const totalIncome = feeIncome + otherIncome;
       const totalExpense = expenseSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
 
+      // Previous Balance Calculation
+      let prevBalance = 0;
+      let prevIncome = 0;
+      let prevExpense = 0;
+      if (start_date) {
+        const [prevFees, prevInc, prevExp] = await Promise.all([
+          firestore.collection("fees").where("paid_date", "<", start_date).get(),
+          firestore.collection("income").where("date", "<", start_date).get(),
+          firestore.collection("expenses").where("date", "<", start_date).get()
+        ]);
+        
+        const pf = prevFees.docs
+          .filter(doc => doc.data().status === "paid")
+          .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+        const pi = prevInc.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+        const pe = prevExp.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+        prevIncome = pf + pi;
+        prevExpense = pe;
+        prevBalance = prevIncome - prevExpense;
+      }
+
       res.json({ 
         totalIncome, 
         feeIncome,
         otherIncome,
         totalExpense, 
-        balance: totalIncome - totalExpense 
+        balance: totalIncome - totalExpense,
+        prevBalance,
+        prevIncome,
+        prevExpense,
+        totalBalance: prevBalance + (totalIncome - totalExpense)
       });
     } catch (error) {
+      console.error("Accounting summary error:", error);
       res.status(500).json({ error: "Failed to fetch summary" });
     }
   });
@@ -1169,9 +1559,13 @@ async function seedDatabase() {
       let feesQuery: any = firestore.collection("fees");
       let incomeQuery: any = firestore.collection("income");
 
-      if (start_date && end_date) {
-        feesQuery = feesQuery.where("paid_date", ">=", start_date).where("paid_date", "<=", end_date);
-        incomeQuery = incomeQuery.where("date", ">=", start_date).where("date", "<=", end_date);
+      if (start_date) {
+        feesQuery = feesQuery.where("paid_date", ">=", start_date);
+        incomeQuery = incomeQuery.where("date", ">=", start_date);
+      }
+      if (end_date) {
+        feesQuery = feesQuery.where("paid_date", "<=", end_date + "T23:59:59.999Z");
+        incomeQuery = incomeQuery.where("date", "<=", end_date + "T23:59:59.999Z");
       }
 
       const [feesSnapshot, incomeSnapshot] = await Promise.all([
@@ -1214,14 +1608,15 @@ async function seedDatabase() {
   });
 
   app.post("/api/admin/accounting/income", async (req, res) => {
-    const { category, description, amount, date, purpose } = req.body;
+    const { category, description, amount, date, purpose, class_name } = req.body;
     try {
       await firestore.collection("income").add({
         category,
         description,
         amount: Number(amount),
         date: date || new Date().toISOString(),
-        purpose
+        purpose,
+        class_name: class_name || null
       });
       res.json({ success: true });
     } catch (e) {
@@ -1254,8 +1649,11 @@ async function seedDatabase() {
     const { start_date, end_date, limit = 50, offset = 0, search } = req.query;
     try {
       let query: any = firestore.collection("expenses");
-      if (start_date && end_date) {
-        query = query.where("date", ">=", start_date).where("date", "<=", end_date);
+      if (start_date) {
+        query = query.where("date", ">=", start_date);
+      }
+      if (end_date) {
+        query = query.where("date", "<=", end_date + "T23:59:59.999Z");
       }
       
       const snapshot = await query.orderBy("date", "desc").get();
@@ -1283,14 +1681,15 @@ async function seedDatabase() {
   });
 
   app.post("/api/admin/accounting/expenses", async (req, res) => {
-    const { category, description, amount, date, purpose } = req.body;
+    const { category, description, amount, date, purpose, class_name } = req.body;
     try {
       await firestore.collection("expenses").add({
         category,
         description,
         amount: Number(amount),
         date: date || new Date().toISOString(),
-        purpose
+        purpose,
+        class_name: class_name || null
       });
       res.json({ success: true });
     } catch (e) {
@@ -2465,6 +2864,103 @@ async function seedDatabase() {
     }
   });
 
+  // --- Hifz Management ---
+  app.get("/api/admin/settings/hifz", async (req, res) => {
+    try {
+      const doc = await firestore.collection("settings").doc("hifz").get();
+      if (doc.exists) {
+        res.json(doc.data());
+      } else {
+        res.json({ guardian_view_enabled: false, guardian_login_by_id_enabled: true });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch hifz settings" });
+    }
+  });
+
+  app.put("/api/admin/settings/hifz", async (req, res) => {
+    try {
+      const { guardian_view_enabled, guardian_login_by_id_enabled } = req.body;
+      
+      const updateData: any = {};
+      if (guardian_view_enabled !== undefined) updateData.guardian_view_enabled = guardian_view_enabled;
+      if (guardian_login_by_id_enabled !== undefined) updateData.guardian_login_by_id_enabled = guardian_login_by_id_enabled;
+      
+      await firestore.collection("settings").doc("hifz").set(updateData, { merge: true });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update hifz settings" });
+    }
+  });
+
+  app.get("/api/admin/hifz-reports", async (req, res) => {
+    try {
+      const { student_id, start_date, end_date } = req.query;
+      let query: any = firestore.collection("hifz_records");
+      
+      if (student_id) {
+        // Fetch by student_id and filter dates in memory to avoid composite index requirement
+        query = query.where("student_id", "==", student_id);
+        const snapshot = await query.get();
+        let reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        
+        if (start_date) {
+          reports = reports.filter(r => r.date >= start_date);
+        }
+        if (end_date) {
+          reports = reports.filter(r => r.date <= end_date);
+        }
+        
+        // Sort by date descending
+        reports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return res.json(reports);
+      }
+      
+      // If no student_id, query by date range
+      if (start_date) {
+        query = query.where("date", ">=", start_date);
+      }
+      if (end_date) {
+        query = query.where("date", "<=", end_date);
+      }
+      
+      const snapshot = await query.get();
+      const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(reports);
+    } catch (error) {
+      console.error("Hifz reports fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch hifz reports" });
+    }
+  });
+
+  app.post("/api/admin/hifz-reports", async (req, res) => {
+    try {
+      const reportData = req.body;
+      const docRef = await firestore.collection("hifz_records").add({
+        ...reportData,
+        created_at: new Date().toISOString()
+      });
+      res.json({ success: true, id: docRef.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create hifz report" });
+    }
+  });
+
+  app.delete("/api/admin/hifz-reports/:id", async (req, res) => {
+    try {
+      const { password } = req.body;
+      const settingsDoc = await firestore.collection("settings").doc("general").get();
+      const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
+      if (password !== adminPassword && password !== "১২৩৪") {
+        return res.status(401).json({ error: "Incorrect password" });
+      }
+      await firestore.collection("hifz_records").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete hifz report" });
+    }
+  });
+
   // --- Admin Stats ---
   app.get("/api/admin/stats", async (req, res) => {
     try {
@@ -2529,24 +3025,34 @@ async function seedDatabase() {
     }
 
     try {
+      // Fetch Hifz settings to check if login by ID is enabled
+      const hifzSettingsDoc = await firestore.collection("settings").doc("hifz").get();
+      const hifzSettings = hifzSettingsDoc.exists ? hifzSettingsDoc.data() : { guardian_login_by_id_enabled: true };
+      const loginByIdEnabled = hifzSettings.guardian_login_by_id_enabled !== false;
+
       // Check phone
       let snapshot = await firestore.collection("students").where("phone", "==", identifier).where("deleted_at", "==", null).get();
       if (snapshot.empty) {
         // Check email
         snapshot = await firestore.collection("students").where("email", "==", identifier).where("deleted_at", "==", null).get();
       }
-      if (snapshot.empty) {
-        // Check student_code
+      
+      if (snapshot.empty && loginByIdEnabled) {
+        // Check student_code ONLY if login by ID is enabled
         snapshot = await firestore.collection("students").where("student_code", "==", identifier).where("deleted_at", "==", null).get();
       }
 
       if (snapshot.empty) {
-        return res.status(401).json({ error: "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড সঠিক নয়।" });
+        const errorMsg = loginByIdEnabled 
+          ? "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড সঠিক নয়।" 
+          : "মোবাইল নম্বর বা ইমেইল সঠিক নয়।";
+        return res.status(401).json({ error: errorMsg });
       }
 
       const student = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
       res.json(student);
     } catch (error) {
+      console.error("Parent login error:", error);
       res.status(500).json({ error: "Login failed" });
     }
   });

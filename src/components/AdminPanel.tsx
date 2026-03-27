@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { TeacherManager } from "./TeacherManager";
+import { TeacherArchiveManager } from "./TeacherArchiveManager";
 import { BiometricManager } from "./BiometricManager";
 import { AccountingManager } from "./AccountingManager";
 import { RecruitmentManager } from "./RecruitmentManager";
 import { FoodMenuManager } from "./FoodMenuManager";
 import { AllStudentsManager } from "./AllStudentsManager";
 import { DatabaseResetManager } from "./DatabaseResetManager";
+import { HifzManager } from "./HifzManager";
 import { 
   LayoutDashboard, 
   Users, 
@@ -76,7 +78,7 @@ const AdminStat = ({ label, value, icon: Icon, color }: any) => (
 );
 
 const PrintHeader = ({ settings }: { settings: any }) => (
-  <div className="hidden print:block mb-8 border-b-4 border-slate-900 pb-6">
+  <div className="hidden print:block print-header mb-8 border-b-4 border-slate-900 pb-6">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-8">
         {settings?.logo_url && settings.logo_url !== "" && (
@@ -108,6 +110,238 @@ const PrintHeader = ({ settings }: { settings: any }) => (
 );
 
 import { useToast } from "./ToastContext";
+
+const LockedTab = ({ children, addToast }: { children: React.ReactNode, addToast: any }) => {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [password, setPassword] = useState("");
+
+  const handleUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
+    if (password === adminPassword || password === "১২৩৪") {
+      setIsUnlocked(true);
+    } else {
+      addToast("ভুল পাসওয়ার্ড!", "error");
+    }
+  };
+
+  if (isUnlocked) return <>{children}</>;
+
+  return (
+    <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-100 text-center max-w-md mx-auto mt-12">
+      <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
+        <Lock className="w-10 h-10" />
+      </div>
+      <h3 className="text-2xl font-bold text-slate-900 mb-2">সুরক্ষিত এলাকা</h3>
+      <p className="text-slate-500 mb-8">এই সেকশনে প্রবেশ করতে পাসওয়ার্ড দিন</p>
+      <form onSubmit={handleUnlock} className="space-y-4">
+        <input 
+          type="password" 
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="পাসওয়ার্ড"
+          className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-rose-500 outline-none font-bold text-center"
+          autoFocus
+        />
+        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all">
+          আনলক করুন
+        </button>
+      </form>
+    </div>
+  );
+};
+
+function CategoryManager({ type }: { type: "income" | "expense" }) {
+  const { addToast } = useToast();
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newCategory, setNewCategory] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState<"add" | "edit" | "delete">("add");
+  const [selectedCat, setSelectedCat] = useState<any>(null);
+  const [password, setPassword] = useState("");
+  const [editName, setEditName] = useState("");
+
+  const fetchCategories = async () => {
+    const res = await fetch(`/api/admin/accounting/${type}-categories`);
+    const data = await res.json();
+    if (Array.isArray(data)) setCategories(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, [type]);
+
+  const handleAction = async () => {
+    if (!password) {
+      addToast("পাসওয়ার্ড দিন", "error");
+      return;
+    }
+
+    let url = `/api/admin/accounting/${type}-categories`;
+    let method = "POST";
+    let body: any = { password };
+
+    if (modalType === "add") {
+      if (!newCategory.trim()) {
+        addToast("ক্যাটাগরির নাম দিন", "error");
+        return;
+      }
+      body.name = newCategory.trim();
+    } else if (modalType === "edit") {
+      url += `/${selectedCat.id}`;
+      method = "PUT";
+      body = { ...selectedCat, name: editName.trim(), password };
+    } else if (modalType === "delete") {
+      url += `/${selectedCat.id}`;
+      method = "DELETE";
+      // Ensure body is sent for DELETE if server expects it
+    }
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      
+      if (res.ok) {
+        addToast(modalType === "add" ? "ক্যাটাগরি যোগ করা হয়েছে" : modalType === "edit" ? "আপডেট করা হয়েছে" : "ডিলিট করা হয়েছে", "success");
+        setShowModal(false);
+        setPassword("");
+        setNewCategory("");
+        fetchCategories();
+      } else {
+        const data = await res.json();
+        addToast(data.error || "ব্যর্থ হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সার্ভার সমস্যা হয়েছে", "error");
+    }
+  };
+
+  const handleToggleHide = async (cat: any) => {
+    const pass = window.prompt("পাসওয়ার্ড দিন:");
+    if (!pass) return;
+
+    const res = await fetch(`/api/admin/accounting/${type}-categories/${cat.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...cat, is_hidden: !cat.is_hidden, password: pass })
+    });
+    if (res.ok) {
+      addToast("আপডেট করা হয়েছে", "success");
+      fetchCategories();
+    } else {
+      const data = await res.json();
+      addToast(data.error || "ব্যর্থ হয়েছে", "error");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8">
+            <h3 className="text-xl font-black text-slate-900 mb-6">
+              {modalType === "add" ? "নতুন ক্যাটাগরি যোগ করুন" : modalType === "edit" ? "ক্যাটাগরি এডিট করুন" : "ক্যাটাগরি ডিলিট করুন"}
+            </h3>
+            
+            <div className="space-y-4">
+              {modalType === "add" && (
+                <input 
+                  value={newCategory} 
+                  onChange={e => setNewCategory(e.target.value)} 
+                  placeholder="ক্যাটাগরির নাম" 
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold"
+                />
+              )}
+              {modalType === "edit" && (
+                <input 
+                  value={editName} 
+                  onChange={e => setEditName(e.target.value)} 
+                  placeholder="ক্যাটাগরির নাম" 
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold"
+                />
+              )}
+              {modalType === "delete" && (
+                <p className="text-rose-600 font-bold">আপনি কি নিশ্চিতভাবে "{selectedCat?.name}" ডিলিট করতে চান?</p>
+              )}
+              
+              <input 
+                type="password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                placeholder="অ্যাডমিন পাসওয়ার্ড" 
+                className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-center"
+              />
+              
+              <div className="flex gap-3 pt-4">
+                <button onClick={() => setShowModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">বাতিল</button>
+                <button onClick={handleAction} className={cn("flex-1 py-4 text-white rounded-2xl font-bold", modalType === "delete" ? "bg-rose-600" : "bg-emerald-600")}>
+                  {modalType === "add" ? "যোগ করুন" : modalType === "edit" ? "আপডেট করুন" : "ডিলিট করুন"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input 
+          value={newCategory} 
+          onChange={e => setNewCategory(e.target.value)} 
+          placeholder={`নতুন ${type === "income" ? "আয়" : "ব্যয়"} ক্যাটাগরি`} 
+          className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold"
+        />
+        <button 
+          onClick={() => {
+            setModalType("add");
+            setShowModal(true);
+          }} 
+          className="px-6 bg-emerald-600 text-white rounded-2xl font-bold"
+        >
+          যোগ করুন
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {categories.map(cat => (
+          <div key={cat.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <span className={cn("font-bold text-lg", cat.is_hidden && "text-slate-400 line-through")}>{cat.name}</span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => {
+                  setSelectedCat(cat);
+                  setEditName(cat.name);
+                  setModalType("edit");
+                  setShowModal(true);
+                }} 
+                className="p-3 text-slate-500 hover:text-blue-600 bg-white rounded-xl shadow-sm"
+              >
+                <Edit className="w-5 h-5" />
+              </button>
+              <button onClick={() => handleToggleHide(cat)} className="p-3 text-slate-500 hover:text-emerald-600 bg-white rounded-xl shadow-sm">
+                {cat.is_hidden ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+              </button>
+              <button 
+                onClick={() => {
+                  setSelectedCat(cat);
+                  setModalType("delete");
+                  setShowModal(true);
+                }} 
+                className="p-3 text-rose-500 hover:text-rose-700 bg-white rounded-xl shadow-sm"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminPanel() {
   const { addToast } = useToast();
@@ -223,10 +457,12 @@ export default function AdminPanel() {
     { id: "students", label: "ছাত্র তালিকা", icon: Users, permission: "admission" },
     { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users, permission: "admission" },
     { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
+    { id: "hifz", label: "হিফজ বিভাগ", icon: GraduationCap },
     { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "student_attendance" },
     { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
     { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "result" },
     { id: "teachers", label: "শিক্ষক", icon: Users, permission: "teacher_attendance" },
+    { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "teacher_attendance" },
     { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "teacher_attendance" },
     { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard, permission: "fee_collection" },
     { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "teacher_attendance" },
@@ -321,6 +557,11 @@ export default function AdminPanel() {
         {/* Main Content */}
         <main className="flex-1">
           <AnimatePresence mode="wait">
+            {activeTab === "hifz" && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <HifzManager classesList={classes.map(c => c.name)} />
+              </motion.div>
+            )}
             {activeTab === "dashboard" && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -364,12 +605,16 @@ export default function AdminPanel() {
               <TeacherManager addToast={addToast} settings={settings} />
             )}
 
+            {activeTab === "all-teachers" && (
+              <TeacherArchiveManager settings={settings} />
+            )}
+
             {activeTab === "biometric" && (
               <BiometricManager addToast={addToast} />
             )}
 
             {activeTab === "accounting" && (
-              <AccountingManager settings={settings} addToast={addToast} />
+              <AccountingManager settings={settings} addToast={addToast} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
             )}
 
             {activeTab === "recruitment" && (
@@ -385,7 +630,12 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "students" && (
-              <StudentManager settings={settings} onUpdate={fetchStudents} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
+              <StudentManager 
+                settings={settings} 
+                onUpdate={fetchStudents} 
+                classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} 
+                setActiveTab={setActiveTab}
+              />
             )}
 
             {activeTab === "all-students" && (
@@ -429,14 +679,20 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "delete-history" && (
-              <DeleteHistory />
+              <LockedTab addToast={addToast}>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <DeleteHistory />
+                </motion.div>
+              </LockedTab>
             )}
 
             {activeTab === "settings" && (
-              <div className="space-y-8">
-                <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
-                <DatabaseResetManager />
-              </div>
+              <LockedTab addToast={addToast}>
+                <div className="space-y-8">
+                  <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
+                  <DatabaseResetManager />
+                </div>
+              </LockedTab>
             )}
           </AnimatePresence>
         </main>
@@ -851,6 +1107,31 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
     }
   };
 
+  const handleEditClass = async (id: string, currentName: string) => {
+    const newName = prompt("নতুন ক্লাসের নাম দিন:", currentName);
+    if (!newName || newName === currentName) return;
+    
+    const pwd = prompt("ক্লাসটি এডিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+
+    try {
+      const res = await fetch(`/api/classes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName, password: pwd })
+      });
+      if (res.ok) {
+        addToast("ক্লাস এডিট করা হয়েছে। সংশ্লিষ্ট সব ডেটা আপডেট হচ্ছে।", "success");
+        fetchClasses();
+      } else {
+        const err = await res.json();
+        addToast(err.error || "সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
+    }
+  };
+
   const handleDeleteClass = async (id: string) => {
     const pwd = prompt("ক্লাসটি ডিলিট করতে পাসওয়ার্ড দিন:");
     if (!pwd) return;
@@ -895,10 +1176,19 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
           {classes.map((c: any) => (
             <div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-xl">
               <span className="font-bold text-slate-800">{c.name}</span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => handleToggleClass(c.id, c.is_active)} className={`p-2 rounded-lg ${c.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                  {c.is_active ? 'সক্রিয়' : 'হাইড'}
-                </button>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={c.is_active} 
+                    onChange={() => handleToggleClass(c.id, c.is_active)} 
+                    className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500"
+                  />
+                  <span className={`text-sm font-medium ${c.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {c.is_active ? 'সক্রিয়' : 'হাইড'}
+                  </span>
+                </label>
+                <button onClick={() => handleEditClass(c.id, c.name)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"><Edit className="w-5 h-5" /></button>
                 <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="w-5 h-5" /></button>
               </div>
             </div>
@@ -1074,8 +1364,8 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSaving(true);
     try {
       const res = await fetch("/api/site-settings", {
@@ -1103,8 +1393,8 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <h3 className="text-2xl font-bold text-slate-900">ওয়েবসাইট সেটিংস</h3>
         <div className="flex gap-3">
-          <button type="button" onClick={() => setShowClassModal(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold hover:bg-emerald-200 transition-all">
-            <BookOpen className="w-5 h-5" /> ক্লাস সমূহ
+          <button type="button" onClick={() => setShowClassModal(true)} className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
+            <BookOpen className="w-5 h-5" /> ক্লাস ম্যানেজমেন্ট
           </button>
           <button type="button" onClick={() => setShowSubAdminModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all">
             <Users className="w-5 h-5" /> সাব-এডমিন
@@ -1112,7 +1402,7 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
         </div>
       </div>
       
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">প্রতিষ্ঠানের নাম</label>
@@ -1121,6 +1411,16 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">ঠিকানা</label>
             <textarea value={settings.address || ""} onChange={(e) => setSettings({...settings, address: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">অ্যাডমিন পাসওয়ার্ড (Admin Password)</label>
+            <input 
+              type="password"
+              value={settings.admin_password || ""} 
+              onChange={(e) => setSettings({...settings, admin_password: e.target.value})} 
+              className="w-full p-4 bg-slate-50 border rounded-2xl" 
+              placeholder="পাসওয়ার্ড পরিবর্তন করুন"
+            />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">বিকাশ নম্বর</label>
@@ -1187,6 +1487,10 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <label htmlFor="auto_whatsapp" className="text-sm font-bold text-slate-700">অটোমেটিক হোয়াটসঅ্যাপে রশিদ পাঠানো চালু করুন</label>
           </div>
           <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">কিউআর কোড ইউআরএল (QR Code URL)</label>
+            <input value={settings.qr_code_url || ""} onChange={(e) => setSettings({...settings, qr_code_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/qr.png" />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">ঘোষণা (Announcement)</label>
             <input value={settings.announcement || ""} onChange={(e) => setSettings({...settings, announcement: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
           </div>
@@ -1229,16 +1533,6 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           <div className="space-y-2 flex items-center gap-3">
             <input type="checkbox" id="show_signature" checked={!!settings.show_muhtamim_signature} onChange={(e) => setSettings({...settings, show_muhtamim_signature: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
             <label htmlFor="show_signature" className="text-sm font-bold text-slate-700">রশিদে মুহতামিম সাহেবের স্বাক্ষর দেখান</label>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-bold text-slate-700">ক্লাস সমূহ (কমা দিয়ে আলাদা করুন)</label>
-            <input 
-              value={settings.available_classes || "প্লে, নার্সারি, প্রথম, দ্বিতীয়, তৃতীয়, চতুর্থ, পঞ্চম, হিফজ"} 
-              onChange={(e) => setSettings({...settings, available_classes: e.target.value})} 
-              className="w-full p-4 bg-slate-50 border rounded-2xl" 
-              placeholder="যেমন: প্লে, নার্সারি, প্রথম, দ্বিতীয়, তৃতীয়, চতুর্থ, পঞ্চম, ষষ্ঠ, সপ্তম, অষ্টম, নবম, দশম, হিফজ, কিতাব খানা"
-            />
-            <p className="text-xs text-slate-500 mt-1">এই ক্লাসগুলো পুরো সিস্টেমে ড্রপডাউনে দেখাবে।</p>
           </div>
         </div>
 
@@ -1359,10 +1653,18 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           )}
         </div>
 
-        <LoadingButton loading={saving} type="submit" className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold">
+        <div className="border-t border-slate-100 pt-8 mt-8">
+          <h3 className="text-xl font-bold text-slate-900 mb-6">ক্যাটাগরি ম্যানেজমেন্ট</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <CategoryManager type="income" />
+            <CategoryManager type="expense" />
+          </div>
+        </div>
+
+        <LoadingButton loading={saving} onClick={() => handleSubmit()} className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold">
           <Save className="w-5 h-5" /> সেটিংস সেভ করুন
         </LoadingButton>
-      </form>
+      </div>
 
       {/* Password Modal for Advanced Settings */}
       <AnimatePresence>
@@ -1574,7 +1876,7 @@ const printElement = (elementId: string) => {
   }
 };
 
-function StudentManager({ settings, onUpdate, classesList }: { settings: any, onUpdate: () => void, classesList: string[] }) {
+function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { settings: any, onUpdate: () => void, classesList: string[], setActiveTab: (tab: string) => void }) {
   const { addToast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClass, setSelectedClass] = useState("All");
@@ -1613,7 +1915,7 @@ function StudentManager({ settings, onUpdate, classesList }: { settings: any, on
     fetchStudents();
   }, []);
 
-  const classes = ["All", ...(classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"])];
+  const classes = ["All", ...classesList];
 
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -2017,7 +2319,7 @@ function StudentManager({ settings, onUpdate, classesList }: { settings: any, on
                       fetch("/api/admin/fees", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ student_id: fullProfile.student.id, category, amount: Number(amount), due_date: new Date().toISOString().split('T')[0] })
+                        body: JSON.stringify({ student_id: fullProfile.student.id, category, amount: Number(amount), due_date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}` })
                       }).then(() => {
                         fetchFullProfile(fullProfile.student.id);
                         form.reset();
@@ -2425,6 +2727,55 @@ function StudentManager({ settings, onUpdate, classesList }: { settings: any, on
                     )}
                   </div>
                 </div>
+
+                {/* Hifz Section in Profile */}
+                {fullProfile.student.is_hifz === 1 && (
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-6">
+                      <h4 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                        <BookOpen className="w-6 h-6 text-emerald-600" /> হিফজ রিপোর্ট
+                      </h4>
+                      <button 
+                        onClick={() => setActiveTab("hifz")}
+                        className="text-emerald-600 font-bold text-sm hover:underline"
+                      >
+                        বিস্তারিত দেখুন
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <p className="text-sm font-bold text-slate-500 uppercase mb-4">সর্বশেষ সবক</p>
+                        {fullProfile.hifzReports && fullProfile.hifzReports.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-lg font-black text-slate-900">
+                              {fullProfile.hifzReports[0].sabok?.map((s: any) => `${s.reading} (${s.page})`).join(', ')}
+                            </p>
+                            <p className="text-xs text-slate-500">তারিখ: {new Date(fullProfile.hifzReports[0].date).toLocaleDateString('bn-BD')}</p>
+                          </div>
+                        ) : (
+                          <p className="text-slate-400 italic">কোনো রিপোর্ট পাওয়া যায়নি</p>
+                        )}
+                      </div>
+                      <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100">
+                        <p className="text-sm font-bold text-emerald-600 uppercase mb-4">সারাংশ</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-emerald-600 font-bold">মোট সবক</p>
+                            <p className="text-xl font-black text-emerald-700">
+                              {fullProfile.hifzReports?.reduce((sum: number, r: any) => sum + (r.sabok?.length || 0), 0) || 0}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-emerald-600 font-bold">আমুখতা (পৃষ্ঠা)</p>
+                            <p className="text-xl font-black text-emerald-700">
+                              {fullProfile.hifzReports?.reduce((sum: number, r: any) => sum + (r.amukhta?.total_pages || 0), 0) || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Hidden Templates for PDF Generation */}
@@ -2537,7 +2888,7 @@ function StudentManager({ settings, onUpdate, classesList }: { settings: any, on
                 
                 <div className="flex justify-between mt-24 px-12">
                   <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>শ্রেণী শিক্ষকের স্বাক্ষর</div>
-                  <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>অধ্যক্ষের স্বাক্ষর</div>
+                  <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>মুহতামিমের স্বাক্ষর</div>
                 </div>
               </div>
 
@@ -2657,7 +3008,7 @@ function StudentManager({ settings, onUpdate, classesList }: { settings: any, on
 
 function AttendanceManager({ settings, classesList }: { settings: any, classesList: string[] }) {
   const { addToast } = useToast();
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`);
   const [selectedClass, setSelectedClass] = useState("");
   const [students, setStudents] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, any>>({});
@@ -2667,7 +3018,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
   const [hasSaved, setHasSaved] = useState(false);
   const [filter, setFilter] = useState<'all' | 'present' | 'absent'>('all');
 
-  const classes = classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = classesList;
 
   const fetchAttendance = async () => {
     if (!selectedClass) return;
@@ -2920,7 +3271,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
 
 function TeacherAttendanceManager({ settings }: { settings: any }) {
   const { addToast } = useToast();
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -3072,7 +3423,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
   const [newExamName, setNewExamName] = useState("");
   const [isAddingExam, setIsAddingExam] = useState(false);
 
-  const classes = classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"];
+  const classes = classesList;
 
   const fetchExams = async () => {
     const res = await fetch("/api/exams");
@@ -3590,7 +3941,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
 
 function FeeManager({ students, settings, onUpdate, initialStudentId, classesList }: { students: any[], settings: any, onUpdate: () => void, initialStudentId?: string, classesList: string[] }) {
   const { addToast } = useToast();
-  const classes = ["All", ...(classesList?.length ? classesList : ["১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "হিফজ"])];
+  const classes = ["All", ...classesList];
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const monthsBn = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
@@ -4025,9 +4376,21 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
 
           doc.save(`Receipt_${selectedStudent.id}_${transactionId}.pdf`);
 
-          const message = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরশিদ নং: ${transactionId}\nমোট পরিমাণ: ৳${totalPaid}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
-          const waUrl = `https://wa.me/${selectedStudent.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-          window.open(waUrl, '_blank');
+                    const message = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরশিদ নং: ${transactionId}\nমোট পরিমাণ: ৳${totalPaid}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
+                    const cleanPhone = selectedStudent.whatsapp ? selectedStudent.whatsapp.replace(/[^0-9]/g, '') : '';
+                    let phone = cleanPhone.startsWith('0') ? '88' + cleanPhone : cleanPhone;
+                    
+                    if (!phone) {
+                      const manualPhone = window.prompt("ছাত্রের হোয়াটসঅ্যাপ নম্বর দেওয়া নেই! দয়া করে নম্বরটি দিন (যেমন: 01712345678):", "");
+                      if (manualPhone) {
+                        const cleanManual = manualPhone.replace(/[^0-9]/g, '');
+                        phone = cleanManual.startsWith('0') ? '88' + cleanManual : cleanManual;
+                      } else {
+                        return;
+                      }
+                    }
+                    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+                    window.open(waUrl, '_blank');
         }
       } else {
         addToast("পেমেন্ট ব্যর্থ হয়েছে।", "error");
@@ -4966,14 +5329,20 @@ function TransactionHistory({ settings }: { settings: any }) {
             <input 
               type="date" 
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                if (!endDate || e.target.value > endDate) setEndDate(e.target.value);
+              }}
               className="p-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
             />
             <span className="text-slate-400 font-bold">থেকে</span>
             <input 
               type="date" 
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                if (!startDate || e.target.value < startDate) setStartDate(e.target.value);
+              }}
               className="p-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
             />
           </div>
@@ -5345,14 +5714,20 @@ function DeleteHistory() {
           <input 
             type="date" 
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              if (!endDate || e.target.value > endDate) setEndDate(e.target.value);
+            }}
             className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm"
           />
           <span className="text-slate-400">থেকে</span>
           <input 
             type="date" 
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              if (!startDate || e.target.value < startDate) setStartDate(e.target.value);
+            }}
             className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm"
           />
           <button onClick={() => { setStartDate(""); setEndDate(""); }} className="text-xs font-bold text-slate-400 hover:text-slate-600">রিসেট</button>

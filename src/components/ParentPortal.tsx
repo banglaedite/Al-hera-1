@@ -29,6 +29,9 @@ export default function ParentPortal() {
   const [fees, setFees] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  const [hifzSettings, setHifzSettings] = useState<any>(null);
+  const [hifzStartDate, setHifzStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
+  const [hifzEndDate, setHifzEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -163,6 +166,7 @@ export default function ParentPortal() {
 
   useEffect(() => {
     fetch("/api/site-settings").then(res => res.json()).then(setSettings);
+    fetch("/api/admin/settings/hifz").then(res => res.json()).then(setHifzSettings);
     
     // Auto login if identifier exists in localStorage
     const savedIdentifier = localStorage.getItem("guardianPhone");
@@ -216,14 +220,15 @@ export default function ParentPortal() {
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড সঠিক নয়");
+        const loginByIdEnabled = hifzSettings?.guardian_login_by_id_enabled !== false;
+        throw new Error(errData.error || (loginByIdEnabled ? "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড সঠিক নয়" : "মোবাইল নম্বর বা ইমেইল সঠিক নয়"));
       }
       const data = await response.json();
       setStudent(data);
       localStorage.setItem("guardianPhone", loginIdentifier);
       
       // Fetch related data
-      const [attRes, resRes, hifzRes, profileRes, deviceRes, noticeRes, historyRes, settingsRes] = await Promise.all([
+      const [attRes, resRes, hifzRes, profileRes, deviceRes, noticeRes, historyRes, settingsRes, hifzSettingsRes] = await Promise.all([
         fetch(`/api/attendance/${data.id}`),
         fetch(`/api/results/${data.id}`),
         fetch(`/api/hifz/${data.id}`),
@@ -231,7 +236,8 @@ export default function ParentPortal() {
         fetch(`/api/parent/device-history/${data.id}`),
         fetch("/api/notices"),
         fetch(`/api/parent/payment-history/${data.id}`),
-        fetch("/api/settings")
+        fetch("/api/site-settings"),
+        fetch("/api/admin/settings/hifz")
       ]);
       
       const attData = await attRes.json();
@@ -257,6 +263,9 @@ export default function ParentPortal() {
 
       const settingsData = await settingsRes.json();
       setSettings(settingsData);
+
+      const hifzSettingsData = await hifzSettingsRes.json();
+      setHifzSettings(hifzSettingsData);
     } catch (err: any) {
       setError(err.message);
       localStorage.removeItem("guardianPhone");
@@ -289,14 +298,20 @@ export default function ParentPortal() {
 
           <form onSubmit={(e) => handleLogin(e)} className="space-y-6">
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড</label>
+              <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">
+                {hifzSettings?.guardian_login_by_id_enabled !== false 
+                  ? "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড" 
+                  : "মোবাইল নম্বর বা ইমেইল"}
+              </label>
               <div className="relative">
                 <input
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
-                  placeholder="যেমন: 01712345678"
+                  placeholder={hifzSettings?.guardian_login_by_id_enabled !== false 
+                    ? "যেমন: 01712345678 বা AH-001" 
+                    : "যেমন: 01712345678"}
                   required
                 />
                 <Phone className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -634,7 +649,7 @@ export default function ParentPortal() {
                     </select>
                   </div>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-12">
                     {monthsList.map((month) => {
                       const isPaid = fees.some(f => f.month === month && f.year === selectedYear && f.status === "paid");
                       return (
@@ -665,6 +680,50 @@ export default function ParentPortal() {
                         </label>
                       );
                     })}
+                  </div>
+
+                  {/* Other Fees Section */}
+                  <div className="mt-12">
+                    <h4 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-emerald-600" />
+                      অন্যান্য ফি (Other Fees)
+                    </h4>
+                    <div className="space-y-4">
+                      {fees.filter(f => !f.month && f.status === "unpaid").length > 0 ? (
+                        fees.filter(f => !f.month && f.status === "unpaid").map((fee) => (
+                          <div key={fee.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                            <div>
+                              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">{fee.category}</p>
+                              <h4 className="text-lg font-bold text-slate-900">{fee.name || fee.category}</h4>
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div className="text-right">
+                                <p className="text-xl font-black text-slate-900">৳{fee.amount}</p>
+                                <p className="text-[10px] font-bold text-rose-500 uppercase">বকেয়া</p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  // For other fees, we'll use a slightly different payment flow or just reuse the manual one
+                                  setLivePaymentMethod("");
+                                  setLivePaymentStep(1);
+                                  setLivePaymentPhone("");
+                                  setLivePaymentTrxID("");
+                                  setLivePaymentReference(`Fee: ${fee.category}`);
+                                  // We need to handle single fee payment in processLivePayment
+                                  // For now, let's just alert that they should contact admin or I'll implement it
+                                  alert("এই ফি-টি পরিশোধ করতে মুহতামিম সাহেবের সাথে যোগাযোগ করুন অথবা শীঘ্রই অনলাইন পেমেন্ট যুক্ত করা হবে।");
+                                }}
+                                className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all active:scale-95"
+                              >
+                                পরিশোধ করুন
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-center text-slate-400 py-8 bg-slate-50 rounded-3xl border border-slate-100 border-dashed">কোন অন্যান্য ফি বকেয়া নেই</p>
+                      )}
+                    </div>
                   </div>
                   
                   {selectedPayMonths.length > 0 && (
@@ -750,25 +809,81 @@ export default function ParentPortal() {
 
               {activeTab === "hifz" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-8">হিফজ ট্র্যাকিং</h3>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <h3 className="text-2xl font-bold text-slate-900">হিফজ ট্র্যাকিং</h3>
+                    {hifzSettings?.guardian_view_enabled && (
+                      <div className="flex gap-2">
+                        <input type="date" value={hifzStartDate} onChange={e => setHifzStartDate(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                        <input type="date" value={hifzEndDate} onChange={e => setHifzEndDate(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                      </div>
+                    )}
+                  </div>
+
+                  {hifzSettings?.guardian_view_enabled && (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                      <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center">
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">মোট সবক</p>
+                        <p className="text-2xl font-black text-emerald-900">
+                          {hifzRecords.filter(r => r.date >= hifzStartDate && r.date <= hifzEndDate).reduce((sum, r) => sum + (r.sabok?.length || 0), 0)}
+                        </p>
+                      </div>
+                      <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
+                        <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">সাত ছবক</p>
+                        <p className="text-2xl font-black text-blue-900">
+                          {hifzRecords.filter(r => r.date >= hifzStartDate && r.date <= hifzEndDate).filter(r => r.sat_sabok).length}
+                        </p>
+                      </div>
+                      <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 text-center">
+                        <p className="text-[10px] font-bold text-purple-600 uppercase mb-1">আমুখতা (পৃষ্ঠা)</p>
+                        <p className="text-2xl font-black text-purple-900">
+                          {hifzRecords.filter(r => r.date >= hifzStartDate && r.date <= hifzEndDate).reduce((sum, r) => sum + (r.amukhta?.total_pages || 0), 0)}
+                        </p>
+                      </div>
+                      <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center">
+                        <p className="text-[10px] font-bold text-orange-600 uppercase mb-1">তিলাওয়াত (পারা)</p>
+                        <p className="text-2xl font-black text-orange-900">
+                          {hifzRecords.filter(r => r.date >= hifzStartDate && r.date <= hifzEndDate).reduce((sum, r) => sum + (r.tilawat?.total_paras || 0), 0)}
+                        </p>
+                      </div>
+                      <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 text-center">
+                        <p className="text-[10px] font-bold text-rose-600 uppercase mb-1">সাবীনা (পারা)</p>
+                        <p className="text-2xl font-black text-rose-900">
+                          {hifzRecords.filter(r => r.date >= hifzStartDate && r.date <= hifzEndDate).reduce((sum, r) => sum + (r.sabina?.total_paras || 0), 0)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-6">
-                    {hifzRecords.length > 0 ? hifzRecords.map((rec, i) => (
+                    {hifzRecords.filter(r => !hifzSettings?.guardian_view_enabled || (r.date >= hifzStartDate && r.date <= hifzEndDate)).length > 0 ? hifzRecords.filter(r => !hifzSettings?.guardian_view_enabled || (r.date >= hifzStartDate && r.date <= hifzEndDate)).map((rec, i) => (
                       <div key={i} className="p-6 border border-slate-100 rounded-3xl space-y-4">
                         <div className="flex justify-between items-center border-b border-slate-50 pb-4">
-                          <span className="font-bold text-slate-900">{new Date(rec.date).toLocaleDateString()}</span>
+                          <span className="font-bold text-slate-900">{new Date(rec.date).toLocaleDateString('bn-BD')}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                           <div className="text-center">
                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সবক</p>
-                            <p className="font-bold text-emerald-700">{rec.sabak}</p>
+                            <div className="text-sm font-bold text-emerald-700">
+                              {rec.sabok?.map((s: any, idx: number) => (
+                                <div key={idx}>{s.reading} (পৃষ্ঠা {s.page})</div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="text-center border-x border-slate-100">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সবকি</p>
-                            <p className="font-bold text-emerald-700">{rec.sabki}</p>
+                          <div className="text-center border-l border-slate-100">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সাত ছবক</p>
+                            <p className="font-bold text-emerald-700">{rec.sat_sabok ? "হ্যাঁ" : "না"}</p>
                           </div>
-                          <div className="text-center">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">মঞ্জিল</p>
-                            <p className="font-bold text-emerald-700">{rec.manzil}</p>
+                          <div className="text-center border-l border-slate-100">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">আমুখতা</p>
+                            <p className="font-bold text-emerald-700">{rec.amukhta?.from_para} - {rec.amukhta?.to_para} ({rec.amukhta?.total_pages} পৃষ্ঠা)</p>
+                          </div>
+                          <div className="text-center border-l border-slate-100">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">তিলাওয়াত</p>
+                            <p className="font-bold text-emerald-700">{rec.tilawat?.from_para} - {rec.tilawat?.to_para} ({rec.tilawat?.total_paras} পারা)</p>
+                          </div>
+                          <div className="text-center border-l border-slate-100">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সাবীনা</p>
+                            <p className="font-bold text-emerald-700">{rec.sabina?.paras} ({rec.sabina?.total_paras} পারা)</p>
                           </div>
                         </div>
                       </div>
