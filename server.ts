@@ -2516,6 +2516,67 @@ async function seedDatabase() {
     }
   });
 
+  // --- ZKTeco ADMS (Cloud) Direct Integration ---
+  app.get("/iclock/cdata", (req, res) => {
+    res.send("OK");
+  });
+
+  app.get("/iclock/getrequest", (req, res) => {
+    res.send("OK");
+  });
+
+  app.post("/iclock/cdata", express.text({ type: '*/*' }), async (req, res) => {
+    try {
+      const rawData = req.body;
+      if (!rawData || typeof rawData !== 'string') {
+        return res.send("OK");
+      }
+
+      const lines = rawData.split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const userId = parts[0].trim();
+          const timestamp = parts[1].trim(); // Format: "YYYY-MM-DD HH:MM:SS"
+          
+          const dateObj = new Date(timestamp);
+          if (isNaN(dateObj.getTime())) continue;
+
+          const date = dateObj.toISOString().split('T')[0];
+          const time = dateObj.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+          // Assuming student for direct ADMS push. For a real app, you'd check if ID belongs to student or teacher.
+          const docId = `${userId}_${date}`;
+          const docRef = firestore.collection('attendance').doc(docId);
+          const doc = await docRef.get();
+
+          if (!doc.exists) {
+            await docRef.set({
+              student_id: userId,
+              date,
+              status: 'present',
+              check_in: time,
+              check_out: null,
+              method: 'device',
+              updated_at: new Date().toISOString()
+            });
+          } else {
+            await docRef.update({
+              check_out: time,
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+      }
+      res.send("OK");
+    } catch (error) {
+      console.error("ADMS Error:", error);
+      res.send("OK"); // Always return OK so device clears its buffer
+    }
+  });
+
   // --- Device Attendance (ZKTeco K40 Integration) ---
   app.post("/api/device/attendance", async (req, res) => {
     const { id, type } = req.body; // id: student_id or teacher_id, type: 'student' | 'teacher' | 'guardian'

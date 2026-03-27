@@ -3112,7 +3112,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                 className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all font-bold"
               />
             </div>
-            <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 overflow-x-auto max-w-full">
+            <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 max-w-full">
               {classes.map((c) => (
                 <button
                   key={c}
@@ -3644,7 +3644,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
             <p className="text-slate-500 font-bold mt-1">পরীক্ষার ফলাফল এবং বিষয় নির্ধারণ করুন</p>
           </div>
           <div className="flex flex-wrap gap-4 w-full md:w-auto">
-             <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 overflow-x-auto">
+             <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
               {classes.map((c) => (
                 <button
                   key={c}
@@ -4787,7 +4787,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full p-4 bg-slate-50 border rounded-2xl font-bold"
                 />
-                <div className="flex gap-2 overflow-x-auto pb-2">
+                <div className="flex flex-wrap gap-2 pb-2">
                   {classes.map(c => (
                     <button 
                       key={c}
@@ -6168,37 +6168,18 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
           <div className="bg-emerald-900 p-8 rounded-[2.5rem] text-white shadow-xl">
             <h3 className="text-xl font-black mb-4">ডিভাইস কানেকশন গাইড</h3>
             <div className="space-y-4 text-emerald-100 text-sm font-bold">
-              <p>ZKTeco K40 ডিভাইস কানেক্ট করতে মাদরাসার কম্পিউটারে নিচের ধাপগুলো অনুসরণ করুন:</p>
-              <ol className="list-decimal list-inside space-y-2">
-                <li>কম্পিউটারে Python ইন্সটল করুন।</li>
-                <li>টার্মিনালে লিখুন: <code className="bg-emerald-800 px-2 py-1 rounded">pip install zkteco</code></li>
-                <li>নিচের স্ক্রিপ্টটি একটি ফাইলে সেভ করে রান করুন।</li>
+              <p>যেহেতু মেশিনের বাটনে ইংরেজি টাইপ করা কষ্টকর, তাই আপনি আপনার মোবাইল ফোন ব্যবহার করে খুব সহজেই মেশিনের সেটিং করতে পারবেন। আপনার ফোনটি অবশ্যই মাদরাসার ওয়াইফাই (যে রাউটারে মেশিন লাগানো) এর সাথে কানেক্ট থাকতে হবে।</p>
+              <ol className="list-decimal list-inside space-y-3 mt-4">
+                <li><strong>মেশিনের IP বের করুন:</strong> মেশিনের Menu &gt; Comm. &gt; Ethernet এ গিয়ে IP Address টি (যেমন: 192.168.1.201) লিখে রাখুন।</li>
+                <li><strong>ফোনে ব্রাউজার ওপেন করুন:</strong> আপনার ফোনের Google Chrome ব্রাউজারে গিয়ে ওই IP Address টি লিখে Enter দিন।</li>
+                <li><strong>লগইন করুন:</strong> মেশিনের একটি ওয়েব পেজ আসবে। সেখানে লগইন করুন (সাধারণত পাসওয়ার্ড লাগে না, লাগলে admin দিয়ে চেষ্টা করুন)।</li>
+                <li><strong>Cloud Server সেটিং:</strong> ওয়েব পেজের মেনু থেকে <strong>Cloud Server Setting</strong> বা <strong>ADMS</strong> অপশনে যান।</li>
+                <li><strong>সার্ভার এড্রেস বসান:</strong> Server Address এর ঘরে <code className="bg-emerald-800 px-2 py-1 rounded select-all">{window.location.hostname}</code> কপি করে বসিয়ে দিন।</li>
+                <li><strong>পোর্ট ও ডোমেইন:</strong> Server Port <code className="bg-emerald-800 px-2 py-1 rounded">80</code> (বা 443) দিন এবং Enable Domain Name অপশনটি ON করে দিন।</li>
+                <li>সবশেষে <strong>Save</strong> করে মেশিনটি একবার বন্ধ করে চালু (Restart) করুন।</li>
               </ol>
-              <div className="bg-black/30 p-4 rounded-xl font-mono text-[10px] overflow-x-auto">
-                <pre>{`
-import requests
-from zk import ZK
-
-# সেটিংস
-DEVICE_IP = '192.168.1.201' # ডিভাইসের IP
-APP_URL = '${window.location.origin}/api/device/attendance'
-
-zk = ZK(DEVICE_IP, port=4370)
-try:
-    conn = zk.connect()
-    print("Connected to Device")
-    for attendance in conn.live_capture():
-        if attendance:
-            # পোর্টালে ডেটা পাঠানো
-            data = {
-                "id": str(attendance.user_id),
-                "type": "student" # বা লজিক অনুযায়ী পরিবর্তন করুন
-            }
-            requests.post(APP_URL, json=data)
-            print(f"Sent: {attendance.user_id}")
-except Exception as e:
-    print(f"Error: {e}")
-                `}</pre>
+              <div className="mt-4 p-4 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-200 text-sm">
+                <strong>নোট:</strong> মেশিনে ছাত্রদের যে ID (যেমন: 101) দিয়ে ফিঙ্গারপ্রিন্ট সেভ করবেন, সফটওয়্যারেও ছাত্রদের রোল বা স্টুডেন্ট আইডি হুবহু একই হতে হবে। তাহলে সফটওয়্যার অটোমেটিক বুঝে নেবে কে উপস্থিত হয়েছে।
               </div>
             </div>
           </div>
