@@ -154,6 +154,7 @@ const LockedTab = ({ children, addToast }: { children: React.ReactNode, addToast
           placeholder="পাসওয়ার্ড"
           className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-rose-500 outline-none font-bold text-center"
           autoFocus
+          autoComplete="new-password"
         />
         <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all">
           আনলক করুন
@@ -538,7 +539,7 @@ export default function AdminPanel() {
       <div className="max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar */}
-        <aside className="w-full md:w-64 space-y-2">
+        <aside className="w-full md:w-64 space-y-2 print:hidden">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -567,7 +568,7 @@ export default function AdminPanel() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
+        <main className="flex-1 print:w-full print:max-w-none">
           <AnimatePresence mode="wait">
             {activeTab === "hifz" && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
@@ -3125,8 +3126,8 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
             <h3 className="text-3xl font-black text-slate-900">স্মার্ট হাজিরা ব্যবস্থাপনা</h3>
             <p className="text-slate-500 font-bold mt-1">ডিভাইস এন্ট্রি ও ম্যানুয়াল হাজিরা</p>
           </div>
-          <div className="flex flex-wrap gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:w-48">
+          <div className="flex flex-wrap gap-4 w-full">
+            <div className="relative w-full md:w-48 shrink-0">
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600 w-5 h-5" />
               <input 
                 type="date" 
@@ -3135,7 +3136,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                 className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all font-bold"
               />
             </div>
-            <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 max-w-full">
+            <div className="flex flex-wrap gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 flex-1 min-w-[200px]">
               {classes.map((c) => (
                 <button
                   key={c}
@@ -3188,8 +3189,8 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
             {loading ? (
               <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
+              <div className="overflow-x-auto print:overflow-visible w-full">
+                <table className="w-full border-collapse min-w-[600px] print:min-w-0">
                   <thead>
                     <tr className="border-b-2 border-slate-100">
                       <th className="text-left py-4 px-4 font-black text-slate-400 uppercase text-xs tracking-wider">ছাত্রের তথ্য</th>
@@ -3593,7 +3594,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
       
       {/* Marksheet Print View (Hidden) */}
       {printStudent && (
-        <div className="hidden print:block fixed inset-0 bg-white z-[200] p-12">
+        <div className="hidden print:block p-12 bg-white w-full">
           <PrintHeader settings={settings} />
           <div className="text-center mb-12">
             <h2 className="text-3xl font-black text-slate-900 uppercase tracking-widest border-b-4 border-slate-900 inline-block pb-2 mb-4">একাডেমিক ট্রান্সক্রিপ্ট</h2>
@@ -5194,7 +5195,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
 
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3 justify-center sticky bottom-0 z-20">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={() => printElement('payment-receipt', 'A5')}
                   className="px-5 py-2.5 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all text-sm"
                 >
                   <Printer className="w-4 h-4" /> প্রিন্ট করুন
@@ -5244,11 +5245,14 @@ function TransactionHistory({ settings }: { settings: any }) {
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
   const [historySearch, setHistorySearch] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const today = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [displayCount, setDisplayCount] = useState(30);
 
   const fetchTransactions = () => {
     setLoading(true);
+    setDisplayCount(30);
     const params = new URLSearchParams();
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
@@ -5256,7 +5260,10 @@ function TransactionHistory({ settings }: { settings: any }) {
     fetch(`/api/admin/all-history?${params.toString()}`)
       .then(res => res.json())
       .then(data => {
-        setTransactions(Array.isArray(data) ? data : []);
+        const sortedData = Array.isArray(data) 
+          ? [...data].sort((a, b) => new Date(b.timestamp || b.date || 0).getTime() - new Date(a.timestamp || a.date || 0).getTime())
+          : [];
+        setTransactions(sortedData);
         setLoading(false);
       })
       .catch(err => {
@@ -5392,8 +5399,8 @@ function TransactionHistory({ settings }: { settings: any }) {
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
       ) : (
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden print:shadow-none print:border-0">
-          <div className="overflow-x-auto">
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden print:shadow-none print:border-0 print:overflow-visible print:p-0">
+          <div className="overflow-x-auto print:overflow-visible">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
@@ -5407,7 +5414,7 @@ function TransactionHistory({ settings }: { settings: any }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredTransactions.map((t) => (
+                {filteredTransactions.slice(0, displayCount).map((t) => (
                   <tr key={`trans-${t.id}`} className="group hover:bg-slate-50 transition-colors cursor-pointer">
                     <td className="p-4 font-bold text-slate-500 text-sm" onClick={() => t.type === 'fee' && handleViewReceipt(t)}>
                       {new Date(t.date).toLocaleString('bn-BD')}
@@ -5457,6 +5464,17 @@ function TransactionHistory({ settings }: { settings: any }) {
                 )}
               </tbody>
             </table>
+            
+            {filteredTransactions.length > displayCount && (
+              <div className="p-6 border-t border-slate-100 flex justify-center print:hidden">
+                <button 
+                  onClick={() => setDisplayCount(prev => prev + 30)}
+                  className="px-8 py-3 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  আরো দেখুন ({filteredTransactions.length - displayCount} টি বাকি)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -5566,7 +5584,7 @@ function TransactionHistory({ settings }: { settings: any }) {
 
               <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-center sticky bottom-0 z-20">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={() => printElement('history-receipt', 'A5')}
                   className="px-6 py-3 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all shadow-lg shadow-slate-200"
                 >
                   <Printer className="w-5 h-5" /> প্রিন্ট করুন
@@ -5916,9 +5934,17 @@ function DeleteHistory() {
                       </div>
                     </div>
                   ) : (
-                    <pre className="p-6 bg-slate-900 text-emerald-400 rounded-3xl text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                      {JSON.stringify(parseDetails(selectedHistory.details), null, 2)}
-                    </pre>
+                    <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+                      <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-4 mb-4">বিস্তারিত তথ্য</h4>
+                      <div className="space-y-3">
+                        {Object.entries(parseDetails(selectedHistory.details)).map(([key, value]) => (
+                          <div key={key} className="flex flex-col sm:flex-row sm:justify-between py-2 border-b border-slate-50 last:border-0">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{key.replace(/_/g, ' ')}</span>
+                            <span className="font-bold text-slate-900 text-sm break-all">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

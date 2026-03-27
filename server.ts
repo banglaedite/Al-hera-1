@@ -284,7 +284,7 @@ async function seedDatabase() {
   // --- Sequential Serial Number Helper ---
   async function getNextSerial(prefix: string = "AHM") {
     const db = getFirestoreInstance();
-    const counterRef = db.collection("counters").doc("transactions");
+    const counterRef = db.collection("counters").doc(prefix);
     
     return await db.runTransaction(async (transaction: any) => {
       const counterDoc = await transaction.get(counterRef);
@@ -1610,7 +1610,9 @@ async function seedDatabase() {
   app.post("/api/admin/accounting/income", async (req, res) => {
     const { category, description, amount, date, purpose, class_name } = req.body;
     try {
+      const transaction_id = await getNextSerial("INC");
       await firestore.collection("income").add({
+        transaction_id,
         category,
         description,
         amount: Number(amount),
@@ -1683,7 +1685,9 @@ async function seedDatabase() {
   app.post("/api/admin/accounting/expenses", async (req, res) => {
     const { category, description, amount, date, purpose, class_name } = req.body;
     try {
+      const transaction_id = await getNextSerial("EXP");
       await firestore.collection("expenses").add({
+        transaction_id,
         category,
         description,
         amount: Number(amount),

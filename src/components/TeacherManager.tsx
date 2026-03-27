@@ -4,6 +4,8 @@ import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download
 import jsPDF from "jspdf";
 import { toPng } from 'html-to-image';
 
+import { printElement } from '../utils/printUtils';
+
 export function TeacherManager({ addToast, settings }: { addToast: (message: string, type?: 'success' | 'error' | 'info') => void, settings?: any }) {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -577,7 +579,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
             </div>
 
             <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-4 gap-2 sticky bottom-0 z-20 print:hidden">
-              <button onClick={() => window.print()} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
+              <button onClick={() => printElement('salary-receipt', 'A5')} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
                 <Printer className="w-5 h-5 text-slate-600" />
                 <span className="text-[10px] font-bold">প্রিন্ট</span>
               </button>

@@ -12,6 +12,8 @@ import { LoadingButton } from "./LoadingButton";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+import { printElement } from '../utils/printUtils';
+
 export function AccountingManager({ settings, addToast, classesList }: { settings: any, addToast: (message: string, type?: 'success' | 'error' | 'info') => void, classesList?: string[] }) {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0, feeIncome: 0, otherIncome: 0, prevBalance: 0, totalBalance: 0 });
   const [prevSummary, setPrevSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0 });
@@ -27,6 +29,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const [selectedStudentProfile, setSelectedStudentProfile] = useState<any>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [isDeletingTransaction, setIsDeletingTransaction] = useState(false);
+  const [printType, setPrintType] = useState<"all" | "income" | "expense">("all");
   
   const [reportMonth, setReportMonth] = useState("");
   const [reportCategory, setReportCategory] = useState("");
@@ -356,6 +359,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
           </tbody>
         </table>
 
+        ${(printType === 'all' || printType === 'income') ? `
         <div class="section-title">আয়ের বিস্তারিত</div>
         <table>
           <thead>
@@ -376,7 +380,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             ${income.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
           </tbody>
         </table>
+        ` : ''}
 
+        ${(printType === 'all' || printType === 'expense') ? `
         <div class="section-title">ব্যয়ের বিস্তারিত</div>
         <table>
           <thead>
@@ -397,6 +403,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             ${expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
           </tbody>
         </table>
+        ` : ''}
       `;
     } else if (activeView === "income") {
       contentHtml = `
@@ -468,6 +475,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
           </tbody>
         </table>
 
+        ${(printType === 'all' || printType === 'income') ? `
         <div class="section-title">আয়সমূহ</div>
         <table>
           <thead>
@@ -488,7 +496,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             ${categoryReportData.income.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
           </tbody>
         </table>
+        ` : ''}
 
+        ${(printType === 'all' || printType === 'expense') ? `
         <div class="section-title">ব্যয়সমূহ</div>
         <table>
           <thead>
@@ -509,6 +519,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             ${categoryReportData.expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
           </tbody>
         </table>
+        ` : ''}
       `;
     } else if (activeView === "class-report" && classReportData) {
       const totalInc = classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
@@ -536,6 +547,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
           </tbody>
         </table>
 
+        ${(printType === 'all' || printType === 'income') ? `
         <div class="section-title">আদায়কৃত ফিস ও আয়</div>
         <table>
           <thead>
@@ -563,7 +575,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             ${classReportData.fees.filter((f: any) => f.status === 'paid').length === 0 && classReportData.income.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
           </tbody>
         </table>
+        ` : ''}
 
+        ${(printType === 'all' || printType === 'expense') ? `
         <div class="section-title">ব্যয়সমূহ</div>
         <table>
           <thead>
@@ -584,6 +598,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             ${classReportData.expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
           </tbody>
         </table>
+        ` : ''}
 
         <div class="section-title">বকেয়া ফিস</div>
         <table>
@@ -654,27 +669,37 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     return html;
   };
 
-  const handleDownloadReport = () => {
-    const html = generatePrintableHTML();
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `accounting_report_${new Date().toISOString().split('T')[0]}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-    addToast("HTML ফাইল ডাউনলোড হয়েছে। এটি ব্রাউজারে ওপেন করে PDF হিসেবে সেভ করতে পারেন।", "success");
+  const handleDownloadReport = (type?: 'income' | 'expense') => {
+    if (type) setPrintType(type);
+    
+    setTimeout(() => {
+      const html = generatePrintableHTML();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type || 'accounting'}_report_${new Date().toISOString().split('T')[0]}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast("HTML ফাইল ডাউনলোড হয়েছে। এটি ব্রাউজারে ওপেন করে PDF হিসেবে সেভ করতে পারেন।", "success");
+    }, 100);
   };
 
-  const handlePrint = () => {
-    const html = generatePrintableHTML();
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-    } else {
-      addToast("পপ-আপ ব্লক করা আছে। দয়া করে পপ-আপ অ্যালাউ করুন।", "error");
-    }
+  const handlePrint = (type?: 'income' | 'expense') => {
+    if (type) setPrintType(type);
+    
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.id = 'print-report-temp';
+      div.innerHTML = generatePrintableHTML();
+      document.body.appendChild(div);
+      
+      printElement('print-report-temp', 'A4');
+      
+      setTimeout(() => {
+        document.body.removeChild(div);
+      }, 1000);
+    }, 100);
   };
 
   const calculatePercentage = (part: number, total: number) => {
@@ -690,7 +715,17 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
           <h2 className="text-3xl font-black text-slate-900">হিসাব-নিকাশ</h2>
           <p className="text-slate-500 font-bold">মাদরাসার আয়-ব্যয়ের বিস্তারিত পরিসংখ্যান</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          <select
+            value={printType}
+            onChange={(e) => setPrintType(e.target.value as any)}
+            className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
+            title="প্রিন্ট অপশন"
+          >
+            <option value="all">সব প্রিন্ট</option>
+            <option value="income">শুধু আয়</option>
+            <option value="expense">শুধু ব্যয়</option>
+          </select>
           <button 
             onClick={() => setIsAddingIncome(true)}
             className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
@@ -704,14 +739,26 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             <Plus className="w-5 h-5" /> খরচ যোগ করুন
           </button>
           <button 
-            onClick={handleDownloadReport}
+            onClick={() => handleDownloadReport()}
             className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
             title="ডাউনলোড রিপোর্ট"
           >
             <Download className="w-6 h-6" />
           </button>
           <button 
-            onClick={handlePrint}
+            onClick={() => handleDownloadReport('income')}
+            className="px-4 py-3 bg-emerald-100 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-200 transition-all"
+          >
+            Income PDF
+          </button>
+          <button 
+            onClick={() => handleDownloadReport('expense')}
+            className="px-4 py-3 bg-rose-100 text-rose-700 rounded-2xl font-bold hover:bg-rose-200 transition-all"
+          >
+            Expense PDF
+          </button>
+          <button 
+            onClick={() => handlePrint()}
             className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
             title="প্রিন্ট রিপোর্ট"
           >
@@ -1454,7 +1501,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               </div>
 
               <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-5 gap-2 sticky bottom-0 z-20 print:hidden">
-                <button onClick={() => window.print()} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
+                <button onClick={() => printElement('transaction-detail', 'A5')} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
                   <Printer className="w-5 h-5 text-slate-600" />
                   <span className="text-[10px] font-bold">প্রিন্ট</span>
                 </button>
