@@ -504,20 +504,27 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
             <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
               <div id="salary-receipt" className="space-y-8 bg-white relative">
                 {/* Receipt Header */}
-                <div className="flex items-center gap-4 border-b-2 border-slate-900 pb-6">
-                  {settings?.logo_url && (
-                    <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
-                  )}
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                    <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
-                    <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">
-                      বেতন রিসিট
+                <div className="flex items-center justify-between border-b-2 border-slate-900 pb-6">
+                  <div className="flex items-center gap-4">
+                    {settings?.logo_url && (
+                      <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                    )}
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                      <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                      <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedSalary.id.toString().substring(0, 6)}</p>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">
+                        বেতন রিসিট
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedSalary.id.toString().substring(0, 6)}</p>
+                    </div>
+                    {settings?.enable_qr_code && settings?.qr_code_url && (
+                      <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
+                    )}
                   </div>
                 </div>
 

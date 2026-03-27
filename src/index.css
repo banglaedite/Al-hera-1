@@ -67,9 +67,14 @@
 }
 
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   @page {
-    size: A4;
-    margin: 10mm;
+    margin: 0; /* Remove browser headers/footers */
   }
   
   /* Hide everything by default */
@@ -96,7 +101,7 @@
     top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 20mm !important; /* Add padding to compensate for @page margin: 0 */
     border: none !important;
     box-shadow: none !important;
     z-index: 99999 !important;
@@ -104,6 +109,15 @@
     display: block !important;
     height: auto !important;
     overflow: visible !important;
+  }
+
+  /* Page size specific classes */
+  .print-a4 {
+    @page { size: A4; }
+  }
+  
+  .print-a5 {
+    @page { size: A5; }
   }
 
   /* Ensure parents of printable elements don't hide them */

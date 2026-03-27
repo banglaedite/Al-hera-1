@@ -100,10 +100,22 @@ const PrintHeader = ({ settings }: { settings: any }) => (
           </p>
         </div>
       </div>
-      <div className="text-right border-l-2 border-slate-100 pl-8">
-        <p className="text-slate-400 font-black text-xs uppercase tracking-tighter mb-1">রিপোর্ট জেনারেটেড</p>
-        <p className="text-2xl font-black text-slate-900">{new Date().toLocaleDateString('bn-BD')}</p>
-        <p className="text-slate-500 font-bold text-sm mt-1">সময়: {new Date().toLocaleTimeString('bn-BD')}</p>
+      <div className="flex items-center gap-8">
+        <div className="text-right border-l-2 border-slate-100 pl-8">
+          <p className="text-slate-400 font-black text-xs uppercase tracking-tighter mb-1">রিপোর্ট জেনারেটেড</p>
+          <p className="text-2xl font-black text-slate-900">{new Date().toLocaleDateString('bn-BD')}</p>
+          <p className="text-slate-500 font-bold text-sm mt-1">সময়: {new Date().toLocaleTimeString('bn-BD')}</p>
+        </div>
+        {settings?.enable_qr_code && settings?.qr_code_url && (
+          <div className="border-l-2 border-slate-100 pl-8">
+            <img 
+              src={settings.qr_code_url} 
+              className="w-24 h-24 object-contain bg-white p-2 rounded-xl shadow-sm" 
+              alt="QR Code" 
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
       </div>
     </div>
   </div>
@@ -1486,6 +1498,10 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <input type="checkbox" id="auto_whatsapp" checked={!!settings.auto_whatsapp} onChange={(e) => setSettings({...settings, auto_whatsapp: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
             <label htmlFor="auto_whatsapp" className="text-sm font-bold text-slate-700">অটোমেটিক হোয়াটসঅ্যাপে রশিদ পাঠানো চালু করুন</label>
           </div>
+          <div className="space-y-2 flex items-center gap-3">
+            <input type="checkbox" id="enable_qr_code" checked={!!settings.enable_qr_code} onChange={(e) => setSettings({...settings, enable_qr_code: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
+            <label htmlFor="enable_qr_code" className="text-sm font-bold text-slate-700">রশিদ ও মার্কশিটে কিউআর কোড (QR Code) দেখান</label>
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">কিউআর কোড ইউআরএল (QR Code URL)</label>
             <input value={settings.qr_code_url || ""} onChange={(e) => setSettings({...settings, qr_code_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/qr.png" />
@@ -1830,10 +1846,11 @@ const printElement = (elementId: string) => {
   if (!element) return;
   
   const clone = element.cloneNode(true) as HTMLElement;
-  clone.classList.remove('hidden');
+  clone.classList.remove('hidden', 'absolute', 'top-0', 'left-0');
   clone.style.width = '100%';
   clone.style.margin = '0';
   clone.style.padding = '0';
+  clone.style.position = 'relative';
   
   const printWindow = window.open('', '_blank');
   if (printWindow) {
@@ -1844,15 +1861,21 @@ const printElement = (elementId: string) => {
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
-            body { font-family: 'Hind Siliguri', sans-serif; background: white; margin: 0; padding: 20px; }
+            body { font-family: 'Hind Siliguri', sans-serif; background: white; margin: 0; padding: 0; }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
             @media print { 
               .no-print { display: none !important; } 
-              body { padding: 0; }
+              @page { margin: 0; size: auto; }
+              body { padding: 10mm; }
             }
           </style>
         </head>
         <body>
-          <div class="w-full">${clone.outerHTML}</div>
+          <div class="w-full max-w-4xl mx-auto">${clone.outerHTML}</div>
           <script>
             // Wait for Tailwind and images to load
             window.onload = () => {
@@ -2779,7 +2802,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
               </div>
 
               {/* Hidden Templates for PDF Generation */}
-              <div id="id-card-template" className="hidden absolute top-0 left-0 bg-white p-8 w-[400px] border-2 border-emerald-600 rounded-3xl text-center" style={{ borderColor: '#059669' }}>
+              <div id="id-card-template" className="hidden absolute top-0 left-0 bg-white p-8 w-full max-w-[400px] mx-auto border-2 border-emerald-600 rounded-3xl text-center" style={{ borderColor: '#059669' }}>
                 <div className="flex items-center justify-center gap-3 mb-6 border-b-2 border-emerald-100 pb-4" style={{ borderColor: '#d1fae5' }}>
                   <GraduationCap className="w-8 h-8 text-emerald-600" style={{ color: '#059669' }} />
                   <h2 className="text-2xl font-black text-emerald-900" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
@@ -2797,7 +2820,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                 </div>
               </div>
 
-              <div id="marksheet-template" className="hidden absolute top-0 left-0 bg-white p-12 w-[800px] border-4 border-double border-emerald-900 text-center" style={{ borderColor: '#064e3b' }}>
+              <div id="marksheet-template" className="hidden absolute top-0 left-0 bg-white p-12 w-full max-w-[800px] mx-auto border-4 border-double border-emerald-900 text-center" style={{ borderColor: '#064e3b' }}>
                 <div className="flex items-center justify-center gap-4 mb-8 border-b-4 border-emerald-100 pb-6" style={{ borderColor: '#d1fae5' }}>
                   <GraduationCap className="w-12 h-12 text-emerald-600" style={{ color: '#059669' }} />
                   <div>
@@ -5074,13 +5097,18 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                           <img src={settings.logo_url} className="w-12 h-12 object-contain" alt="Logo" referrerPolicy="no-referrer" />
                         )}
                         <div>
-                          <h2 className="text-xl font-black text-slate-900 leading-tight">আল-হেরা মাদ্রাসা মধুপুর</h2>
+                          <h2 className="text-xl font-black text-slate-900 leading-tight">{settings?.title || "আল-হেরা মাদ্রাসা মধুপুর"}</h2>
                           <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{settings?.address || "মাদরাসা ঠিকানা এখানে"}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="inline-block px-2 py-0.5 bg-slate-900 text-white text-[8px] font-black rounded-md uppercase tracking-widest mb-1">টাকা জমার রশিদ</div>
-                        <p className="text-[8px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="inline-block px-2 py-0.5 bg-slate-900 text-white text-[8px] font-black rounded-md uppercase tracking-widest mb-1">টাকা জমার রশিদ</div>
+                          <p className="text-[8px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
+                        </div>
+                        {settings?.enable_qr_code && settings?.qr_code_url && (
+                          <img src={settings.qr_code_url} className="w-12 h-12 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
+                        )}
                       </div>
                     </div>
 
@@ -5459,13 +5487,18 @@ function TransactionHistory({ settings }: { settings: any }) {
                           <img src={settings.logo_url} className="w-16 h-16 object-contain" alt="Logo" referrerPolicy="no-referrer" />
                         )}
                         <div>
-                          <h2 className="text-2xl font-black text-slate-900 leading-tight">আল-হেরা মাদ্রাসা মধুপুর</h2>
+                          <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল-হেরা মাদ্রাসা মধুপুর"}</h2>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{settings?.address || "মাদরাসা ঠিকানা এখানে"}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">টাকা জমার রশিদ</div>
-                        <p className="text-[10px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">টাকা জমার রশিদ</div>
+                          <p className="text-[10px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
+                        </div>
+                        {settings?.enable_qr_code && settings?.qr_code_url && (
+                          <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
+                        )}
                       </div>
                     </div>
 
