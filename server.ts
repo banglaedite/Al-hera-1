@@ -399,7 +399,11 @@ async function seedDatabase() {
         });
       });
 
-      allData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      allData.sort((a, b) => {
+        const timeA = a.created_at || a.timestamp || a.date;
+        const timeB = b.created_at || b.timestamp || b.date;
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
+      });
 
       res.json(allData);
     } catch (error) {
