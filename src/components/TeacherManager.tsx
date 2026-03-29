@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2, X as CloseIcon, Save } from "lucide-react";
 import jsPDF from "jspdf";
 import { toPng } from 'html-to-image';
+import { cn } from "../lib/utils";
 
 import { printElement } from '../utils/printUtils';
 
@@ -68,7 +69,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
   };
 
   const handleDeleteSalary = async () => {
-    const res = await fetch(`/api/admin/teachers/${selectedTeacher.id}/salaries/${isDeletingSalary.id}`, {
+    const res = await fetch(`/api/admin/teachers/salary/${isDeletingSalary.id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: deletePassword })
@@ -80,7 +81,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
       setDeletePassword("");
       fetchSalaries(selectedTeacher.id);
     } else {
-      addToast("পাসওয়ার্ড ভুল", "error");
+      addToast(data.error || "পাসওয়ার্ড ভুল", "error");
     }
   };
 
@@ -371,6 +372,30 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
               </form>
 
               <div className="mt-8">
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">মূল বেতন</p>
+                    <p className="text-lg font-black text-slate-900">৳{teacherSalary}</p>
+                  </div>
+                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">মোট প্রদান</p>
+                    <p className="text-lg font-black text-emerald-700">৳{paidAmount}</p>
+                  </div>
+                  <div className={cn(
+                    "p-4 rounded-2xl border",
+                    teacherSalary - paidAmount > 0 ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"
+                  )}>
+                    <p className={cn(
+                      "text-[10px] font-black uppercase mb-1",
+                      teacherSalary - paidAmount > 0 ? "text-rose-600" : "text-emerald-600"
+                    )}>বাকি</p>
+                    <p className={cn(
+                      "text-lg font-black",
+                      teacherSalary - paidAmount > 0 ? "text-rose-700" : "text-emerald-700"
+                    )}>৳{Math.max(0, teacherSalary - paidAmount)}</p>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between mb-4 px-2">
                   <h4 className="font-black text-slate-900">বেতন প্রদানের ইতিহাস ({monthNames[selectedMonth]} {selectedYear})</h4>
                   <span className="text-xs font-bold text-slate-400">মোট {currentMonthSalaries.length}টি রেকর্ড</span>
@@ -536,7 +561,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                       </div>
                       <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedSalary.id.toString().substring(0, 6)}</p>
                     </div>
-                    {settings?.enable_qr_code && settings?.qr_code_url && (
+                    {settings?.qr_code_url && (
                       <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
                     )}
                   </div>

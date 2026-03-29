@@ -13,9 +13,12 @@ interface MonthlyYearlyReportProps {
   loading: boolean;
   startDate: string;
   endDate: string;
+  setStartDate: (date: string) => void;
+  setEndDate: (date: string) => void;
+  settings?: any;
 }
 
-export default function MonthlyYearlyReport({ data, type, loading, startDate, endDate }: MonthlyYearlyReportProps) {
+export default function MonthlyYearlyReport({ data, type, loading, startDate, endDate, setStartDate, setEndDate, settings }: MonthlyYearlyReportProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [printType, setPrintType] = useState<"all" | "income" | "expense">("all");
@@ -28,24 +31,27 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
     const doc = new jsPDF('p', 'mm', 'a4');
     
     // Header
-    doc.setFontSize(18);
+    doc.setFontSize(20);
+    doc.setTextColor(0, 100, 0); // Dark Green
+    doc.text(settings?.title || 'আল-হেরা মাদ্রাসা মধুপুর', 105, 15, { align: 'center' });
+    doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text('মাদ্রাসা হিসাব বিবরণী', 105, 15, { align: 'center' });
+    doc.text(type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী', 105, 22, { align: 'center' });
     doc.setFontSize(12);
-    doc.text(`${startDate ? new Date(startDate).toLocaleDateString('bn-BD') : ''} থেকে ${endDate ? new Date(endDate).toLocaleDateString('bn-BD') : ''}`, 105, 22, { align: 'center' });
+    doc.text(`${startDate ? new Date(startDate).toLocaleDateString('bn-BD') : ''} থেকে ${endDate ? new Date(endDate).toLocaleDateString('bn-BD') : ''}`, 105, 29, { align: 'center' });
     
     // Income Table
     if (printType === 'all' || printType === 'income') {
       doc.setFontSize(14);
       doc.setTextColor(16, 185, 129); // Emerald-500
-      doc.text('আয় সমূহ', 14, 35);
+      doc.text('আয় সমূহ', 14, 40);
       
       const incomeData = Object.entries(groupedByCategory.income).flatMap(([cat, data]: [string, any]) => 
         data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || 'N/A', `৳${item.amount}`])
       );
 
       (doc as any).autoTable({
-        startY: 40,
+        startY: 45,
         head: [['তারিখ', 'বিভাগ', 'বিবরণ', 'পরিমাণ']],
         body: incomeData,
         theme: 'striped',
@@ -55,7 +61,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
 
     // Expense Table
     if (printType === 'all' || printType === 'expense') {
-      const startY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 40;
+      const startY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 45;
       doc.setFontSize(14);
       doc.setTextColor(225, 29, 72); // Rose-600
       doc.text('ব্যয় সমূহ', 14, startY);
@@ -73,7 +79,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
       });
     }
     
-    doc.save(`Accounting_Report.pdf`);
+    doc.save(`Accounting_Report_${type}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
   };
 
   const groupedByCategory = useMemo(() => {
@@ -260,18 +266,72 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center print:hidden">
-        <div className="flex items-center gap-4">
-          <select
-            value={printType}
-            onChange={(e) => setPrintType(e.target.value as any)}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none"
-          >
-            <option value="all">সব দেখান</option>
-            <option value="income">শুধু আয়</option>
-            <option value="expense">শুধু ব্যয়</option>
-          </select>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-slate-400" />
+            <span className="font-bold text-slate-700">রিপোর্ট ফিল্টার:</span>
+          </div>
+          
+          {type === 'yearly' ? (
+            <div className="flex flex-col">
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-1">বছর নির্বাচন</label>
+              <input 
+                type="number" 
+                min="2000"
+                max="2100"
+                placeholder="YYYY"
+                value={startDate && endDate && startDate.startsWith(endDate.substring(0, 4)) && startDate.endsWith('-01-01') && endDate.endsWith('-12-31') ? startDate.substring(0, 4) : ''}
+                onChange={(e) => {
+                  const year = e.target.value;
+                  if (year && year.length === 4) {
+                    setStartDate(`${year}-01-01`);
+                    setEndDate(`${year}-12-31`);
+                  } else if (!year) {
+                    setStartDate("");
+                    setEndDate("");
+                  }
+                }}
+                className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900 w-24"
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-1">মাস নির্বাচন</label>
+              <input 
+                type="month" 
+                value={startDate && endDate && startDate.substring(0, 7) === endDate.substring(0, 7) ? startDate.substring(0, 7) : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    const [year, month] = val.split('-');
+                    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+                    setStartDate(`${val}-01`);
+                    setEndDate(`${val}-${lastDay}`);
+                  } else {
+                    setStartDate("");
+                    setEndDate("");
+                  }
+                }}
+                className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          )}
+
+          <div className="flex flex-col">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-1">ধরণ</label>
+            <select
+              value={printType}
+              onChange={(e) => setPrintType(e.target.value as any)}
+              className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="all">সব দেখান</option>
+              <option value="income">শুধু আয়</option>
+              <option value="expense">শুধু ব্যয়</option>
+            </select>
+          </div>
         </div>
+
         <div className="flex gap-2">
           <button
             onClick={handlePrint}
@@ -291,13 +351,29 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
       </div>
 
       <div id="monthly-yearly-report" className="bg-white p-8 rounded-2xl border border-slate-200">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-900">
-            {type === 'monthly' ? 'মাসিক রিপোর্ট' : 'বাৎসরিক রিপোর্ট'}
-          </h2>
-          <p className="text-slate-500 mt-2">
-            {startDate && endDate ? `${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : 'সব সময়'}
-          </p>
+        <div className="flex items-center justify-between mb-8 border-b pb-6">
+          <div className="flex items-center gap-4">
+            {settings?.logo_url && (
+              <img src={settings.logo_url} className="w-16 h-16 object-contain" alt="Logo" referrerPolicy="no-referrer" />
+            )}
+            <div>
+              <h1 className="text-3xl font-black text-slate-900 mb-1">{settings?.title || "আল-হেরা মাদ্রাসা মধুপুর"}</h1>
+              <p className="text-slate-600 font-medium">{settings?.address || "মধুপুর, টাঙ্গাইল"}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <h2 className="text-xl font-bold text-slate-800 bg-slate-100 inline-block px-4 py-1 rounded-full mb-2">
+                {type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী'}
+              </h2>
+              <p className="text-slate-500 font-medium">
+                {startDate && endDate ? `${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : 'সব সময়'}
+              </p>
+            </div>
+            {settings?.qr_code_url && (
+              <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
+            )}
+          </div>
         </div>
 
         {(printType === 'all' || printType === 'income') && (

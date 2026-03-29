@@ -30,39 +30,41 @@ import { ToastProvider } from "./components/ToastContext";
 import { cn } from "./lib/utils";
 
 const NoticeBoard = () => {
-  const [notices, setNotices] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
 
   useEffect(() => {
-    const fetchNotices = async () => {
+    const fetchSettings = async () => {
       try {
-        const res = await fetch("/api/notices");
+        const res = await fetch("/api/site-settings");
         if (res.ok) {
           const data = await res.json();
-          setNotices(Array.isArray(data) ? data : []);
+          setSettings(data);
         }
       } catch (err) {
-        console.error("Failed to load notices:", err);
+        console.error("Failed to load settings:", err);
       }
     };
-    fetchNotices();
+    fetchSettings();
   }, []);
 
-  if (notices.length === 0) return null;
+  if (!settings?.announcement) return null;
 
   return (
-    <div className="bg-amber-50 border-b border-amber-100 py-2 overflow-hidden whitespace-nowrap">
+    <div className="bg-emerald-50 border-b border-emerald-100 py-2 overflow-hidden whitespace-nowrap">
       <div className="flex animate-marquee">
-        {notices.map((n, i) => (
-          <span key={i} className="mx-8 text-sm font-bold text-amber-900 flex items-center gap-2">
-            <Bell className="w-4 h-4" /> {n.title}: {n.content}
-          </span>
-        ))}
+        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
+          <Bell className="w-4 h-4" /> {settings.announcement}
+        </span>
         {/* Duplicate for seamless loop */}
-        {notices.map((n, i) => (
-          <span key={`dup-${i}`} className="mx-8 text-sm font-bold text-amber-900 flex items-center gap-2">
-            <Bell className="w-4 h-4" /> {n.title}: {n.content}
-          </span>
-        ))}
+        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
+          <Bell className="w-4 h-4" /> {settings.announcement}
+        </span>
+        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
+          <Bell className="w-4 h-4" /> {settings.announcement}
+        </span>
+        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
+          <Bell className="w-4 h-4" /> {settings.announcement}
+        </span>
       </div>
     </div>
   );
@@ -94,7 +96,6 @@ const Navbar = () => {
     { name: "হোম", path: "/", icon: Home },
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
     { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
-    { name: "শিক্ষক পোর্টাল", path: "/teacher", icon: ShieldCheck },
   ];
 
   return (
@@ -188,7 +189,6 @@ export default function App() {
               <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
               <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
               <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
-              <Route path="/teacher" element={<div className="max-w-7xl mx-auto px-4 py-12"><TeacherPortal /></div>} />
               <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
             </Routes>
           </main>

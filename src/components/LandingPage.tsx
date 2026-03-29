@@ -357,7 +357,7 @@ const LandingPage = () => {
 
       {/* Public Notice Board Section */}
       {notices.length > 0 && (
-        <section className="py-12 bg-emerald-50/50 border-y border-emerald-100">
+        <section id="notices" className={`py-12 bg-emerald-50/50 border-y border-emerald-100 ${settings?.show_notices_directly !== 1 ? 'hidden target:block' : ''}`}>
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex items-center gap-3 mb-8">
               <div className="p-2 bg-emerald-900 rounded-lg shadow-lg shadow-emerald-900/20">
@@ -419,9 +419,14 @@ const LandingPage = () => {
       )}
 
       {/* Content Sections Toggle Buttons */}
-      {(settings?.show_features_directly !== 1 || settings?.show_food_directly !== 1 || settings?.show_showcase_directly !== 1 || settings?.show_routines_directly !== 1) && (
+      {(settings?.show_features_directly !== 1 || settings?.show_food_directly !== 1 || settings?.show_showcase_directly !== 1 || settings?.show_routines_directly !== 1 || settings?.show_notices_directly !== 1) && (
         <div className="bg-white py-8 border-b border-slate-100">
           <div className="max-w-7xl mx-auto px-4 flex flex-wrap justify-center gap-4">
+            {settings?.show_notices_directly !== 1 && notices.length > 0 && (
+              <a href="#notices" className="px-8 py-4 bg-amber-50 text-amber-900 rounded-2xl font-black shadow-sm border border-amber-100 hover:bg-amber-100 transition-all flex items-center gap-2">
+                <Bell className="w-5 h-5" /> নোটিশ বোর্ড
+              </a>
+            )}
             {settings?.show_features_directly !== 1 && (
               <a href="#features" className="px-8 py-4 bg-emerald-50 text-emerald-900 rounded-2xl font-black shadow-sm border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center gap-2">
                 <Star className="w-5 h-5" /> আমাদের বৈশিষ্ট্য

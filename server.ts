@@ -765,7 +765,11 @@ async function seedDatabase() {
       show_features_directly, show_food_directly, show_showcase_directly, showcase_content,
       admission_rules,
       enable_neon_light, neon_light_color, neon_light_effect,
-      admin_password
+      admin_password,
+      youtube_url, muhtamim_signature_url, show_muhtamim_signature,
+      qr_code_url, enable_qr_code, auto_whatsapp, enable_historical_reports,
+      show_routines_directly, bkash_instructions, nagad_instructions, rocket_instructions,
+      payment_special_note, enable_signature, signature_url
     } = req.body;
     try {
       await firestore!.collection("site_settings").doc("1").set({
@@ -786,7 +790,21 @@ async function seedDatabase() {
         enable_neon_light: enable_neon_light ? 1 : 0,
         neon_light_color: neon_light_color || "#10b981",
         neon_light_effect: neon_light_effect || "pulse",
-        admin_password: admin_password || ""
+        admin_password: admin_password || "",
+        youtube_url: youtube_url || "",
+        muhtamim_signature_url: muhtamim_signature_url || "",
+        show_muhtamim_signature: show_muhtamim_signature ? 1 : 0,
+        qr_code_url: qr_code_url || "",
+        enable_qr_code: enable_qr_code ? 1 : 0,
+        auto_whatsapp: auto_whatsapp ? 1 : 0,
+        enable_historical_reports: enable_historical_reports ? 1 : 0,
+        show_routines_directly: show_routines_directly ? 1 : 0,
+        bkash_instructions: bkash_instructions || "",
+        nagad_instructions: nagad_instructions || "",
+        rocket_instructions: rocket_instructions || "",
+        payment_special_note: payment_special_note || "",
+        enable_signature: enable_signature ? 1 : 0,
+        signature_url: signature_url || ""
       }, { merge: true });
       res.json({ success: true });
     } catch (error) {
@@ -1811,6 +1829,8 @@ async function seedDatabase() {
       batch.set(salaryRef, {
         teacher_id: teacherId,
         amount: Number(amount),
+        total_salary: teacher.salary || 0,
+        due_amount: (teacher.salary || 0) - Number(amount),
         month,
         year: Number(year),
         given_by: given_by || null,
@@ -2518,11 +2538,7 @@ async function seedDatabase() {
         .where("user_id", "==", user_id)
         .where("date", "==", date)
         .get();
-      const logs = {};
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        logs[data.task_id] = data.status;
-      });
+      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(logs);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch amal logs" });
@@ -2532,20 +2548,32 @@ async function seedDatabase() {
   app.get("/api/admin/amal-rankings", async (req, res) => {
     const { target, startDate, endDate } = req.query;
     try {
+      // Get active tasks count for this target
+      const tasksSnapshot = await firestore.collection("amal_tasks")
+        .where("target", "==", target)
+        .where("is_active", "==", true)
+        .get();
+      const activeTasksCount = tasksSnapshot.size || 1;
+
+      // Calculate days in range
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const totalPossiblePerUser = activeTasksCount * days;
+
       const logsSnapshot = await firestore.collection("amal_logs")
         .where("user_type", "==", target)
         .where("date", ">=", startDate)
         .where("date", "<=", endDate)
         .get();
       
-      const userStats = {};
+      const userStats: Record<string, { completed: number }> = {};
       logsSnapshot.docs.forEach(doc => {
         const data = doc.data();
         if (!userStats[data.user_id]) {
-          userStats[data.user_id] = { completed: 0, total: 0 };
+          userStats[data.user_id] = { completed: 0 };
         }
-        if (data.status) userStats[data.user_id].completed++;
-        userStats[data.user_id].total++;
+        if (data.status === "completed") userStats[data.user_id].completed++;
       });
 
       const rankings = await Promise.all(Object.entries(userStats).map(async ([userId, stats]: [string, any]) => {
@@ -2554,9 +2582,9 @@ async function seedDatabase() {
         return {
           userId,
           name: userData?.name || "Unknown",
-          percentage: (stats.completed / (stats.total || 1)) * 100,
+          percentage: (stats.completed / totalPossiblePerUser) * 100,
           completed: stats.completed,
-          total: stats.total
+          total: totalPossiblePerUser
         };
       }));
 
@@ -2565,6 +2593,84 @@ async function seedDatabase() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to fetch rankings" });
+    }
+  });
+
+  app.get("/api/amal-rankings", async (req, res) => {
+    const { target, startDate, endDate } = req.query;
+    try {
+      // Get active tasks count for this target
+      const tasksSnapshot = await firestore.collection("amal_tasks")
+        .where("target", "==", target)
+        .where("is_active", "==", true)
+        .get();
+      const activeTasksCount = tasksSnapshot.size || 1;
+
+      // Calculate days in range
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const totalPossiblePerUser = activeTasksCount * days;
+
+      const logsSnapshot = await firestore.collection("amal_logs")
+        .where("user_type", "==", target)
+        .where("date", ">=", startDate)
+        .where("date", "<=", endDate)
+        .get();
+      
+      const userStats: Record<string, { completed: number }> = {};
+      logsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (!userStats[data.user_id]) {
+          userStats[data.user_id] = { completed: 0 };
+        }
+        if (data.status === "completed") userStats[data.user_id].completed++;
+      });
+
+      const rankings = await Promise.all(Object.entries(userStats).map(async ([userId, stats]: [string, any]) => {
+        const userDoc = await firestore.collection(target === 'student' ? 'students' : 'teachers').doc(userId).get();
+        const userData = userDoc.data();
+        return {
+          userId,
+          name: userData?.name || "Unknown",
+          percentage: (stats.completed / totalPossiblePerUser) * 100,
+          completed: stats.completed,
+          total: totalPossiblePerUser
+        };
+      }));
+
+      rankings.sort((a, b) => b.percentage - a.percentage);
+      res.json(rankings);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch rankings" });
+    }
+  });
+
+  app.get("/api/amal-tasks", async (req, res) => {
+    const { target } = req.query;
+    try {
+      const snapshot = await firestore.collection("amal_tasks")
+        .where("target", "==", target)
+        .where("is_active", "==", true)
+        .get();
+      const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch amal tasks" });
+    }
+  });
+
+  app.get("/api/teacher/salary-history/:id", async (req, res) => {
+    try {
+      const salariesSnapshot = await firestore.collection("teacher_salaries")
+        .where("teacher_id", "==", req.params.id)
+        .get();
+      const salaries = salariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      salaries.sort((a: any, b: any) => new Date(b.date || b.created_at || 0).getTime() - new Date(a.date || a.created_at || 0).getTime());
+      res.json(salaries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch salary history" });
     }
   });
 

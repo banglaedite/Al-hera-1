@@ -1423,6 +1423,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             loading={loadingReport}
             startDate={startDate}
             endDate={endDate}
+            setStartDate={setStartDate}
+            setEndDate={setEndDate}
+            settings={settings}
           />
         )}
 
@@ -1433,6 +1436,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             loading={loadingReport}
             startDate={startDate}
             endDate={endDate}
+            setStartDate={setStartDate}
+            setEndDate={setEndDate}
+            settings={settings}
           />
         )}
       </div>
@@ -1532,7 +1538,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                         </div>
                         <p className="text-[10px] font-bold text-slate-400">রিসিট নং: #{selectedTransaction.id.toString().padStart(6, '0')}</p>
                       </div>
-                      {settings?.enable_qr_code && settings?.qr_code_url && (
+                      {settings?.qr_code_url && (
                         <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
                       )}
                     </div>

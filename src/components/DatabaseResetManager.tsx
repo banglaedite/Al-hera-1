@@ -10,6 +10,10 @@ export function DatabaseResetManager() {
 
   const executeAction = async () => {
     if (!confirmAction) return;
+    if (!password) {
+      setMessage({ text: "পাসওয়ার্ড দিন", type: "error" });
+      return;
+    }
     
     setLoading(true);
     setMessage({ text: "", type: "" });
@@ -49,17 +53,17 @@ export function DatabaseResetManager() {
   };
 
   const handleReset = () => {
-    if (!password) return setMessage({ text: "পাসওয়ার্ড দিন", type: "error" });
+    setMessage({ text: "", type: "" });
     setConfirmAction({ type: 'reset', message: "আপনি কি নিশ্চিত? এটি সকল ডেটা ট্র্যাশে পাঠিয়ে দিবে এবং অ্যাপ নতুন করে শুরু হবে।" });
   };
 
   const handleRecover = () => {
-    if (!password) return setMessage({ text: "পাসওয়ার্ড দিন", type: "error" });
+    setMessage({ text: "", type: "" });
     setConfirmAction({ type: 'recover', message: "আপনি কি নিশ্চিত? এটি ট্র্যাশ থেকে সকল ডেটা পুনরুদ্ধার করবে।" });
   };
 
   const handlePermanentDelete = () => {
-    if (!password) return setMessage({ text: "পাসওয়ার্ড দিন", type: "error" });
+    setMessage({ text: "", type: "" });
     setConfirmAction({ type: 'permanent', message: "সতর্কতা: এটি ট্র্যাশ থেকে সকল ডেটা চিরতরে মুছে ফেলবে। এটি আর পুনরুদ্ধার করা সম্ভব নয়। আপনি কি নিশ্চিত?" });
   };
 
@@ -82,14 +86,6 @@ export function DatabaseResetManager() {
       )}
 
       <div className="space-y-6">
-        <input 
-          type="password" 
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="এডমিন পাসওয়ার্ড দিন"
-          className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-rose-500 outline-none font-bold"
-        />
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button 
             onClick={handleReset}
@@ -131,9 +127,19 @@ export function DatabaseResetManager() {
                 </div>
                 <h3 className="text-xl font-black text-slate-900">নিশ্চিত করুন</h3>
               </div>
-              <p className="text-slate-600 font-bold mb-8">{confirmAction.message}</p>
+              <p className="text-slate-600 font-bold mb-6">{confirmAction.message}</p>
+              
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="এডমিন পাসওয়ার্ড দিন"
+                className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-rose-500 outline-none font-bold mb-8 text-center"
+                autoFocus
+              />
+
               <div className="flex gap-4">
-                <button onClick={() => setConfirmAction(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all">বাতিল</button>
+                <button onClick={() => { setConfirmAction(null); setPassword(""); }} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all">বাতিল</button>
                 <button onClick={executeAction} className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-200">হ্যাঁ, নিশ্চিত</button>
               </div>
             </motion.div>

@@ -111,15 +111,6 @@
     overflow: visible !important;
   }
 
-  /* Page size specific classes */
-  .print-a4 {
-    @page { size: A4; }
-  }
-  
-  .print-a5 {
-    @page { size: A5; }
-  }
-
   /* Ensure parents of printable elements don't hide them */
   .fixed.inset-0, .absolute.inset-0, .relative {
     display: block !important;

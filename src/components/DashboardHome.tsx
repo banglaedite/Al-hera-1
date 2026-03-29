@@ -114,34 +114,20 @@ export default function DashboardHome() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <QuickAction 
-            icon={UserPlus} 
-            title="অনলাইন ভর্তি" 
-            description="নতুন ছাত্র ভর্তির জন্য অনলাইনে আবেদন করুন এবং ফি জমা দিন।"
-            to="/admission"
-            color="bg-emerald-600"
-          />
-          <QuickAction 
-            icon={LayoutDashboard} 
-            title="ছাত্র/অভিভাবক পোর্টাল" 
-            description="হাজিরা, রেজাল্ট এবং পেমেন্ট হিস্ট্রি চেক করতে লগইন করুন।"
-            to="/parent"
-            color="bg-blue-600"
-          />
-          <QuickAction 
-            icon={Heart} 
-            title="অনলাইন অনুদান" 
-            description="মাদ্রাসার উন্নয়ন ও এতিমদের কল্যাণে আপনার অনুদান প্রদান করুন।"
-            to="/donate"
-            color="bg-rose-600"
-          />
-          <QuickAction 
-            icon={ShieldCheck} 
-            title="এডমিন প্যানেল" 
-            description="কর্তৃপক্ষের জন্য হাজিরা, রেজাল্ট এবং হিসাব ব্যবস্থাপনার ড্যাশবোর্ড।"
-            to="/admin"
-            color="bg-slate-800"
-          />
+          {(() => {
+            const actions = [
+              { id: 'admission', icon: UserPlus, title: "অনলাইন ভর্তি", description: "নতুন ছাত্র ভর্তির জন্য অনলাইনে আবেদন করুন এবং ফি জমা দিন।", to: "/admission", color: "bg-emerald-600" },
+              { id: 'portal', icon: LayoutDashboard, title: "ছাত্র/অভিভাবক পোর্টাল", description: "হাজিরা, রেজাল্ট এবং পেমেন্ট হিস্ট্রি চেক করতে লগইন করুন।", to: "/parent", color: "bg-blue-600" },
+              { id: 'donate', icon: Heart, title: "অনলাইন অনুদান", description: "মাদ্রাসার উন্নয়ন ও এতিমদের কল্যাণে আপনার অনুদান প্রদান করুন।", to: "/donate", color: "bg-rose-600" },
+              { id: 'admin', icon: ShieldCheck, title: "এডমিন প্যানেল", description: "কর্তৃপক্ষের জন্য হাজিরা, রেজাল্ট এবং হিসাব ব্যবস্থাপনার ড্যাশবোর্ড।", to: "/admin", color: "bg-slate-800" },
+            ];
+            const orderedActions = settings.button_order 
+              ? [...actions].sort((a, b) => settings.button_order.indexOf(a.id) - settings.button_order.indexOf(b.id))
+              : actions;
+            return orderedActions.map(action => (
+              <QuickAction key={action.id} {...action} />
+            ));
+          })()}
         </div>
       </section>
     </div>

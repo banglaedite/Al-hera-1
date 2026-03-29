@@ -15,8 +15,12 @@ import {
   User,
   Users,
   History,
+  Receipt,
   MessageSquare,
-  Send
+  Send,
+  Heart,
+  Trophy,
+  Calendar
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -53,6 +57,8 @@ export default function ParentPortal() {
   const [amalLogs, setAmalLogs] = useState<Record<string, boolean>>({});
   const [savingAmal, setSavingAmal] = useState(false);
   const [amalDate, setAmalDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amalRankings, setAmalRankings] = useState<any[]>([]);
+  const [userAmalStats, setUserAmalStats] = useState<any>(null);
 
   // Syllabus & Routine State
   const [syllabusRoutines, setSyllabusRoutines] = useState<any[]>([]);
@@ -273,8 +279,31 @@ export default function ParentPortal() {
   useEffect(() => {
     if (student && activeTab === "amal") {
       fetchAmalData();
+      fetchAmalRankings();
     }
   }, [student, activeTab, amalDate]);
+
+  const fetchAmalRankings = async () => {
+    try {
+      const target = student.isTeacher ? "teacher" : "student";
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+      
+      const res = await fetch(`/api/amal-rankings?target=${target}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAmalRankings(data);
+        const myStats = data.find((r: any) => r.userId === student.id);
+        if (myStats) {
+          const rank = data.findIndex((r: any) => r.userId === student.id) + 1;
+          setUserAmalStats({ ...myStats, rank });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch rankings:", error);
+    }
+  };
 
   useEffect(() => {
     if (student && activeTab === "syllabus") {
@@ -284,8 +313,9 @@ export default function ParentPortal() {
 
   const fetchAmalData = async () => {
     try {
+      const target = student.isTeacher ? "teacher" : "student";
       const [tasksRes, logsRes] = await Promise.all([
-        fetch("/api/amal-tasks?target=student"),
+        fetch(`/api/amal-tasks?target=${target}`),
         fetch(`/api/amal-logs?user_id=${student.id}&date=${amalDate}`)
       ]);
       if (tasksRes.ok && logsRes.ok) {
@@ -293,9 +323,11 @@ export default function ParentPortal() {
         const logs = await logsRes.json();
         setAmalTasks(tasks);
         const logMap: Record<string, boolean> = {};
-        logs.forEach((log: any) => {
-          logMap[log.task_id] = log.status === "completed";
-        });
+        if (Array.isArray(logs)) {
+          logs.forEach((log: any) => {
+            logMap[log.task_id] = log.status === "completed";
+          });
+        }
         setAmalLogs(logMap);
       }
     } catch (err) {
@@ -324,7 +356,7 @@ export default function ParentPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: student.id,
-          user_type: "student",
+          user_type: student.isTeacher ? "teacher" : "student",
           date: amalDate,
           logs: { [taskId]: newStatus ? "completed" : "pending" }
         })
@@ -344,59 +376,94 @@ export default function ParentPortal() {
     setError("");
 
     try {
-      const response = await fetch("/api/parent-login", {
+      let response = await fetch("/api/parent-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: loginIdentifier })
       });
+
+      let isTeacher = false;
+      let data;
+
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const loginByIdEnabled = hifzSettings?.guardian_login_by_id_enabled !== false;
-        throw new Error(errData.error || (loginByIdEnabled ? "মোবাইল নম্বর, ইমেইল বা স্টুডেন্ট কোড সঠিক নয়" : "মোবাইল নম্বর বা ইমেইল সঠিক নয়"));
+        const teacherResponse = await fetch("/api/teacher-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: loginIdentifier })
+        });
+
+        if (!teacherResponse.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const loginByIdEnabled = hifzSettings?.guardian_login_by_id_enabled !== false;
+          throw new Error(errData.error || (loginByIdEnabled ? "মোবাইল নম্বর, ইমেইল বা আইডি সঠিক নয়" : "মোবাইল নম্বর বা ইমেইল সঠিক নয়"));
+        }
+        
+        data = await teacherResponse.json();
+        isTeacher = true;
+      } else {
+        data = await response.json();
       }
-      const data = await response.json();
-      setStudent(data);
+
+      setStudent({ ...data, isTeacher });
       localStorage.setItem("guardianPhone", loginIdentifier);
       
-      // Fetch related data
-      const [attRes, resRes, hifzRes, profileRes, deviceRes, noticeRes, historyRes, settingsRes, hifzSettingsRes] = await Promise.all([
-        fetch(`/api/attendance/${data.id}`),
-        fetch(`/api/results/${data.id}`),
-        fetch(`/api/hifz/${data.id}`),
-        fetch(`/api/students/${data.id}/full-profile`),
-        fetch(`/api/parent/device-history/${data.id}`),
-        fetch("/api/notices"),
-        fetch(`/api/parent/payment-history/${data.id}`),
-        fetch("/api/site-settings"),
-        fetch("/api/admin/settings/hifz")
-      ]);
-      
-      const attData = await attRes.json();
-      setAttendance(Array.isArray(attData) ? attData : []);
-      
-      const resData = await resRes.json();
-      setResults(Array.isArray(resData) ? resData : []);
-      
-      const hifzData = await hifzRes.json();
-      setHifzRecords(Array.isArray(hifzData) ? hifzData : []);
-      
-      const deviceData = await deviceRes.json();
-      setDeviceHistory(Array.isArray(deviceData) ? deviceData : []);
-      
-      const profileData = await profileRes.json();
-      setFees(profileData.fees || []);
+      if (isTeacher) {
+        const [attRes, salaryRes, settingsRes] = await Promise.all([
+          fetch(`/api/admin/teacher-attendance?date=${new Date().toISOString().slice(0, 10)}`),
+          fetch(`/api/admin/teachers/${data.id}/salaries`),
+          fetch("/api/site-settings")
+        ]);
+        
+        const attData = await attRes.json();
+        const myAtt = Array.isArray(attData) ? attData.find((a: any) => a.id === data.id) : null;
+        setAttendance(myAtt ? [myAtt] : []);
+        
+        const salaryData = await salaryRes.json();
+        setPaymentHistory(Array.isArray(salaryData) ? salaryData : []);
+        
+        const settingsData = await settingsRes.json();
+        setSettings(settingsData);
+      } else {
+        // Fetch related data
+        const [attRes, resRes, hifzRes, profileRes, deviceRes, noticeRes, historyRes, settingsRes, hifzSettingsRes] = await Promise.all([
+          fetch(`/api/attendance/${data.id}`),
+          fetch(`/api/results/${data.id}`),
+          fetch(`/api/hifz/${data.id}`),
+          fetch(`/api/students/${data.id}/full-profile`),
+          fetch(`/api/parent/device-history/${data.id}`),
+          fetch("/api/notices"),
+          fetch(`/api/parent/payment-history/${data.id}`),
+          fetch("/api/site-settings"),
+          fetch("/api/admin/settings/hifz")
+        ]);
+        
+        const attData = await attRes.json();
+        setAttendance(Array.isArray(attData) ? attData : []);
+        
+        const resData = await resRes.json();
+        setResults(Array.isArray(resData) ? resData : []);
+        
+        const hifzData = await hifzRes.json();
+        setHifzRecords(Array.isArray(hifzData) ? hifzData : []);
+        
+        const deviceData = await deviceRes.json();
+        setDeviceHistory(Array.isArray(deviceData) ? deviceData : []);
+        
+        const profileData = await profileRes.json();
+        setFees(profileData.fees || []);
 
-      const noticeData = await noticeRes.json();
-      setNotices(Array.isArray(noticeData) ? noticeData : []);
+        const noticeData = await noticeRes.json();
+        setNotices(Array.isArray(noticeData) ? noticeData : []);
 
-      const historyData = await historyRes.json();
-      setPaymentHistory(Array.isArray(historyData) ? historyData : []);
+        const historyData = await historyRes.json();
+        setPaymentHistory(Array.isArray(historyData) ? historyData : []);
 
-      const settingsData = await settingsRes.json();
-      setSettings(settingsData);
+        const settingsData = await settingsRes.json();
+        setSettings(settingsData);
 
-      const hifzSettingsData = await hifzSettingsRes.json();
-      setHifzSettings(hifzSettingsData);
+        const hifzSettingsData = await hifzSettingsRes.json();
+        setHifzSettings(hifzSettingsData);
+      }
     } catch (err: any) {
       setError(err.message);
       localStorage.removeItem("guardianPhone");
@@ -495,7 +562,27 @@ export default function ParentPortal() {
 
         {/* Tabs */}
         <div className="flex overflow-x-auto gap-3 mb-10 pb-2 scrollbar-hide">
-          {[
+          {student.isTeacher ? [
+            { id: "overview", label: "একনজরে", icon: LayoutDashboard },
+            { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
+            { id: "payment-history", label: "বেতন হিস্টোরি", icon: CreditCard }
+          ].map((tab: any) => (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
+                activeTab === tab.id 
+                  ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
+                  : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
+              )}
+            >
+              <tab.icon className="w-5 h-5" />
+              {tab.label}
+            </motion.button>
+          )) : [
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
@@ -526,7 +613,7 @@ export default function ParentPortal() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Student Profile Card (Left) */}
+          {/* Profile Card (Left) */}
           <div className="lg:col-span-1">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
@@ -543,20 +630,31 @@ export default function ParentPortal() {
                   />
                 </div>
                 <h3 className="text-3xl font-black text-slate-900 mb-2">{student.name}</h3>
-                <p className="text-emerald-700 font-black text-lg mb-8 bg-emerald-50 px-6 py-2 rounded-full">{student.class} শ্রেণী | রোল: {student.roll}</p>
+                {student.isTeacher ? (
+                  <p className="text-emerald-700 font-black text-lg mb-8 bg-emerald-50 px-6 py-2 rounded-full">{student.qualification || "শিক্ষক"}</p>
+                ) : (
+                  <p className="text-emerald-700 font-black text-lg mb-8 bg-emerald-50 px-6 py-2 rounded-full">{student.class} শ্রেণী | রোল: {student.roll}</p>
+                )}
                 
                 <div className="w-full space-y-5 pt-8 border-t border-slate-100">
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400 font-bold">স্টুডেন্ট আইডি</span>
+                    <span className="text-slate-400 font-bold">{student.isTeacher ? "শিক্ষক আইডি" : "স্টুডেন্ট আইডি"}</span>
                     <span className="font-black text-slate-900">{student.id}</span>
                   </div>
+                  {student.isTeacher ? (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400 font-bold">আইডি কোড</span>
+                      <span className="font-black text-emerald-700">{student.id_code || "N/A"}</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400 font-bold">স্টুডেন্ট কোড</span>
+                      <span className="font-black text-emerald-700">{student.student_code}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400 font-bold">স্টুডেন্ট কোড</span>
-                    <span className="font-black text-emerald-700">{student.student_code}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400 font-bold">রক্তের গ্রুপ</span>
-                    <span className="font-black text-rose-600">{student.blood_group}</span>
+                    <span className="text-slate-400 font-bold">মোবাইল নম্বর</span>
+                    <span className="font-black text-rose-600">{student.phone}</span>
                   </div>
                 </div>
               </div>
@@ -604,6 +702,22 @@ export default function ParentPortal() {
                         <p className="text-xs text-slate-400 font-bold uppercase">ঠিকানা</p>
                         <p className="font-bold text-slate-900">{student.address || "-"}</p>
                       </div>
+                      {student.isTeacher && (
+                        <>
+                          <div className="space-y-1">
+                            <p className="text-xs text-slate-400 font-bold uppercase">শিক্ষাগত যোগ্যতা</p>
+                            <p className="font-bold text-slate-900">{student.qualification || "-"}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-slate-400 font-bold uppercase">যোগদানের তারিখ</p>
+                            <p className="font-bold text-slate-900">{student.join_date ? new Date(student.join_date).toLocaleDateString('bn-BD') : "-"}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-slate-400 font-bold uppercase">মাসিক বেতন</p>
+                            <p className="font-bold text-slate-900">৳{student.salary || 0}</p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -750,65 +864,155 @@ export default function ParentPortal() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <div>
-                  <h3 className="text-2xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
-                  <p className="text-slate-500 font-bold">আপনার আমলগুলো প্রতিদিন রেকর্ড করুন</p>
+            {/* Stats & Ranking Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-4 bg-emerald-100 text-emerald-600 rounded-2xl">
+                  <Heart className="w-8 h-8" />
                 </div>
-                <input 
-                  type="date" 
-                  value={amalDate}
-                  onChange={(e) => setAmalDate(e.target.value)}
-                  className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
-                />
+                <div>
+                  <p className="text-slate-500 font-bold text-sm">আপনার আমল পূরণ</p>
+                  <h4 className="text-2xl font-black text-slate-900">
+                    {userAmalStats ? `${userAmalStats.percentage.toFixed(1)}%` : "0%"}
+                  </h4>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-4 bg-amber-100 text-amber-600 rounded-2xl">
+                  <Trophy className="w-8 h-8" />
+                </div>
+                <div>
+                  <p className="text-slate-500 font-bold text-sm">আপনার র‍্যাংক</p>
+                  <h4 className="text-2xl font-black text-slate-900">
+                    {userAmalStats ? `#${userAmalStats.rank}` : "N/A"}
+                  </h4>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="p-4 bg-blue-100 text-blue-600 rounded-2xl">
+                  <Calendar className="w-8 h-8" />
+                </div>
+                <div>
+                  <p className="text-slate-500 font-bold text-sm">এই মাসের আমল</p>
+                  <h4 className="text-2xl font-black text-slate-900">
+                    {userAmalStats ? `${userAmalStats.completed}/${userAmalStats.total}` : "0/0"}
+                  </h4>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Daily Tasks */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
+                    <p className="text-slate-500 font-bold">আপনার আমলগুলো প্রতিদিন রেকর্ড করুন</p>
+                  </div>
+                  <input 
+                    type="date" 
+                    value={amalDate}
+                    onChange={(e) => setAmalDate(e.target.value)}
+                    className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                  />
+                </div>
+
+                {amalTasks.length === 0 ? (
+                  <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                    <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-bold">কোন আমল সেট করা নেই</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {amalTasks.map((task) => (
+                      <button
+                        key={task.id}
+                        onClick={() => toggleAmal(task.id)}
+                        className={cn(
+                          "w-full p-4 rounded-[1.5rem] border-2 transition-all flex items-center justify-between text-left group",
+                          amalLogs[task.id]
+                            ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-900/10"
+                            : "bg-white border-slate-100 hover:border-emerald-200"
+                        )}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "p-3 rounded-xl transition-all",
+                            amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-500"
+                          )}>
+                            <Heart className="w-5 h-5 fill-current" />
+                          </div>
+                          <div>
+                            <h4 className={cn(
+                              "font-black text-base transition-all",
+                              amalLogs[task.id] ? "text-emerald-900" : "text-slate-700"
+                            )}>{task.title}</h4>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                              {amalLogs[task.id] ? "সম্পন্ন হয়েছে" : "বাকি আছে"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className={cn(
+                          "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                          amalLogs[task.id] ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent"
+                        )}>
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {amalTasks.length === 0 ? (
-                <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
-                  <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500 font-bold">কোন আমল সেট করা নেই</p>
+              {/* Monthly Rankings */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <div className="mb-8">
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">সেরা আমলকারী (চলতি মাস)</h3>
+                  <p className="text-slate-500 font-bold">এই মাসের শীর্ষ ১০ জন আমলকারী</p>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {amalTasks.map((task) => (
-                    <button
-                      key={task.id}
-                      onClick={() => toggleAmal(task.id)}
+
+                <div className="space-y-4">
+                  {amalRankings.slice(0, 10).map((rank, index) => (
+                    <div 
+                      key={rank.userId} 
                       className={cn(
-                        "p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between text-left group",
-                        amalLogs[task.id]
-                          ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-900/10"
-                          : "bg-white border-slate-100 hover:border-emerald-200"
+                        "p-4 rounded-2xl flex items-center justify-between transition-all",
+                        rank.userId === student.id ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50 border border-transparent"
                       )}
                     >
                       <div className="flex items-center gap-4">
                         <div className={cn(
-                          "p-4 rounded-2xl transition-all",
-                          amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-500"
+                          "w-10 h-10 rounded-full flex items-center justify-center font-black text-lg",
+                          index === 0 ? "bg-amber-100 text-amber-600" :
+                          index === 1 ? "bg-slate-200 text-slate-600" :
+                          index === 2 ? "bg-orange-100 text-orange-600" :
+                          "bg-white text-slate-400"
                         )}>
-                          <Heart className="w-6 h-6 fill-current" />
+                          {index + 1}
                         </div>
                         <div>
-                          <h4 className={cn(
-                            "font-black text-lg transition-all",
-                            amalLogs[task.id] ? "text-emerald-900" : "text-slate-700"
-                          )}>{task.title}</h4>
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                            {amalLogs[task.id] ? "সম্পন্ন হয়েছে" : "বাকি আছে"}
-                          </p>
+                          <h4 className="font-black text-slate-900">{rank.name}</h4>
+                          <p className="text-xs text-slate-500 font-bold">সম্পন্ন: {rank.completed}/{rank.total}</p>
                         </div>
                       </div>
-                      <div className={cn(
-                        "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all",
-                        amalLogs[task.id] ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent"
-                      )}>
-                        <CheckCircle2 className="w-5 h-5" />
+                      <div className="text-right">
+                        <div className="text-xl font-black text-emerald-600">{rank.percentage.toFixed(0)}%</div>
+                        <div className="w-24 h-1.5 bg-slate-200 rounded-full mt-1 overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full" 
+                            style={{ width: `${rank.percentage}%` }}
+                          />
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
+                  {amalRankings.length === 0 && (
+                    <div className="text-center py-12 text-slate-400 font-bold">
+                      কোন র‍্যাঙ্কিং তথ্য পাওয়া যায়নি
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -1062,30 +1266,92 @@ export default function ParentPortal() {
 
               {activeTab === "payment-history" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-8">পেমেন্ট হিস্টোরি</h3>
-                  <div className="space-y-4">
-                    {paymentHistory.length > 0 ? paymentHistory.map((payment, i) => (
-                      <div key={payment.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                        <div>
-                          <p className="font-bold text-slate-900">{payment.months.join(", ")} {payment.year}</p>
-                          <p className="text-xs text-slate-500 uppercase">{payment.method} • {new Date(payment.createdAt).toLocaleDateString('bn-BD')}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-black text-emerald-700">৳{payment.amount}</p>
-                          <span className={cn(
-                            "text-[10px] font-bold px-2 py-1 rounded-full",
-                            payment.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                            payment.status === "rejected" ? "bg-rose-100 text-rose-700" :
-                            "bg-amber-100 text-amber-700"
-                          )}>
-                            {payment.status === "completed" ? "এপ্রুভড" : payment.status === "rejected" ? "বাতিল" : "পেন্ডিং"}
-                          </span>
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="text-center py-20">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-8">{student.isTeacher ? "বেতন হিস্টোরি" : "পেমেন্ট হিস্টোরি"}</h3>
+                  <div className="space-y-6">
+                    {paymentHistory.length > 0 ? (
+                      student.isTeacher ? (
+                        // Group salary history by month and year for teachers
+                        Object.entries(paymentHistory.reduce((acc: any, payment: any) => {
+                          const key = `${payment.month} ${payment.year || ''}`;
+                          if (!acc[key]) acc[key] = { month: payment.month, year: payment.year, total_paid: 0, total_salary: payment.total_salary || student.salary || 0, payments: [] };
+                          acc[key].total_paid += Number(payment.amount);
+                          acc[key].payments.push(payment);
+                          return acc;
+                        }, {})).map(([key, data]: [string, any]) => (
+                          <div key={key} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 hover:bg-white hover:shadow-xl transition-all group">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+                              <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                                  <Receipt className="w-7 h-7" />
+                                </div>
+                                <div>
+                                  <h4 className="text-xl font-black text-slate-900">{data.month} {data.year} মাসের বেতন</h4>
+                                  <p className="text-sm text-slate-500 font-bold">মূল বেতন: ৳{data.total_salary}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-3xl font-black text-emerald-600">৳{data.total_paid}</div>
+                                <div className={cn(
+                                  "text-xs font-bold px-3 py-1 rounded-full inline-block mt-1",
+                                  data.total_salary - data.total_paid > 0 ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"
+                                )}>
+                                  {data.total_salary - data.total_paid > 0 ? `বাকি: ৳${data.total_salary - data.total_paid}` : "পরিশোধিত"}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-3 pt-4 border-t border-slate-200 border-dashed">
+                              {data.payments.map((p: any) => (
+                                <div key={p.id} className="flex items-center justify-between text-sm">
+                                  <div className="flex items-center gap-2 text-slate-500 font-bold">
+                                    <Calendar className="w-3 h-3" />
+                                    {new Date(p.date || p.created_at).toLocaleDateString('bn-BD')}
+                                    <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded text-slate-600">প্রদানকারী: {p.given_by || "অ্যাডমিন"}</span>
+                                  </div>
+                                  <div className="font-black text-slate-700">৳{p.amount}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        // Student payment history
+                        paymentHistory.map((payment: any, i: number) => (
+                          <div key={payment.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white hover:shadow-lg transition-all group">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Receipt className="w-6 h-6" />
+                              </div>
+                              <div>
+                                <p className="font-black text-slate-900 text-lg">
+                                  {(payment.months || []).join(", ")} {payment.year || ''}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-3 mt-1">
+                                  <p className="text-xs text-slate-500 font-bold flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {new Date(payment.date || payment.created_at || payment.createdAt).toLocaleDateString('bn-BD')}
+                                  </p>
+                                  <p className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">{payment.method}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right flex flex-col items-end gap-1">
+                              <p className="text-2xl font-black text-emerald-600">৳{payment.amount}</p>
+                              <span className={cn(
+                                "text-[10px] font-bold px-2 py-1 rounded-full",
+                                payment.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                                payment.status === "rejected" ? "bg-rose-100 text-rose-700" :
+                                "bg-amber-100 text-amber-700"
+                              )}>
+                                {payment.status === "completed" ? "এপ্রুভড" : payment.status === "rejected" ? "বাতিল" : "পেন্ডিং"}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )
+                    ) : (
+                      <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
                         <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold">এখনো কোন পেমেন্ট হিস্টোরি নেই</p>
+                        <p className="text-slate-400 font-bold">{student.isTeacher ? "এখনো কোন বেতন হিস্টোরি নেই" : "এখনো কোন পেমেন্ট হিস্টোরি নেই"}</p>
                       </div>
                     )}
                   </div>

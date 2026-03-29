@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Check, X, Edit, Loader2, Target, User, Users } from "lucide-react";
+import { Plus, Trash2, Check, X, Edit, Loader2, Target, User, Users, Trophy, Calendar, BarChart2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useToast } from "./ToastContext";
+import { cn } from "../lib/utils";
 
 export function AmalManager() {
   const { addToast } = useToast();
@@ -10,6 +11,12 @@ export function AmalManager() {
   const [isAdding, setIsAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"tasks" | "rankings">("tasks");
+  const [rankings, setRankings] = useState<any[]>([]);
+  const [rankingTarget, setRankingTarget] = useState<"student" | "teacher">("student");
+  const [startDate, setStartDate] = useState(new Date(new Date().setDate(1)).toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fetchingRankings, setFetchingRankings] = useState(false);
 
   const fetchTasks = async () => {
     try {
@@ -23,9 +30,28 @@ export function AmalManager() {
     }
   };
 
+  const fetchRankings = async () => {
+    setFetchingRankings(true);
+    try {
+      const res = await fetch(`/api/admin/amal-rankings?target=${rankingTarget}&startDate=${startDate}&endDate=${endDate}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setRankings(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setFetchingRankings(false);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "rankings") {
+      fetchRankings();
+    }
+  }, [activeTab, rankingTarget, startDate, endDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,18 +106,196 @@ export function AmalManager() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-900">দৈনিক আমল ম্যানেজমেন্ট</h2>
-          <p className="text-slate-500 font-bold">ছাত্র ও ওস্তাদদের জন্য আমল সেট করুন</p>
+          <p className="text-slate-500 font-bold">ছাত্র ও ওস্তাদদের আমল ও র‍্যাংকিং দেখুন</p>
         </div>
-        <button 
-          onClick={() => { setEditingItem(null); setIsAdding(true); }}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-        >
-          <Plus className="w-5 h-5" /> নতুন আমল যোগ করুন
-        </button>
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
+          <button 
+            onClick={() => setActiveTab("tasks")}
+            className={cn(
+              "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
+              activeTab === "tasks" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <Target className="w-4 h-4" /> আমল সেট করুন
+          </button>
+          <button 
+            onClick={() => setActiveTab("rankings")}
+            className={cn(
+              "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
+              activeTab === "rankings" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <Trophy className="w-4 h-4" /> র‍্যাংকিং ও রিপোর্ট
+          </button>
+        </div>
       </div>
+
+      {activeTab === "tasks" ? (
+        <>
+          <div className="flex justify-end">
+            <button 
+              onClick={() => { setEditingItem(null); setIsAdding(true); }}
+              className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+            >
+              <Plus className="w-5 h-5" /> নতুন আমল যোগ করুন
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {tasks.map(task => (
+              <motion.div 
+                layout
+                key={task.id} 
+                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group relative"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className={cn(
+                    "p-3 rounded-2xl",
+                    task.target === "teacher" ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                  )}>
+                    {task.target === "teacher" ? <User className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setEditingItem(task); setIsAdding(true); }} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(task.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">{task.title}</h3>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                    task.target === "teacher" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                  )}>
+                    {task.target === "teacher" ? "ওস্তাদ" : "ছাত্র"}
+                  </span>
+                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                    সক্রিয়
+                  </span>
+                </div>
+              </motion.div>
+            ))}
+
+            {tasks.length === 0 && (
+              <div className="col-span-full text-center py-12 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                <Target className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-500 font-bold">কোন আমল যোগ করা হয়নি</p>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">কাদের র‍্যাংকিং?</label>
+                <select 
+                  value={rankingTarget}
+                  onChange={(e) => setRankingTarget(e.target.value as any)}
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="student">ছাত্র</option>
+                  <option value="teacher">ওস্তাদ</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">শুরুর তারিখ</label>
+                <input 
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">শেষ তারিখ</label>
+                <input 
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">র‍্যাঙ্ক</th>
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">নাম</th>
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">পূরণের হার (%)</th>
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider text-center">মোট আমল</th>
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider text-center">সম্পন্ন</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {fetchingRankings ? (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                        <p className="mt-4 text-slate-500 font-bold">লোড হচ্ছে...</p>
+                      </td>
+                    </tr>
+                  ) : rankings.length > 0 ? rankings.map((rank, index) => (
+                    <tr key={rank.userId} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-6">
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center font-black",
+                          index === 0 ? "bg-amber-100 text-amber-700" :
+                          index === 1 ? "bg-slate-200 text-slate-700" :
+                          index === 2 ? "bg-orange-100 text-orange-700" :
+                          "bg-slate-100 text-slate-500"
+                        )}>
+                          {index + 1}
+                        </div>
+                      </td>
+                      <td className="p-6">
+                        <p className="font-black text-slate-900">{rank.name}</p>
+                        <p className="text-xs text-slate-400 font-bold">ID: {rank.userId}</p>
+                      </td>
+                      <td className="p-6">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${rank.percentage}%` }}
+                              className={cn(
+                                "h-full rounded-full",
+                                rank.percentage >= 80 ? "bg-emerald-500" :
+                                rank.percentage >= 50 ? "bg-amber-500" :
+                                "bg-rose-500"
+                              )}
+                            />
+                          </div>
+                          <span className="font-black text-slate-900 w-12">{Math.round(rank.percentage)}%</span>
+                        </div>
+                      </td>
+                      <td className="p-6 text-center font-bold text-slate-600">{rank.total}</td>
+                      <td className="p-6 text-center font-bold text-emerald-600">{rank.completed}</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center text-slate-400 font-bold">
+                        কোন তথ্য পাওয়া যায়নি
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {isAdding && (
@@ -150,52 +354,7 @@ export function AmalManager() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tasks.map(task => (
-          <motion.div 
-            layout
-            key={task.id} 
-            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group relative"
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div className={cn(
-                "p-3 rounded-2xl",
-                task.target === "teacher" ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
-              )}>
-                {task.target === "teacher" ? <User className="w-6 h-6" /> : <Users className="w-6 h-6" />}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setEditingItem(task); setIsAdding(true); }} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button onClick={() => handleDelete(task.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">{task.title}</h3>
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                task.target === "teacher" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-              )}>
-                {task.target === "teacher" ? "ওস্তাদ" : "ছাত্র"}
-              </span>
-              <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-                সক্রিয়
-              </span>
-            </div>
-          </motion.div>
-        ))}
-
-        {tasks.length === 0 && (
-          <div className="col-span-full text-center py-12 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-            <Target className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-bold">কোন আমল যোগ করা হয়নি</p>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
+

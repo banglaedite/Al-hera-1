@@ -112,7 +112,7 @@ const PrintHeader = ({ settings }: { settings: any }) => (
           <p className="text-2xl font-black text-slate-900">{new Date().toLocaleDateString('bn-BD')}</p>
           <p className="text-slate-500 font-bold text-sm mt-1">সময়: {new Date().toLocaleTimeString('bn-BD')}</p>
         </div>
-        {settings?.enable_qr_code && settings?.qr_code_url && (
+        {settings?.qr_code_url && (
           <div className="border-l-2 border-slate-100 pl-8">
             <img 
               src={settings.qr_code_url} 
@@ -128,47 +128,6 @@ const PrintHeader = ({ settings }: { settings: any }) => (
 );
 
 import { useToast } from "./ToastContext";
-
-const LockedTab = ({ children, addToast }: { children: React.ReactNode, addToast: any }) => {
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [password, setPassword] = useState("");
-
-  const handleUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password === adminPassword || password === "১২৩৪") {
-      setIsUnlocked(true);
-    } else {
-      addToast("ভুল পাসওয়ার্ড!", "error");
-    }
-  };
-
-  if (isUnlocked) return <>{children}</>;
-
-  return (
-    <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-100 text-center max-w-md mx-auto mt-12">
-      <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
-        <Lock className="w-10 h-10" />
-      </div>
-      <h3 className="text-2xl font-bold text-slate-900 mb-2">সুরক্ষিত এলাকা</h3>
-      <p className="text-slate-500 mb-8">এই সেকশনে প্রবেশ করতে পাসওয়ার্ড দিন</p>
-      <form onSubmit={handleUnlock} className="space-y-4">
-        <input 
-          type="password" 
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="পাসওয়ার্ড"
-          className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-rose-500 outline-none font-bold text-center"
-          autoFocus
-          autoComplete="new-password"
-        />
-        <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all">
-          আনলক করুন
-        </button>
-      </form>
-    </div>
-  );
-};
 
 function CategoryManager({ type }: { type: "income" | "expense" }) {
   const { addToast } = useToast();
@@ -475,24 +434,24 @@ export default function AdminPanel() {
     { id: "admissions", label: "ভর্তি আবেদন", icon: UserPlus, permission: "admission" },
     { id: "students", label: "ছাত্র তালিকা", icon: Users, permission: "admission" },
     { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users, permission: "admission" },
-    { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
     { id: "hifz", label: "হিফজ বিভাগ", icon: GraduationCap },
-    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "student_attendance" },
-    { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
+    { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
     { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "result" },
     { id: "teachers", label: "শিক্ষক", icon: Users, permission: "teacher_attendance" },
     { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "teacher_attendance" },
+    { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
+    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "student_attendance" },
     { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "teacher_attendance" },
     { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard, permission: "fee_collection" },
-    { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "teacher_attendance" },
-    { id: "food-menu", label: "খাবারের তালিকা", icon: BookOpen, permission: "notice" },
     { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fee_collection" },
     { id: "history", label: "হিস্টোরি", icon: Clock, permission: "fee_collection" },
+    { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "teacher_attendance" },
+    { id: "food-menu", label: "খাবারের তালিকা", icon: BookOpen, permission: "notice" },
+    { id: "routines", label: "রুটিন", icon: Calendar, permission: "notice" },
+    { id: "amal", label: "দৈনিক আমল", icon: Target, permission: "notice" },
     { id: "notices", label: "নোটিশ", icon: Bell, permission: "notice" },
     { id: "features", label: "বৈশিষ্ট্য", icon: Award, permission: "notice" },
     { id: "showcase", label: "শোকেস", icon: Globe, permission: "notice" },
-    { id: "routines", label: "সিলেবাস ও রুটিন", icon: FileText, permission: "notice" },
-    { id: "amal", label: "দৈনিক আমল", icon: Target, permission: "notice" },
     { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2 },
     { id: "settings", label: "সেটিংস", icon: Settings },
   ];
@@ -708,20 +667,16 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "delete-history" && (
-              <LockedTab addToast={addToast}>
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <DeleteHistory />
-                </motion.div>
-              </LockedTab>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <DeleteHistory />
+              </motion.div>
             )}
 
             {activeTab === "settings" && (
-              <LockedTab addToast={addToast}>
-                <div className="space-y-8">
-                  <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
-                  <DatabaseResetManager />
-                </div>
-              </LockedTab>
+              <div className="space-y-8">
+                <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
+                <DatabaseResetManager />
+              </div>
             )}
           </AnimatePresence>
         </main>
@@ -1418,7 +1373,8 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
   if (!settings) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
 
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 relative">
+    <>
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <h3 className="text-2xl font-bold text-slate-900">ওয়েবসাইট সেটিংস</h3>
         <div className="flex gap-3">
@@ -1502,6 +1458,10 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <input type="checkbox" checked={!!settings.show_routines_directly} onChange={(e) => setSettings({...settings, show_routines_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">নোটিশ বোর্ড সরাসরি হোমপেজে দেখান</label>
+            <input type="checkbox" checked={!!settings.show_notices_directly} onChange={(e) => setSettings({...settings, show_notices_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">লোগোর নিচে নিয়ন লাইট চালু করুন</label>
             <input type="checkbox" checked={!!settings.enable_neon_light} onChange={(e) => setSettings({...settings, enable_neon_light: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
@@ -1583,11 +1543,18 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-8">
+        <div className="border-t border-slate-100 pt-8 flex justify-between items-center">
+          <button 
+            type="button" 
+            onClick={() => handleSubmit()} 
+            className="px-10 py-4 bg-emerald-900 text-white rounded-2xl font-black hover:bg-emerald-800 transition-all shadow-lg shadow-emerald-900/20"
+          >
+            {saving ? "সেভ হচ্ছে..." : "সেটিংস সেভ করুন"}
+          </button>
           <button type="button" onClick={handleAdvancedSettingsClick} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all">
             Advanced Settings (Firebase & Payment)
           </button>
-          
+        </div>
           {showAdvancedSettings && (
             <div className="mt-8 space-y-8">
               <div className="border-t border-slate-100 pt-8">
@@ -1713,7 +1680,6 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
         </LoadingButton>
       </div>
 
-      {/* Password Modal for Advanced Settings */}
       <AnimatePresence>
         {showPasswordModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1748,7 +1714,7 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
         isOpen={showSubAdminModal} 
         onClose={() => setShowSubAdminModal(false)} 
       />
-    </div>
+    </>
   );
 }
 
@@ -3357,12 +3323,6 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                 </button>
               ))}
             </div>
-            <button 
-              onClick={() => window.print()}
-              className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
-            >
-              <Printer className="w-6 h-6" />
-            </button>
           </div>
         </div>
 
@@ -5404,7 +5364,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                           <div className="inline-block px-2 py-0.5 bg-slate-900 text-white text-[8px] font-black rounded-md uppercase tracking-widest mb-1">টাকা জমার রশিদ</div>
                           <p className="text-[8px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
                         </div>
-                        {settings?.enable_qr_code && settings?.qr_code_url && (
+                        {settings?.qr_code_url && (
                           <img src={settings.qr_code_url} className="w-12 h-12 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
                         )}
                       </div>
@@ -5811,7 +5771,7 @@ function TransactionHistory({ settings }: { settings: any }) {
                           <div className="inline-block px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest mb-2">টাকা জমার রশিদ</div>
                           <p className="text-[10px] font-bold text-slate-400">রশিদ নং: <span className="text-slate-900">{receiptData.transactionId}</span></p>
                         </div>
-                        {settings?.enable_qr_code && settings?.qr_code_url && (
+                        {settings?.qr_code_url && (
                           <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
                         )}
                       </div>
@@ -6259,7 +6219,6 @@ function DeleteHistory() {
 function NoticeManager({ notices, onUpdate }: any) {
   const { addToast } = useToast();
   const [formData, setFormData] = useState({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_comments: false });
-  const [sendingEmail, setSendingEmail] = useState(false);
   const [editingNotice, setEditingNotice] = useState<any>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -6307,34 +6266,6 @@ function NoticeManager({ notices, onUpdate }: any) {
       height: notice.height || "",
       allow_comments: !!notice.allow_comments
     });
-  };
-
-  const handleSendEmail = async () => {
-    if (!formData.title || !formData.content) {
-      addToast("দয়া করে শিরোনাম এবং বিস্তারিত লিখুন", "error");
-      return;
-    }
-    
-    setSendingEmail(true);
-    try {
-      // Fetch all students to get their emails
-      const res = await fetch("/api/students");
-      const students = await res.json();
-      const emails = students.map((s: any) => s.email).filter(Boolean);
-      
-      if (emails.length === 0) {
-        addToast("কোনো অভিভাবকের ইমেইল পাওয়া যায়নি।", "error");
-        setSendingEmail(false);
-        return;
-      }
-
-      addToast("নোটিশ সফলভাবে ওয়েবসাইটে আপডেট করা হয়েছে।", "success");
-    } catch (error) {
-      console.error("Notice error:", error);
-      addToast("নোটিশ আপডেট করতে সমস্যা হয়েছে।", "error");
-    } finally {
-      setSendingEmail(false);
-    }
   };
 
   return (
