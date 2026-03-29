@@ -1371,9 +1371,9 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+            className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
           >
-            <div className="p-8 border-b border-slate-100 bg-emerald-50/50 flex justify-between items-center">
+            <div className="p-8 border-b border-slate-100 bg-emerald-50/50 flex justify-between items-center sticky top-0 z-10">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xl">
                   {showDetails.student.roll}
@@ -1388,7 +1388,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
               </button>
             </div>
             
-            <div className="p-8 space-y-6">
+            <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
               {!showDetails.report ? (
                 <div className="text-center py-10">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">

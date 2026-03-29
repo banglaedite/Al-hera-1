@@ -14,7 +14,9 @@ import {
   GraduationCap,
   User,
   Users,
-  History
+  History,
+  MessageSquare,
+  Send
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -41,6 +43,19 @@ export default function ParentPortal() {
   const [paymentMessage, setPaymentMessage] = useState("");
   
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [noticeComments, setNoticeComments] = useState<Record<string, any[]>>({});
+  const [newComment, setNewComment] = useState("");
+  const [commentingOn, setCommentingOn] = useState<string | null>(null);
+  const [fetchingComments, setFetchingComments] = useState<string | null>(null);
+
+  // Daily Amal State
+  const [amalTasks, setAmalTasks] = useState<any[]>([]);
+  const [amalLogs, setAmalLogs] = useState<Record<string, boolean>>({});
+  const [savingAmal, setSavingAmal] = useState(false);
+  const [amalDate, setAmalDate] = useState(new Date().toISOString().slice(0, 10));
+
+  // Syllabus & Routine State
+  const [syllabusRoutines, setSyllabusRoutines] = useState<any[]>([]);
   
   // Live Payment Modal State
   const [showLivePayment, setShowLivePayment] = useState(false);
@@ -204,6 +219,122 @@ export default function ParentPortal() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+
+  const fetchNotices = async () => {
+    try {
+      const res = await fetch("/api/notices");
+      if (res.ok) setNotices(await res.json());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchComments = async (noticeId: string) => {
+    setFetchingComments(noticeId);
+    try {
+      const res = await fetch(`/api/notices/${noticeId}/comments`);
+      if (res.ok) {
+        const data = await res.json();
+        setNoticeComments(prev => ({ ...prev, [noticeId]: data }));
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setFetchingComments(null);
+    }
+  };
+
+  const handleAddComment = async (noticeId: string) => {
+    if (!newComment.trim()) return;
+    setCommentingOn(noticeId);
+    try {
+      const res = await fetch(`/api/notices/${noticeId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guardian_name: student.father_name || student.mother_name || "অভিভাবক",
+          guardian_photo: student.photo_url || null,
+          comment: newComment,
+          student_id: student.student_id
+        })
+      });
+      if (res.ok) {
+        setNewComment("");
+        fetchComments(noticeId);
+        fetchNotices(); // Refresh to get updated comment count
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCommentingOn(null);
+    }
+  };
+
+  useEffect(() => {
+    if (student && activeTab === "amal") {
+      fetchAmalData();
+    }
+  }, [student, activeTab, amalDate]);
+
+  useEffect(() => {
+    if (student && activeTab === "syllabus") {
+      fetchSyllabusRoutines();
+    }
+  }, [student, activeTab]);
+
+  const fetchAmalData = async () => {
+    try {
+      const [tasksRes, logsRes] = await Promise.all([
+        fetch("/api/amal-tasks?target=student"),
+        fetch(`/api/amal-logs?user_id=${student.id}&date=${amalDate}`)
+      ]);
+      if (tasksRes.ok && logsRes.ok) {
+        const tasks = await tasksRes.json();
+        const logs = await logsRes.json();
+        setAmalTasks(tasks);
+        const logMap: Record<string, boolean> = {};
+        logs.forEach((log: any) => {
+          logMap[log.task_id] = log.status === "completed";
+        });
+        setAmalLogs(logMap);
+      }
+    } catch (err) {
+      console.error("Failed to fetch amal data:", err);
+    }
+  };
+
+  const fetchSyllabusRoutines = async () => {
+    try {
+      const res = await fetch("/api/admin/syllabus-routines");
+      if (res.ok) {
+        setSyllabusRoutines(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch syllabus/routines:", err);
+    }
+  };
+
+  const toggleAmal = async (taskId: string) => {
+    const newStatus = !amalLogs[taskId];
+    setAmalLogs(prev => ({ ...prev, [taskId]: newStatus }));
+    
+    try {
+      await fetch("/api/amal-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: student.id,
+          user_type: "student",
+          date: amalDate,
+          logs: { [taskId]: newStatus ? "completed" : "pending" }
+        })
+      });
+    } catch (err) {
+      console.error("Failed to save amal log:", err);
+      // Revert on error
+      setAmalLogs(prev => ({ ...prev, [taskId]: !newStatus }));
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent | null, loginIdentifier: string = identifier) => {
     if (e) e.preventDefault();
@@ -369,6 +500,8 @@ export default function ParentPortal() {
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
             { id: "results", label: "রেজাল্ট", icon: BookOpen },
+            { id: "amal", label: "দৈনিক আমল", icon: Heart },
+            { id: "syllabus", label: "সিলেবাস ও রুটিন", icon: BookOpen },
             { id: "notices", label: "নোটিশ", icon: Bell },
             { id: "payment", label: "পেমেন্ট", icon: CreditCard },
             { id: "payment-history", label: "পেমেন্ট হিস্টোরি", icon: History },
@@ -611,23 +744,175 @@ export default function ParentPortal() {
                 </motion.div>
               )}
 
-              {activeTab === "results" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-8">পরীক্ষার ফলাফল</h3>
-                  <div className="space-y-6">
-                    {results.length > 0 ? results.map((res, i) => (
-                      <div key={i} className="p-6 bg-slate-50 rounded-3xl flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">{res.exam_name}</p>
-                          <h4 className="text-lg font-bold text-slate-900">{res.subject}</h4>
+              {activeTab === "amal" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
+                  <p className="text-slate-500 font-bold">আপনার আমলগুলো প্রতিদিন রেকর্ড করুন</p>
+                </div>
+                <input 
+                  type="date" 
+                  value={amalDate}
+                  onChange={(e) => setAmalDate(e.target.value)}
+                  className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              {amalTasks.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                  <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-500 font-bold">কোন আমল সেট করা নেই</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {amalTasks.map((task) => (
+                    <button
+                      key={task.id}
+                      onClick={() => toggleAmal(task.id)}
+                      className={cn(
+                        "p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between text-left group",
+                        amalLogs[task.id]
+                          ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-900/10"
+                          : "bg-white border-slate-100 hover:border-emerald-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "p-4 rounded-2xl transition-all",
+                          amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-500"
+                        )}>
+                          <Heart className="w-6 h-6 fill-current" />
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-emerald-700">{res.marks}</p>
-                          <p className="text-sm font-bold text-slate-500">গ্রেড: {res.grade}</p>
+                        <div>
+                          <h4 className={cn(
+                            "font-black text-lg transition-all",
+                            amalLogs[task.id] ? "text-emerald-900" : "text-slate-700"
+                          )}>{task.title}</h4>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            {amalLogs[task.id] ? "সম্পন্ন হয়েছে" : "বাকি আছে"}
+                          </p>
                         </div>
                       </div>
-                    )) : (
-                      <p className="text-center text-slate-400 py-12">কোন রেজাল্ট পাওয়া যায়নি</p>
+                      <div className={cn(
+                        "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all",
+                        amalLogs[task.id] ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent"
+                      )}>
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === "syllabus" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+              <div className="mb-8">
+                <h3 className="text-2xl font-black text-slate-900 mb-1">সিলেবাস ও রুটিন</h3>
+                <p className="text-slate-500 font-bold">আপনার প্রয়োজনীয় সব রুটিন ও সিলেবাস এখানে পাবেন</p>
+              </div>
+
+              {syllabusRoutines.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                  <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-500 font-bold">কোন সিলেবাস বা রুটিন পাওয়া যায়নি</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {syllabusRoutines.map((item) => (
+                    <div key={item.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:shadow-md transition-all">
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="p-4 bg-emerald-100 text-emerald-600 rounded-2xl">
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <h4 className="font-black text-lg text-slate-900">{item.title}</h4>
+                      </div>
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-white text-emerald-600 py-4 rounded-2xl font-bold border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        দেখুন ও ডাউনলোড করুন <ArrowRight className="w-4 h-4" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+              {activeTab === "results" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-2xl font-bold text-slate-900">পরীক্ষার ফলাফল</h3>
+                    {settings?.enable_historical_reports ? (
+                      <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">সকল রেজাল্ট</span>
+                    ) : (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">সর্বশেষ রেজাল্ট</span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-8">
+                    {results.length > 0 ? (() => {
+                      // Group results by exam
+                      const groupedResults = results.reduce((acc: any, res: any) => {
+                        if (!acc[res.exam_name]) acc[res.exam_name] = [];
+                        acc[res.exam_name].push(res);
+                        return acc;
+                      }, {});
+
+                      // Sort exams (latest first)
+                      const exams = Object.keys(groupedResults).sort((a, b) => {
+                        // Try to extract date or just sort by name
+                        return b.localeCompare(a);
+                      });
+
+                      // If historical reports disabled, only show the latest exam
+                      const visibleExams = settings?.enable_historical_reports ? exams : [exams[0]];
+
+                      return visibleExams.map((examName) => (
+                        <div key={examName} className="space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-px flex-1 bg-slate-100"></div>
+                            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">{examName}</h4>
+                            <div className="h-px flex-1 bg-slate-100"></div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {groupedResults[examName].map((res: any, i: number) => (
+                              <div key={i} className="p-6 bg-slate-50 rounded-3xl flex items-center justify-between border border-slate-100 hover:bg-white hover:shadow-md transition-all">
+                                <div>
+                                  <h4 className="text-lg font-bold text-slate-900">{res.subject}</h4>
+                                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">পূর্ণমান: ১০০</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-2xl font-black text-emerald-600">{res.marks}</p>
+                                  <p className="text-xs font-bold text-slate-500">গ্রেড: {res.grade}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ));
+                    })() : (
+                      <div className="text-center py-20">
+                        <BookOpen className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">এখনো কোন রেজাল্ট পাওয়া যায়নি</p>
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -917,6 +1202,59 @@ export default function ParentPortal() {
                               referrerPolicy="no-referrer"
                             />
                           </a>
+                        )}
+
+                        {notice.allow_comments && (
+                          <div className="mt-6 pt-6 border-t border-slate-200">
+                            <div className="flex items-center justify-between mb-4">
+                              <button 
+                                onClick={() => fetchComments(notice.id)}
+                                className="flex items-center gap-2 text-sm font-bold text-emerald-600 hover:text-emerald-700"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                                {notice.comment_count || 0} টি কমেন্ট
+                                {fetchingComments === notice.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                              </button>
+                            </div>
+
+                            {noticeComments[notice.id] && (
+                              <div className="space-y-4 mb-6 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                                {noticeComments[notice.id].map((c: any) => (
+                                  <div key={c.id} className="flex gap-3">
+                                    <img 
+                                      src={c.guardian_photo || "https://picsum.photos/seed/user/100/100"} 
+                                      alt={c.guardian_name} 
+                                      className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                    <div className="flex-1 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                                      <p className="text-xs font-black text-slate-900 mb-1">{c.guardian_name}</p>
+                                      <p className="text-xs text-slate-600">{c.comment}</p>
+                                      <p className="text-[8px] text-slate-400 mt-1">{new Date(c.created_at).toLocaleString('bn-BD')}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="flex gap-2">
+                              <input 
+                                type="text" 
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                placeholder="আপনার মতামত লিখুন..."
+                                className="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddComment(notice.id)}
+                              />
+                              <button 
+                                disabled={commentingOn === notice.id || !newComment.trim()}
+                                onClick={() => handleAddComment(notice.id)}
+                                className="p-2 bg-emerald-900 text-white rounded-xl hover:bg-emerald-800 disabled:opacity-50"
+                              >
+                                {commentingOn === notice.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )) : (

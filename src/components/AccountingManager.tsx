@@ -3,7 +3,7 @@ import {
   DollarSign, Plus, Search, TrendingUp, TrendingDown, 
   Printer, Download, Calendar, Filter, MoreVertical,
   Share2, Mail, MessageCircle, PieChart, ArrowUpRight, ArrowDownRight,
-  Trash2, X as CloseIcon, ArrowRightLeft, History, Loader2, Clock
+  Trash2, X as CloseIcon, ArrowRightLeft, History, Loader2, Clock, ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toPng } from 'html-to-image';
@@ -13,6 +13,78 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { printElement } from '../utils/printUtils';
+import MonthlyYearlyReport from './MonthlyYearlyReport';
+
+const PrintDownloadMenu = ({ targetId, filename }: { targetId: string, filename: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleDownload = async () => {
+    setIsOpen(false);
+    const element = document.getElementById(targetId);
+    if (!element) return;
+    try {
+      const imgData = await toPng(element, { quality: 1, pixelRatio: 2, backgroundColor: '#ffffff' });
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const margin = 10;
+      const contentWidth = pdfWidth - (2 * margin);
+      const img = new Image();
+      img.src = imgData;
+      img.onload = () => {
+        const contentHeight = (img.height * contentWidth) / img.width;
+        pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+        pdf.save(`${filename}.pdf`);
+      };
+    } catch (err) {
+      console.error("PDF generation failed", err);
+    }
+  };
+
+  return (
+    <div className="relative print:hidden" ref={menuRef}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm"
+      >
+        <Download className="w-4 h-4" /> রিপোর্ট <ChevronDown className="w-4 h-4" />
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50"
+          >
+            <button 
+              onClick={() => { setIsOpen(false); printElement(targetId, 'A4'); }}
+              className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3 text-sm font-bold text-slate-700 transition-colors"
+            >
+              <Printer className="w-4 h-4 text-slate-400" /> প্রিন্ট করুন
+            </button>
+            <button 
+              onClick={handleDownload}
+              className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3 text-sm font-bold text-slate-700 transition-colors"
+            >
+              <Download className="w-4 h-4 text-slate-400" /> পিডিএফ ডাউনলোড
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export function AccountingManager({ settings, addToast, classesList }: { settings: any, addToast: (message: string, type?: 'success' | 'error' | 'info') => void, classesList?: string[] }) {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0, feeIncome: 0, otherIncome: 0, prevBalance: 0, totalBalance: 0 });
@@ -25,7 +97,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [activeView, setActiveView] = useState<"summary" | "income" | "expense" | "category-report" | "class-report">("summary");
+  const [activeView, setActiveView] = useState<"summary" | "income" | "expense" | "category-report" | "class-report" | "monthly-report" | "yearly-report">("summary");
   const [selectedStudentProfile, setSelectedStudentProfile] = useState<any>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [isDeletingTransaction, setIsDeletingTransaction] = useState(false);
@@ -36,6 +108,8 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const [reportClass, setReportClass] = useState("");
   const [categoryReportData, setCategoryReportData] = useState<any>(null);
   const [classReportData, setClassReportData] = useState<any>(null);
+  const [monthlyReportData, setMonthlyReportData] = useState<any>(null);
+  const [yearlyReportData, setYearlyReportData] = useState<any>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -69,7 +143,13 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const fetchCategoryReport = async () => {
     setLoadingReport(true);
     try {
-      const res = await fetch(`/api/admin/accounting/reports/category?month=${reportMonth}&category=${reportCategory}`);
+      const params = new URLSearchParams();
+      if (reportMonth) params.append("month", reportMonth);
+      if (reportCategory) params.append("category", reportCategory);
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      
+      const res = await fetch(`/api/admin/accounting/reports/category?${params}`);
       const data = await res.json();
       if (res.ok) {
         setCategoryReportData(data);
@@ -88,7 +168,12 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const fetchClassReport = async () => {
     setLoadingReport(true);
     try {
-      const res = await fetch(`/api/admin/accounting/reports/class?class_name=${reportClass}`);
+      const params = new URLSearchParams();
+      if (reportClass) params.append("class_name", reportClass);
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+
+      const res = await fetch(`/api/admin/accounting/reports/class?${params}`);
       const data = await res.json();
       if (res.ok) {
         setClassReportData(data);
@@ -104,13 +189,38 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     }
   };
 
+  const fetchMonthlyYearlyReport = async () => {
+    setLoadingReport(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      
+      const res = await fetch(`/api/admin/accounting/reports/category?${params}`);
+      const data = await res.json();
+      if (res.ok) {
+        if (activeView === "monthly-report") {
+          setMonthlyReportData(data);
+        } else if (activeView === "yearly-report") {
+          setYearlyReportData(data);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
   useEffect(() => {
     if (activeView === "category-report") {
       fetchCategoryReport();
     } else if (activeView === "class-report") {
       fetchClassReport();
+    } else if (activeView === "monthly-report" || activeView === "yearly-report") {
+      fetchMonthlyYearlyReport();
     }
-  }, [activeView, reportMonth, reportCategory, reportClass]);
+  }, [activeView, reportMonth, reportCategory, reportClass, startDate, endDate]);
 
   const fetchData = async (reset = true) => {
     if (reset) {
@@ -669,39 +779,6 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     return html;
   };
 
-  const handleDownloadReport = (type?: 'income' | 'expense') => {
-    if (type) setPrintType(type);
-    
-    setTimeout(() => {
-      const html = generatePrintableHTML();
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${type || 'accounting'}_report_${new Date().toISOString().split('T')[0]}.html`;
-      a.click();
-      URL.revokeObjectURL(url);
-      addToast("HTML ফাইল ডাউনলোড হয়েছে। এটি ব্রাউজারে ওপেন করে PDF হিসেবে সেভ করতে পারেন।", "success");
-    }, 100);
-  };
-
-  const handlePrint = (type?: 'income' | 'expense') => {
-    if (type) setPrintType(type);
-    
-    setTimeout(() => {
-      const div = document.createElement('div');
-      div.id = 'print-report-temp';
-      div.innerHTML = generatePrintableHTML();
-      document.body.appendChild(div);
-      
-      printElement('print-report-temp', 'A4');
-      
-      setTimeout(() => {
-        document.body.removeChild(div);
-      }, 1000);
-    }, 100);
-  };
-
   const calculatePercentage = (part: number, total: number) => {
     if (total === 0) return 0;
     return Math.round((part / total) * 100);
@@ -709,64 +786,6 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900">হিসাব-নিকাশ</h2>
-          <p className="text-slate-500 font-bold">মাদরাসার আয়-ব্যয়ের বিস্তারিত পরিসংখ্যান</p>
-        </div>
-        <div className="flex gap-2 items-center flex-wrap">
-          <select
-            value={printType}
-            onChange={(e) => setPrintType(e.target.value as any)}
-            className="px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
-            title="প্রিন্ট অপশন"
-          >
-            <option value="all">সব প্রিন্ট</option>
-            <option value="income">শুধু আয়</option>
-            <option value="expense">শুধু ব্যয়</option>
-          </select>
-          <button 
-            onClick={() => setIsAddingIncome(true)}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-          >
-            <Plus className="w-5 h-5" /> আয় যোগ করুন
-          </button>
-          <button 
-            onClick={() => setIsAddingExpense(true)}
-            className="px-6 py-3 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all flex items-center gap-2 shadow-lg shadow-rose-600/20"
-          >
-            <Plus className="w-5 h-5" /> খরচ যোগ করুন
-          </button>
-          <button 
-            onClick={() => handleDownloadReport()}
-            className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
-            title="ডাউনলোড রিপোর্ট"
-          >
-            <Download className="w-6 h-6" />
-          </button>
-          <button 
-            onClick={() => handleDownloadReport('income')}
-            className="px-4 py-3 bg-emerald-100 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-200 transition-all"
-          >
-            Income PDF
-          </button>
-          <button 
-            onClick={() => handleDownloadReport('expense')}
-            className="px-4 py-3 bg-rose-100 text-rose-700 rounded-2xl font-bold hover:bg-rose-200 transition-all"
-          >
-            Expense PDF
-          </button>
-          <button 
-            onClick={() => handlePrint()}
-            className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
-            title="প্রিন্ট রিপোর্ট"
-          >
-            <Printer className="w-6 h-6" />
-          </button>
-        </div>
-      </div>
-
       {/* Filters */}
       <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-4 print:hidden">
         <div className="flex items-center gap-2">
@@ -774,6 +793,28 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
           <span className="font-bold text-slate-700">ফিল্টার:</span>
         </div>
         <div className="flex items-center gap-4">
+          <div className="flex flex-col">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-1">বছর নির্বাচন</label>
+            <input 
+              type="number" 
+              min="2000"
+              max="2100"
+              placeholder="YYYY"
+              value={startDate && endDate && startDate.startsWith(endDate.substring(0, 4)) && startDate.endsWith('-01-01') && endDate.endsWith('-12-31') ? startDate.substring(0, 4) : ''}
+              onChange={(e) => {
+                const year = e.target.value;
+                if (year && year.length === 4) {
+                  setStartDate(`${year}-01-01`);
+                  setEndDate(`${year}-12-31`);
+                  setSelectedMonth("");
+                } else if (!year) {
+                  setStartDate("");
+                  setEndDate("");
+                }
+              }}
+              className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900 w-24"
+            />
+          </div>
           <div className="flex flex-col">
             <label className="text-[10px] font-black text-slate-400 uppercase mb-1">মাস নির্বাচন</label>
             <input 
@@ -986,6 +1027,18 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
         >
           ক্লাস রিপোর্ট
         </button>
+        <button 
+          onClick={() => setActiveView("monthly-report")}
+          className={cn("pb-4 px-2 font-black text-sm transition-all border-b-2", activeView === "monthly-report" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400")}
+        >
+          মাসিক রিপোর্ট
+        </button>
+        <button 
+          onClick={() => setActiveView("yearly-report")}
+          className={cn("pb-4 px-2 font-black text-sm transition-all border-b-2", activeView === "yearly-report" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400")}
+        >
+          বাৎসরিক রিপোর্ট
+        </button>
       </div>
 
       {/* Content */}
@@ -1047,7 +1100,13 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
         )}
 
         {activeView === "income" && (
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden" id="income-report">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <TrendingUp className="text-emerald-600" /> বিস্তারিত আয়
+              </h3>
+              <PrintDownloadMenu targetId="income-report" filename="income-report" />
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -1108,7 +1167,13 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
         )}
 
         {activeView === "expense" && (
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden" id="expense-report">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <TrendingDown className="text-rose-600" /> বিস্তারিত ব্যয়
+              </h3>
+              <PrintDownloadMenu targetId="expense-report" filename="expense-report" />
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -1154,27 +1219,30 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
         )}
 
         {activeView === "category-report" && (
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex flex-col md:flex-row gap-4 mb-8">
-              <select 
-                value={reportCategory}
-                onChange={(e) => setReportCategory(e.target.value)}
-                className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
-              >
-                <option value="">সব ক্যাটাগরি</option>
-                <optgroup label="আয়">
-                  {incomeCategories.map(c => <option key={`inc-${c.id}`} value={c.name}>{c.name}</option>)}
-                </optgroup>
-                <optgroup label="ব্যয়">
-                  {expenseCategories.map(c => <option key={`exp-${c.id}`} value={c.name}>{c.name}</option>)}
-                </optgroup>
-              </select>
-              <input 
-                type="month" 
-                value={reportMonth}
-                onChange={(e) => setReportMonth(e.target.value)}
-                className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
-              />
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden" id="category-report">
+            <div className="flex flex-col md:flex-row gap-4 mb-8 justify-between items-start md:items-center">
+              <div className="flex flex-col md:flex-row gap-4">
+                <select 
+                  value={reportCategory}
+                  onChange={(e) => setReportCategory(e.target.value)}
+                  className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="">সব ক্যাটাগরি</option>
+                  <optgroup label="আয়">
+                    {incomeCategories.map(c => <option key={`inc-${c.id}`} value={c.name}>{c.name}</option>)}
+                  </optgroup>
+                  <optgroup label="ব্যয়">
+                    {expenseCategories.map(c => <option key={`exp-${c.id}`} value={c.name}>{c.name}</option>)}
+                  </optgroup>
+                </select>
+                <input 
+                  type="month" 
+                  value={reportMonth}
+                  onChange={(e) => setReportMonth(e.target.value)}
+                  className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <PrintDownloadMenu targetId="category-report" filename="category-report" />
             </div>
             
             {loadingReport ? (
@@ -1237,16 +1305,19 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
         )}
 
         {activeView === "class-report" && (
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex flex-col md:flex-row gap-4 mb-8">
-              <select 
-                value={reportClass}
-                onChange={(e) => setReportClass(e.target.value)}
-                className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
-              >
-                <option value="">ক্লাস নির্বাচন করুন</option>
-                {classesList?.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden" id="class-report">
+            <div className="flex flex-col md:flex-row gap-4 mb-8 justify-between items-start md:items-center">
+              <div className="flex flex-col md:flex-row gap-4">
+                <select 
+                  value={reportClass}
+                  onChange={(e) => setReportClass(e.target.value)}
+                  className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="">ক্লাস নির্বাচন করুন</option>
+                  {classesList?.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <PrintDownloadMenu targetId="class-report" filename="class-report" />
             </div>
             
             {loadingReport ? (
@@ -1343,6 +1414,26 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               </div>
             ) : null}
           </div>
+        )}
+
+        {activeView === "monthly-report" && (
+          <MonthlyYearlyReport
+            data={monthlyReportData}
+            type="monthly"
+            loading={loadingReport}
+            startDate={startDate}
+            endDate={endDate}
+          />
+        )}
+
+        {activeView === "yearly-report" && (
+          <MonthlyYearlyReport
+            data={yearlyReportData}
+            type="yearly"
+            loading={loadingReport}
+            startDate={startDate}
+            endDate={endDate}
+          />
         )}
       </div>
 
@@ -1677,7 +1768,6 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
         )}
 
         {/* Delete Transaction Modal */}
-        <AnimatePresence>
           {isDeletingTransaction && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden p-8 text-center">
@@ -1721,11 +1811,10 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
 
         {/* Profile Modal */}
         {selectedStudentProfile && selectedStudentProfile.student && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden">
               <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <h3 className="text-2xl font-black text-slate-900">ছাত্রের প্রোফাইল</h3>
@@ -1762,7 +1851,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

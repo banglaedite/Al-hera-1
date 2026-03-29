@@ -21,6 +21,7 @@ import AdmissionForm from "./components/AdmissionForm";
 import StudentSearch from "./components/StudentSearch";
 import FeeManagement from "./components/FeeManagement";
 import ParentPortal from "./components/ParentPortal";
+import TeacherPortal from "./components/TeacherPortal";
 import DashboardHome from "./components/DashboardHome";
 import AdminPanel from "./components/AdminPanel";
 import LandingPage from "./components/LandingPage";
@@ -92,7 +93,8 @@ const Navbar = () => {
   const navItems = [
     { name: "হোম", path: "/", icon: Home },
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
-    { name: "পোর্টাল", path: "/parent", icon: LayoutDashboard },
+    { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
+    { name: "শিক্ষক পোর্টাল", path: "/teacher", icon: ShieldCheck },
   ];
 
   return (
@@ -186,6 +188,7 @@ export default function App() {
               <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
               <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
               <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
+              <Route path="/teacher" element={<div className="max-w-7xl mx-auto px-4 py-12"><TeacherPortal /></div>} />
               <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
             </Routes>
           </main>

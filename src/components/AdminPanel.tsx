@@ -6,6 +6,8 @@ import { BiometricManager } from "./BiometricManager";
 import { AccountingManager } from "./AccountingManager";
 import { RecruitmentManager } from "./RecruitmentManager";
 import { FoodMenuManager } from "./FoodMenuManager";
+import { RoutineManager } from "./RoutineManager";
+import { AmalManager } from "./AmalManager";
 import { AllStudentsManager } from "./AllStudentsManager";
 import { DatabaseResetManager } from "./DatabaseResetManager";
 import { HifzManager } from "./HifzManager";
@@ -32,6 +34,7 @@ import {
   ShieldCheck,
   UserPlus,
   Check,
+  X,
   X as CloseIcon,
   Lock,
   Edit,
@@ -47,8 +50,11 @@ import {
   Clock,
   History,
   Fingerprint,
+  Target,
   ChevronDown,
   MessageCircle,
+  MessageSquare,
+  Send,
   Mail,
   AlertTriangle,
   AlertCircle,
@@ -485,6 +491,8 @@ export default function AdminPanel() {
     { id: "notices", label: "নোটিশ", icon: Bell, permission: "notice" },
     { id: "features", label: "বৈশিষ্ট্য", icon: Award, permission: "notice" },
     { id: "showcase", label: "শোকেস", icon: Globe, permission: "notice" },
+    { id: "routines", label: "সিলেবাস ও রুটিন", icon: FileText, permission: "notice" },
+    { id: "amal", label: "দৈনিক আমল", icon: Target, permission: "notice" },
     { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2 },
     { id: "settings", label: "সেটিংস", icon: Settings },
   ];
@@ -636,6 +644,14 @@ export default function AdminPanel() {
 
             {activeTab === "food-menu" && (
               <FoodMenuManager />
+            )}
+
+            {activeTab === "routines" && (
+              <RoutineManager />
+            )}
+
+            {activeTab === "amal" && (
+              <AmalManager />
             )}
 
             {activeTab === "admissions" && (
@@ -1044,9 +1060,9 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
         {admissions.length > 0 ? admissions.map((a) => (
           <div key={a.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col md:flex-row justify-between gap-4">
             <div>
-              <p className="text-lg font-bold text-slate-900">{a.name}</p>
+              <p className="text-lg font-bold text-slate-900">{a.name} {a.name_en && <span className="text-slate-400 font-normal ml-2">({a.name_en})</span>}</p>
               <p className="text-sm text-slate-500">{a.class} শ্রেণী | ফোন: {a.phone}</p>
-              <p className="text-xs text-slate-400 mt-1">পিতা: {a.father_name} | মাতা: {a.mother_name}</p>
+              <p className="text-xs text-slate-400 mt-1">পিতা: {a.father_name} {a.father_name_en && `(${a.father_name_en})`} | মাতা: {a.mother_name} {a.mother_name_en && `(${a.mother_name_en})`}</p>
             </div>
             <div className="flex gap-2">
               <button 
@@ -1412,6 +1428,12 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           <button type="button" onClick={() => setShowSubAdminModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all">
             <Users className="w-5 h-5" /> সাব-এডমিন
           </button>
+          <button type="button" onClick={() => (window as any).setActiveTab("routines")} className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-xl font-bold hover:bg-blue-200 transition-all">
+            <FileText className="w-5 h-5" /> সিলেবাস ও রুটিন
+          </button>
+          <button type="button" onClick={() => (window as any).setActiveTab("amal")} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold hover:bg-emerald-200 transition-all">
+            <Target className="w-5 h-5" /> দৈনিক আমল
+          </button>
         </div>
       </div>
       
@@ -1474,6 +1496,10 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">একাডেমিক শোকেস সরাসরি হোমপেজে দেখান</label>
             <input type="checkbox" checked={!!settings.show_showcase_directly} onChange={(e) => setSettings({...settings, show_showcase_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">সিলেবাস ও রুটিন সরাসরি হোমপেজে দেখান</label>
+            <input type="checkbox" checked={!!settings.show_routines_directly} onChange={(e) => setSettings({...settings, show_routines_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">লোগোর নিচে নিয়ন লাইট চালু করুন</label>
@@ -1550,6 +1576,10 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           <div className="space-y-2 flex items-center gap-3">
             <input type="checkbox" id="show_signature" checked={!!settings.show_muhtamim_signature} onChange={(e) => setSettings({...settings, show_muhtamim_signature: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
             <label htmlFor="show_signature" className="text-sm font-bold text-slate-700">রশিদে মুহতামিম সাহেবের স্বাক্ষর দেখান</label>
+          </div>
+          <div className="space-y-2 flex items-center gap-3">
+            <input type="checkbox" id="enable_historical_reports" checked={!!settings.enable_historical_reports} onChange={(e) => setSettings({...settings, enable_historical_reports: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
+            <label htmlFor="enable_historical_reports" className="text-sm font-bold text-slate-700">অভিভাবকদের জন্য পুরাতন রেজাল্ট দেখার অনুমতি দিন</label>
           </div>
         </div>
 
@@ -2225,8 +2255,12 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
               <form onSubmit={isAdding ? handleAddStudent : handleEditStudent} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">নাম</label>
+                    <label className="text-sm font-bold text-slate-700">নাম (বাংলায়)</label>
                     <input name="name" required defaultValue={isEditing ? selectedStudent.name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Name (English)</label>
+                    <input name="name_en" defaultValue={isEditing ? selectedStudent.name_en : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">স্টুডেন্ট আইডি (ঐচ্ছিক)</label>
@@ -2239,12 +2273,59 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">পিতার নাম</label>
+                    <label className="text-sm font-bold text-slate-700">লিঙ্গ</label>
+                    <select name="gender" defaultValue={isEditing ? selectedStudent.gender : "বালক"} className="w-full p-4 bg-slate-50 border rounded-2xl">
+                      <option value="বালক">বালক</option>
+                      <option value="বালিকা">বালিকা</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">জাতীয়তা</label>
+                    <input name="nationality" defaultValue={isEditing ? selectedStudent.nationality : "বাংলাদেশী"} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">ধর্ম</label>
+                    <input name="religion" defaultValue={isEditing ? selectedStudent.religion : "ইসলাম"} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">পিতার নাম (বাংলায়)</label>
                     <input name="father_name" defaultValue={isEditing ? selectedStudent.father_name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">মাতার নাম</label>
+                    <label className="text-sm font-bold text-slate-700">Father's Name (English)</label>
+                    <input name="father_name_en" defaultValue={isEditing ? selectedStudent.father_name_en : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">পিতার পেশা</label>
+                    <input name="father_occupation" defaultValue={isEditing ? selectedStudent.father_occupation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">পিতার মাসিক আয়</label>
+                    <input name="father_income" type="number" defaultValue={isEditing ? selectedStudent.father_income : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">পিতার এনআইডি নম্বর</label>
+                    <input name="father_nid" defaultValue={isEditing ? selectedStudent.father_nid : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">মাতার নাম (বাংলায়)</label>
                     <input name="mother_name" defaultValue={isEditing ? selectedStudent.mother_name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Mother's Name (English)</label>
+                    <input name="mother_name_en" defaultValue={isEditing ? selectedStudent.mother_name_en : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">মাতার পেশা</label>
+                    <input name="mother_occupation" defaultValue={isEditing ? selectedStudent.mother_occupation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">মাতার মাসিক আয়</label>
+                    <input name="mother_income" type="number" defaultValue={isEditing ? selectedStudent.mother_income : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">মাতার এনআইডি নম্বর</label>
+                    <input name="mother_nid" defaultValue={isEditing ? selectedStudent.mother_nid : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">ফোন নম্বর</label>
@@ -2277,8 +2358,12 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                     <input name="dob" type="date" defaultValue={isEditing ? selectedStudent.dob : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">ঠিকানা</label>
-                    <input name="address" defaultValue={isEditing ? selectedStudent.address : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                    <label className="text-sm font-bold text-slate-700">জন্ম নিবন্ধন নম্বর</label>
+                    <input name="birth_cert_no" defaultValue={isEditing ? selectedStudent.birth_cert_no : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">পূর্ববর্তী শিক্ষা প্রতিষ্ঠান</label>
+                    <input name="previous_school" defaultValue={isEditing ? selectedStudent.previous_school : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">রোল নম্বর</label>
@@ -2288,6 +2373,55 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                     <label className="text-sm font-bold text-slate-700">মাসিক বেতন (টাকা)</label>
                     <input name="monthly_fee" type="number" defaultValue={isEditing ? selectedStudent.monthly_fee : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: 500" />
                   </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">বর্তমান ঠিকানা</label>
+                    <textarea name="present_address" defaultValue={isEditing ? selectedStudent.present_address : ""} className="w-full p-4 bg-slate-50 border rounded-2xl h-24" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">স্থায়ী ঠিকানা</label>
+                    <textarea name="permanent_address" defaultValue={isEditing ? selectedStudent.permanent_address : ""} className="w-full p-4 bg-slate-50 border rounded-2xl h-24" />
+                  </div>
+
+                  <div className="md:col-span-2 pt-4 border-t border-slate-100">
+                    <h4 className="text-lg font-bold text-slate-800 mb-4">অভিভাবকের তথ্য (পিতা/মাতা ব্যতীত অন্য কেউ হলে)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">অভিভাবকের নাম</label>
+                        <input name="guardian_name" defaultValue={isEditing ? selectedStudent.guardian_name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">সম্পর্ক</label>
+                        <input name="guardian_relation" defaultValue={isEditing ? selectedStudent.guardian_relation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">এনআইডি নম্বর</label>
+                        <input name="guardian_nid" defaultValue={isEditing ? selectedStudent.guardian_nid : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">মোবাইল নম্বর</label>
+                        <input name="guardian_mobile" defaultValue={isEditing ? selectedStudent.guardian_mobile : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 pt-4 border-t border-slate-100">
+                    <h4 className="text-lg font-bold text-slate-800 mb-4">জরুরী যোগাযোগ</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">নাম</label>
+                        <input name="emergency_contact_name" defaultValue={isEditing ? selectedStudent.emergency_contact_name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">সম্পর্ক</label>
+                        <input name="emergency_contact_relation" defaultValue={isEditing ? selectedStudent.emergency_contact_relation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-sm font-bold text-slate-700">মোবাইল নম্বর</label>
+                        <input name="emergency_contact_mobile" defaultValue={isEditing ? selectedStudent.emergency_contact_mobile : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-bold text-slate-700">বায়োমেট্রিক আইডি (মেশিন আইডি)</label>
                     <input name="biometric_id" defaultValue={isEditing ? selectedStudent.biometric_id : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: 101" />
@@ -2299,6 +2433,14 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-bold text-slate-700">ছাত্রের ছবির ইউআরএল (Photo URL)</label>
                     <input name="photo_url" defaultValue={isEditing ? selectedStudent.photo_url : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/photo.jpg" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">জন্ম নিবন্ধন (URL)</label>
+                    <input name="birth_cert_url" defaultValue={isEditing ? selectedStudent.birth_cert_url : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/birth_cert.jpg" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">অভিভাবকের এনআইডি (URL)</label>
+                    <input name="parent_nid_url" defaultValue={isEditing ? selectedStudent.parent_nid_url : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/nid.jpg" />
                   </div>
                 </div>
                 <LoadingButton loading={loadingProfile} type="submit" className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold">
@@ -2542,18 +2684,81 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 space-y-4">
                   <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">ব্যক্তিগত তথ্য</h4>
                   {[
-                    { label: "পিতার নাম", value: fullProfile.student.father_name },
-                    { label: "মাতার নাম", value: fullProfile.student.mother_name },
+                    { label: "নাম (বাংলা)", value: fullProfile.student.name },
+                    { label: "Name (English)", value: fullProfile.student.name_en },
+                    { label: "পিতার নাম (বাংলা)", value: fullProfile.student.father_name },
+                    { label: "Father's Name (EN)", value: fullProfile.student.father_name_en },
+                    { label: "মাতার নাম (বাংলা)", value: fullProfile.student.mother_name },
+                    { label: "Mother's Name (EN)", value: fullProfile.student.mother_name_en },
                     { label: "ফোন", value: fullProfile.student.phone },
+                    { label: "হোয়াটসঅ্যাপ", value: fullProfile.student.whatsapp },
+                    { label: "ইমেইল", value: fullProfile.student.email },
                     { label: "রক্তের গ্রুপ", value: fullProfile.student.blood_group },
                     { label: "জন্ম তারিখ", value: fullProfile.student.dob },
-                    { label: "ঠিকানা", value: fullProfile.student.address }
+                    { label: "জন্ম নিবন্ধন নম্বর", value: fullProfile.student.birth_cert_no },
+                    { label: "পূর্ববর্তী স্কুল", value: fullProfile.student.previous_school },
+                    { label: "বর্তমান ঠিকানা", value: fullProfile.student.present_address },
+                    { label: "স্থায়ী ঠিকানা", value: fullProfile.student.permanent_address }
                   ].map((item, i) => (
-                    <div key={i} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
-                      <span className="text-slate-500 text-sm font-bold">{item.label}</span>
+                    <div key={i} className="flex flex-col py-2 border-b border-slate-50 last:border-0">
+                      <span className="text-slate-500 text-xs font-bold">{item.label}</span>
                       <span className="text-slate-900 text-sm font-black">{item.value || "N/A"}</span>
                     </div>
                   ))}
+                </div>
+
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                  <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">অভিভাবক ও জরুরী যোগাযোগ</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 mb-2">অভিভাবকের তথ্য</p>
+                      {[
+                        { label: "নাম", value: fullProfile.student.guardian_name },
+                        { label: "সম্পর্ক", value: fullProfile.student.guardian_relation },
+                        { label: "এনআইডি", value: fullProfile.student.guardian_nid },
+                        { label: "মোবাইল", value: fullProfile.student.guardian_mobile }
+                      ].map((item, i) => (
+                        <div key={i} className="flex justify-between items-center py-1">
+                          <span className="text-slate-500 text-xs font-bold">{item.label}</span>
+                          <span className="text-slate-900 text-xs font-black">{item.value || "N/A"}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t border-slate-50">
+                      <p className="text-xs font-bold text-slate-400 mb-2">জরুরী যোগাযোগ</p>
+                      {[
+                        { label: "নাম", value: fullProfile.student.emergency_contact_name },
+                        { label: "সম্পর্ক", value: fullProfile.student.emergency_contact_relation },
+                        { label: "মোবাইল", value: fullProfile.student.emergency_contact_mobile }
+                      ].map((item, i) => (
+                        <div key={i} className="flex justify-between items-center py-1">
+                          <span className="text-slate-500 text-xs font-bold">{item.label}</span>
+                          <span className="text-slate-900 text-xs font-black">{item.value || "N/A"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                  <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">সংযুক্ত নথিপত্র</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {fullProfile.student.birth_cert_url && (
+                      <a href={fullProfile.student.birth_cert_url} target="_blank" rel="noopener noreferrer" className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center gap-2 hover:bg-slate-100 transition-all">
+                        <FileText className="w-6 h-6 text-emerald-600" />
+                        <span className="text-[10px] font-black text-slate-600">জন্ম নিবন্ধন</span>
+                      </a>
+                    )}
+                    {fullProfile.student.parent_nid_url && (
+                      <a href={fullProfile.student.parent_nid_url} target="_blank" rel="noopener noreferrer" className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center gap-2 hover:bg-slate-100 transition-all">
+                        <CreditCard className="w-6 h-6 text-emerald-600" />
+                        <span className="text-[10px] font-black text-slate-600">অভিভাবক এনআইডি</span>
+                      </a>
+                    )}
+                    {!fullProfile.student.birth_cert_url && !fullProfile.student.parent_nid_url && (
+                      <p className="col-span-2 text-center text-xs text-slate-400 font-bold py-4">কোন নথি আপলোড করা হয়নি</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -3582,6 +3787,23 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
     setIsAdding(true);
   };
 
+  const [showAllReports, setShowAllReports] = useState<any>(null);
+  const [allReports, setAllReports] = useState<any[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+
+  const fetchAllReports = async (studentId: string) => {
+    setLoadingAll(true);
+    try {
+      const res = await fetch(`/api/results/${studentId}`);
+      const data = await res.json();
+      setAllReports(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch all reports", error);
+    } finally {
+      setLoadingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <ConfirmModal 
@@ -3591,6 +3813,71 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
         onCancel={() => setConfirmDelete(null)} 
       />
       <PrintHeader settings={settings} />
+
+      {/* All Reports Modal */}
+      {showAllReports && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          >
+            <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center sticky top-0 z-10">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">{showAllReports.name} এর সকল রেজাল্ট</h3>
+                <p className="text-slate-500 font-bold">রোল: {showAllReports.roll} | ক্লাস: {showAllReports.class}</p>
+              </div>
+              <button onClick={() => setShowAllReports(null)} className="p-3 bg-white text-slate-400 rounded-2xl hover:text-rose-500 shadow-sm transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
+              {loadingAll ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
+                  <p className="text-slate-500 font-bold">রেজাল্ট লোড হচ্ছে...</p>
+                </div>
+              ) : allReports.length > 0 ? (() => {
+                const grouped = allReports.reduce((acc: any, res: any) => {
+                  if (!acc[res.exam_name]) acc[res.exam_name] = [];
+                  acc[res.exam_name].push(res);
+                  return acc;
+                }, {});
+
+                return Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(examName => (
+                  <div key={examName} className="mb-10 last:mb-0">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="h-px flex-1 bg-slate-100"></div>
+                      <h4 className="px-6 py-2 bg-slate-100 rounded-full text-sm font-black text-slate-600 uppercase tracking-widest">{examName}</h4>
+                      <div className="h-px flex-1 bg-slate-100"></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {grouped[examName].map((res: any, i: number) => (
+                        <div key={i} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center">
+                          <div>
+                            <h5 className="font-bold text-slate-900">{res.subject}</h5>
+                            <p className="text-xs text-slate-400 font-bold">পূর্ণমান: ১০০</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-black text-emerald-600">{res.marks}</p>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase">গ্রেড: {res.grade}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })() : (
+                <div className="text-center py-20">
+                  <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                  <p className="text-slate-400 font-bold">কোন রেজাল্ট পাওয়া যায়নি</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
       
       {/* Marksheet Print View (Hidden) */}
       {printStudent && (
@@ -3648,14 +3935,14 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
             </tbody>
           </table>
           <div className="flex justify-between mt-24">
-            <div className="text-center border-t-2 border-slate-900 pt-2 w-48">
-              <p className="font-black text-slate-900">মুহতামিম সাহেবের স্বাক্ষর</p>
+            <div className="text-center">
+              <div className="border-t-2 border-slate-900 w-48 pt-2">শ্রেণী শিক্ষকের স্বাক্ষর</div>
             </div>
-            <div className="text-center border-t-2 border-slate-900 pt-2 w-48">
-              <p className="font-black text-slate-900">শ্রেণী শিক্ষকের স্বাক্ষর</p>
+            <div className="text-center">
+              <div className="border-t-2 border-slate-900 w-48 pt-2">প্রধান শিক্ষকের স্বাক্ষর</div>
             </div>
-            <div className="text-center border-t-2 border-slate-900 pt-2 w-48">
-              <p className="font-black text-slate-900">মুহতামিমের স্বাক্ষর</p>
+            <div className="text-center">
+              <div className="border-t-2 border-slate-900 w-48 pt-2">মুহতামিমের স্বাক্ষর</div>
             </div>
           </div>
         </div>
@@ -3866,6 +4153,16 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                             <td className="py-4 font-black text-blue-600">{r.avgMarks.toFixed(2)}</td>
                             <td className="py-4 print:hidden">
                               <div className="flex gap-2">
+                                <button 
+                                  onClick={() => {
+                                    setShowAllReports(r);
+                                    fetchAllReports(r.studentId || r.id);
+                                  }}
+                                  title="সকল রিপোর্ট"
+                                  className="p-2 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-all"
+                                >
+                                  <History className="w-4 h-4" />
+                                </button>
                                 <button 
                                   onClick={() => openResultEntry(r)}
                                   title="এডিট করুন"
@@ -5195,7 +5492,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
 
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3 justify-center sticky bottom-0 z-20">
                 <button 
-                  onClick={() => printElement('payment-receipt', 'A5')}
+                  onClick={() => printElement('payment-receipt')}
                   className="px-5 py-2.5 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all text-sm"
                 >
                   <Printer className="w-4 h-4" /> প্রিন্ট করুন
@@ -5584,7 +5881,7 @@ function TransactionHistory({ settings }: { settings: any }) {
 
               <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-4 justify-center sticky bottom-0 z-20">
                 <button 
-                  onClick={() => printElement('history-receipt', 'A5')}
+                  onClick={() => printElement('history-receipt')}
                   className="px-6 py-3 bg-slate-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-700 transition-all shadow-lg shadow-slate-200"
                 >
                   <Printer className="w-5 h-5" /> প্রিন্ট করুন
@@ -5961,7 +6258,7 @@ function DeleteHistory() {
 
 function NoticeManager({ notices, onUpdate }: any) {
   const { addToast } = useToast();
-  const [formData, setFormData] = useState({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "" });
+  const [formData, setFormData] = useState({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_comments: false });
   const [sendingEmail, setSendingEmail] = useState(false);
   const [editingNotice, setEditingNotice] = useState<any>(null);
 
@@ -5983,7 +6280,7 @@ function NoticeManager({ notices, onUpdate }: any) {
         body: JSON.stringify(formData)
       });
     }
-    setFormData({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "" });
+    setFormData({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_comments: false });
     onUpdate();
   };
 
@@ -6007,7 +6304,8 @@ function NoticeManager({ notices, onUpdate }: any) {
       image_url: notice.image_url || "",
       link_url: notice.link_url || "",
       width: notice.width || "",
-      height: notice.height || ""
+      height: notice.height || "",
+      allow_comments: !!notice.allow_comments
     });
   };
 
@@ -6065,14 +6363,26 @@ function NoticeManager({ notices, onUpdate }: any) {
             <input placeholder="প্রস্থ (px)" value={formData.width} onChange={(e) => setFormData({...formData, width: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
             <input placeholder="উচ্চতা (px)" value={formData.height} onChange={(e) => setFormData({...formData, height: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
           </div>
-          <div className="flex items-center gap-3 px-2">
-            <input 
-              type="checkbox" 
-              checked={formData.is_active !== 0}
-              onChange={(e) => setFormData({ ...formData, is_active: e.target.checked ? 1 : 0 })}
-              className="w-5 h-5 accent-emerald-600"
-            />
-            <label className="text-sm font-bold text-slate-700">সক্রিয় (Active)</label>
+          <div className="flex items-center gap-6 px-2">
+            <div className="flex items-center gap-3">
+              <input 
+                type="checkbox" 
+                checked={formData.is_active !== 0}
+                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked ? 1 : 0 })}
+                className="w-5 h-5 accent-emerald-600"
+              />
+              <label className="text-sm font-bold text-slate-700">সক্রিয় (Active)</label>
+            </div>
+            <div className="flex items-center gap-3">
+              <input 
+                type="checkbox" 
+                id="allow_comments"
+                checked={formData.allow_comments}
+                onChange={(e) => setFormData({ ...formData, allow_comments: e.target.checked })}
+                className="w-5 h-5 accent-emerald-600"
+              />
+              <label htmlFor="allow_comments" className="text-sm font-bold text-slate-700">কমেন্ট সেকশন চালু করুন</label>
+            </div>
           </div>
           <div className="flex gap-4">
             <button type="submit" className="flex-1 py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors">{editingNotice ? "আপডেট করুন" : "নোটিশ পাবলিশ করুন"}</button>
@@ -6093,7 +6403,11 @@ function NoticeManager({ notices, onUpdate }: any) {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <h4 className="font-bold text-slate-800 pr-16">{n.title} {n.is_active === 0 && <span className="text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded-full">Inactive</span>}</h4>
+              <h4 className="font-bold text-slate-800 pr-16">
+                {n.title} 
+                {n.is_active === 0 && <span className="text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded-full ml-2">Inactive</span>}
+                {n.allow_comments && <span className="text-xs text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full ml-2 flex items-center gap-1 inline-flex"><MessageSquare className="w-3 h-3" /> {n.comment_count || 0}</span>}
+              </h4>
               <p className="text-sm text-slate-500 mt-1">{n.content}</p>
               {n.image_url && (
                 <a href={n.link_url || "#"} target="_blank" rel="noopener noreferrer" className="block mt-4">

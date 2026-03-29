@@ -876,6 +876,59 @@ async function seedDatabase() {
     }
   });
 
+  // --- Routine & Syllabus Management ---
+  app.get("/api/routines", async (req, res) => {
+    try {
+      const db = getFirestoreInstance();
+      const snapshot = await db.collection("routines").get();
+      const routines = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(routines);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch routines" });
+    }
+  });
+
+  app.post("/api/admin/routines", async (req, res) => {
+    try {
+      const { title, link_url } = req.body;
+      await firestore!.collection("routines").add({
+        title,
+        link_url,
+        created_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to add routine" });
+    }
+  });
+
+  app.put("/api/admin/routines/:id", async (req, res) => {
+    try {
+      const { title, link_url } = req.body;
+      await firestore!.collection("routines").doc(req.params.id).update({
+        title,
+        link_url,
+        updated_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to update routine" });
+    }
+  });
+
+  app.delete("/api/admin/routines/:id", async (req, res) => {
+    try {
+      await firestore!.collection("routines").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to delete routine" });
+    }
+  });
+
   // --- Class Promotion ---
   app.post("/api/admin/promote-class", async (req, res) => {
     const { password } = req.body;
@@ -1087,8 +1140,10 @@ async function seedDatabase() {
   // --- Teachers ---
   app.get("/api/admin/teachers", async (req, res) => {
     try {
-      const teachersSnapshot = await firestore!.collection("teachers").where("deleted_at", "==", null).get();
-      const teachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const teachersSnapshot = await firestore!.collection("teachers").get();
+      const teachers = teachersSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((t: any) => t.deleted_at === null || t.deleted_at === undefined);
       res.json(teachers);
     } catch (error) {
       console.error(error);
@@ -1402,12 +1457,15 @@ async function seedDatabase() {
   });
 
   app.get("/api/admin/accounting/reports/category", async (req, res) => {
-    const { month, category } = req.query;
+    const { month, category, start_date, end_date } = req.query;
     try {
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
 
-      if (month) {
+      if (start_date && end_date) {
+        incomeQuery = incomeQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
+        expenseQuery = expenseQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
+      } else if (month) {
         const startDate = `${month}-01`;
         const endDate = `${month}-31T23:59:59.999Z`;
         incomeQuery = incomeQuery.where("date", ">=", startDate).where("date", "<=", endDate);
@@ -1435,7 +1493,7 @@ async function seedDatabase() {
   });
 
   app.get("/api/admin/accounting/reports/class", async (req, res) => {
-    const { class_name } = req.query;
+    const { class_name, start_date, end_date } = req.query;
     try {
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
@@ -1443,6 +1501,11 @@ async function seedDatabase() {
       if (class_name) {
         incomeQuery = incomeQuery.where("class_name", "==", class_name);
         expenseQuery = expenseQuery.where("class_name", "==", class_name);
+      }
+
+      if (start_date && end_date) {
+        incomeQuery = incomeQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
+        expenseQuery = expenseQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
       }
 
       const [incomeSnapshot, expenseSnapshot] = await Promise.all([
@@ -1465,9 +1528,13 @@ async function seedDatabase() {
             chunks.push(studentIds.slice(i, i + 30));
           }
           
-          const feePromises = chunks.map(chunk => 
-            firestore.collection("fees").where("student_id", "in", chunk).get()
-          );
+          const feePromises = chunks.map(chunk => {
+            let q: any = firestore.collection("fees").where("student_id", "in", chunk);
+            if (start_date && end_date) {
+              q = q.where("paid_date", ">=", start_date).where("paid_date", "<=", end_date + "T23:59:59.999Z");
+            }
+            return q.get();
+          });
           
           const feeSnapshots = await Promise.all(feePromises);
           feeSnapshots.forEach(snap => {
@@ -1477,8 +1544,12 @@ async function seedDatabase() {
           });
         }
       } else {
-        const feesSnapshot = await firestore.collection("fees").get();
-        feesData = feesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let q: any = firestore.collection("fees");
+        if (start_date && end_date) {
+          q = q.where("paid_date", ">=", start_date).where("paid_date", "<=", end_date + "T23:59:59.999Z");
+        }
+        const feesSnapshot = await q.get();
+        feesData = feesSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       }
 
       res.json({ fees: feesData, income: incomeData, expenses: expenseData });
@@ -2105,7 +2176,14 @@ async function seedDatabase() {
   });
 
   app.post("/api/admin/students", async (req, res) => {
-    const { name, father_name, mother_name, dob, blood_group, address, phone, whatsapp, email, className, is_hifz, photo_url, roll: providedRoll, monthly_fee, studentId: providedStudentId } = req.body;
+    const { 
+      name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
+      dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
+      phone, whatsapp, email, className, is_hifz, photo_url, roll: providedRoll, 
+      monthly_fee, studentId: providedStudentId,
+      guardian_name, guardian_relation, guardian_nid, guardian_mobile,
+      emergency_contact_name, emergency_contact_relation, emergency_contact_mobile
+    } = req.body;
     
     if (!name || !className) {
       return res.status(400).json({ error: "নাম এবং শ্রেণী আবশ্যক" });
@@ -2146,11 +2224,17 @@ async function seedDatabase() {
         studentId,
         roll,
         name,
+        name_en,
         father_name,
+        father_name_en,
         mother_name,
+        mother_name_en,
         dob,
         blood_group,
-        address,
+        birth_cert_no,
+        previous_school,
+        present_address,
+        permanent_address,
         phone,
         whatsapp,
         email,
@@ -2160,6 +2244,13 @@ async function seedDatabase() {
         monthly_fee: monthly_fee || 0,
         student_code: studentCode,
         biometric_id: req.body.biometric_id || null,
+        guardian_name,
+        guardian_relation,
+        guardian_nid,
+        guardian_mobile,
+        emergency_contact_name,
+        emergency_contact_relation,
+        emergency_contact_mobile,
         deleted_at: null,
         created_at: new Date().toISOString()
       };
@@ -2173,7 +2264,14 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/students/:id", async (req, res) => {
-    const { name, father_name, mother_name, dob, blood_group, address, phone, whatsapp, email, className, roll, is_hifz, photo_url, monthly_fee, student_code, studentId } = req.body;
+    const { 
+      name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
+      dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
+      phone, whatsapp, email, className, roll, is_hifz, photo_url, monthly_fee, 
+      student_code, studentId,
+      guardian_name, guardian_relation, guardian_nid, guardian_mobile,
+      emergency_contact_name, emergency_contact_relation, emergency_contact_mobile
+    } = req.body;
     try {
       if (student_code) {
         const existingSnapshot = await firestore.collection("students").where("student_code", "==", student_code).get();
@@ -2184,11 +2282,19 @@ async function seedDatabase() {
       }
 
       const updateData: any = {
-        name, father_name, mother_name, dob, 
-        blood_group, address, phone, whatsapp, email, class: className, 
+        name, name_en, father_name, father_name_en, mother_name, mother_name_en,
+        dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
+        phone, whatsapp, email, class: className, 
         roll, is_hifz: (is_hifz || className?.includes("হিফজ") || className?.includes("হেফজ")) ? 1 : 0, photo_url, 
         monthly_fee: monthly_fee || 0, student_code,
         biometric_id: req.body.biometric_id || null,
+        guardian_name,
+        guardian_relation,
+        guardian_nid,
+        guardian_mobile,
+        emergency_contact_name,
+        emergency_contact_relation,
+        emergency_contact_mobile,
         updated_at: new Date().toISOString()
       };
 
@@ -2237,11 +2343,21 @@ async function seedDatabase() {
   });
 
   app.post("/api/admission", async (req, res) => {
-    const { name, father_name, mother_name, dob, blood_group, address, phone, whatsapp, email, className, is_hifz, photo_url } = req.body;
+    const { 
+      name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
+      dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
+      phone, whatsapp, email, className, is_hifz, photo_url, birth_cert_url, parent_nid_url,
+      guardian_name, guardian_relation, guardian_nid, guardian_mobile,
+      emergency_contact_name, emergency_contact_relation, emergency_contact_mobile
+    } = req.body;
     try {
       await firestore.collection("admissions").add({
-        name, father_name, mother_name, dob, blood_group, address, phone, whatsapp, email, class: className, 
-        is_hifz: is_hifz ? 1 : 0, photo_url,
+        name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
+        dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
+        phone, whatsapp, email, class: className, 
+        is_hifz: is_hifz ? 1 : 0, photo_url, birth_cert_url, parent_nid_url,
+        guardian_name, guardian_relation, guardian_nid, guardian_mobile,
+        emergency_contact_name, emergency_contact_relation, emergency_contact_mobile,
         status: 'pending',
         created_at: new Date().toISOString()
       });
@@ -2280,20 +2396,35 @@ async function seedDatabase() {
       const studentCode = Math.floor(100000 + Math.random() * 900000).toString();
 
       const studentData = {
+        studentId,
         roll,
         name: application.name,
+        name_en: application.name_en || "",
         father_name: application.father_name,
+        father_name_en: application.father_name_en || "",
         mother_name: application.mother_name,
+        mother_name_en: application.mother_name_en || "",
         dob: application.dob,
         blood_group: application.blood_group,
-        address: application.address,
+        birth_cert_no: application.birth_cert_no || "",
+        previous_school: application.previous_school || "",
+        present_address: application.present_address || "",
+        permanent_address: application.permanent_address || "",
         phone: application.phone,
         whatsapp: application.whatsapp,
         email: application.email,
-        class: application.class,
+        class: className,
         is_hifz: application.is_hifz,
         photo_url: application.photo_url,
+        monthly_fee: 0,
         student_code: studentCode,
+        guardian_name: application.guardian_name || "",
+        guardian_relation: application.guardian_relation || "",
+        guardian_nid: application.guardian_nid || "",
+        guardian_mobile: application.guardian_mobile || "",
+        emergency_contact_name: application.emergency_contact_name || "",
+        emergency_contact_relation: application.emergency_contact_relation || "",
+        emergency_contact_mobile: application.emergency_contact_mobile || "",
         deleted_at: null,
         created_at: new Date().toISOString()
       };
@@ -2304,6 +2435,177 @@ async function seedDatabase() {
       res.json({ success: true, studentId, roll, studentCode });
     } catch (error) {
       res.status(500).json({ error: "Failed to approve admission" });
+    }
+  });
+
+  // Amal Endpoints
+  app.get("/api/admin/amal-tasks", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("amal_tasks").get();
+      const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch amal tasks" });
+    }
+  });
+
+  app.post("/api/admin/amal-tasks", async (req, res) => {
+    const { title, target, is_active } = req.body;
+    try {
+      const docRef = await firestore.collection("amal_tasks").add({
+        title, target, is_active: is_active ?? true, created_at: new Date().toISOString()
+      });
+      res.json({ id: docRef.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create amal task" });
+    }
+  });
+
+  app.put("/api/admin/amal-tasks/:id", async (req, res) => {
+    try {
+      await firestore.collection("amal_tasks").doc(req.params.id).update(req.body);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update amal task" });
+    }
+  });
+
+  app.delete("/api/admin/amal-tasks/:id", async (req, res) => {
+    try {
+      await firestore.collection("amal_tasks").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete amal task" });
+    }
+  });
+
+  app.get("/api/amal-tasks", async (req, res) => {
+    const { target } = req.query;
+    try {
+      const snapshot = await firestore.collection("amal_tasks")
+        .where("target", "==", target)
+        .where("is_active", "==", true)
+        .get();
+      const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch amal tasks" });
+    }
+  });
+
+  app.post("/api/amal-logs", async (req, res) => {
+    const { user_id, user_type, date, logs } = req.body; // logs: { task_id: status }
+    try {
+      const batch = firestore.batch();
+      for (const [taskId, status] of Object.entries(logs)) {
+        const logId = `${user_id}_${taskId}_${date}`;
+        const logRef = firestore.collection("amal_logs").doc(logId);
+        batch.set(logRef, {
+          user_id, user_type, date, task_id: taskId, status, updated_at: new Date().toISOString()
+        }, { merge: true });
+      }
+      await batch.commit();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save amal logs" });
+    }
+  });
+
+  app.get("/api/amal-logs", async (req, res) => {
+    const { user_id, date } = req.query;
+    try {
+      const snapshot = await firestore.collection("amal_logs")
+        .where("user_id", "==", user_id)
+        .where("date", "==", date)
+        .get();
+      const logs = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        logs[data.task_id] = data.status;
+      });
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch amal logs" });
+    }
+  });
+
+  app.get("/api/admin/amal-rankings", async (req, res) => {
+    const { target, startDate, endDate } = req.query;
+    try {
+      const logsSnapshot = await firestore.collection("amal_logs")
+        .where("user_type", "==", target)
+        .where("date", ">=", startDate)
+        .where("date", "<=", endDate)
+        .get();
+      
+      const userStats = {};
+      logsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (!userStats[data.user_id]) {
+          userStats[data.user_id] = { completed: 0, total: 0 };
+        }
+        if (data.status) userStats[data.user_id].completed++;
+        userStats[data.user_id].total++;
+      });
+
+      const rankings = await Promise.all(Object.entries(userStats).map(async ([userId, stats]: [string, any]) => {
+        const userDoc = await firestore.collection(target === 'student' ? 'students' : 'teachers').doc(userId).get();
+        const userData = userDoc.data();
+        return {
+          userId,
+          name: userData?.name || "Unknown",
+          percentage: (stats.completed / (stats.total || 1)) * 100,
+          completed: stats.completed,
+          total: stats.total
+        };
+      }));
+
+      rankings.sort((a, b) => b.percentage - a.percentage);
+      res.json(rankings);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch rankings" });
+    }
+  });
+
+  // Syllabus & Routine Endpoints
+  app.get("/api/admin/syllabus-routines", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("syllabus_routines").get();
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch syllabus/routines" });
+    }
+  });
+
+  app.post("/api/admin/syllabus-routines", async (req, res) => {
+    const { title, link } = req.body;
+    try {
+      const docRef = await firestore.collection("syllabus_routines").add({
+        title, link, created_at: new Date().toISOString()
+      });
+      res.json({ id: docRef.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create syllabus/routine" });
+    }
+  });
+
+  app.put("/api/admin/syllabus-routines/:id", async (req, res) => {
+    try {
+      await firestore.collection("syllabus_routines").doc(req.params.id).update(req.body);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update syllabus/routine" });
+    }
+  });
+
+  app.delete("/api/admin/syllabus-routines/:id", async (req, res) => {
+    try {
+      await firestore.collection("syllabus_routines").doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete syllabus/routine" });
     }
   });
 
@@ -2877,7 +3179,12 @@ async function seedDatabase() {
   app.get("/api/notices", async (req, res) => {
     try {
       const snapshot = await firestore.collection("notices").where("is_active", "==", 1).get();
-      let notices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      let notices = await Promise.all(snapshot.docs.map(async doc => {
+        const data = doc.data();
+        // Fetch comment count
+        const commentsSnapshot = await firestore.collection("notices").doc(doc.id).collection("comments").get();
+        return { id: doc.id, ...data, comment_count: commentsSnapshot.size } as any;
+      }));
       notices.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
       res.json(notices);
     } catch (error) {
@@ -2886,7 +3193,7 @@ async function seedDatabase() {
   });
 
   app.post("/api/notices", async (req, res) => {
-    const { title, content, image_url, link_url, width, height } = req.body;
+    const { title, content, image_url, link_url, width, height, allow_comments } = req.body;
     try {
       await firestore.collection("notices").add({
         title,
@@ -2895,6 +3202,7 @@ async function seedDatabase() {
         link_url: link_url || null,
         width: width || null,
         height: height || null,
+        allow_comments: !!allow_comments,
         is_active: 1,
         date: new Date().toISOString(),
         created_at: new Date().toISOString()
@@ -2906,7 +3214,7 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/notices/:id", async (req, res) => {
-    const { title, content, is_active, image_url, link_url, width, height } = req.body;
+    const { title, content, is_active, image_url, link_url, width, height, allow_comments } = req.body;
     try {
       await firestore.collection("notices").doc(req.params.id).update({
         title,
@@ -2915,12 +3223,44 @@ async function seedDatabase() {
         link_url: link_url || null,
         width: width || null,
         height: height || null,
+        allow_comments: allow_comments !== undefined ? !!allow_comments : false,
         is_active: is_active !== undefined ? Number(is_active) : 1,
         updated_at: new Date().toISOString()
       });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to update notice" });
+    }
+  });
+
+  app.get("/api/notices/:id/comments", async (req, res) => {
+    try {
+      const snapshot = await firestore.collection("notices").doc(req.params.id).collection("comments").orderBy("created_at", "desc").get();
+      const comments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(comments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch comments" });
+    }
+  });
+
+  app.post("/api/notices/:id/comments", async (req, res) => {
+    const { guardian_name, guardian_photo, comment, student_id } = req.body;
+    try {
+      const noticeDoc = await firestore.collection("notices").doc(req.params.id).get();
+      if (!noticeDoc.exists || !noticeDoc.data()?.allow_comments) {
+        return res.status(400).json({ error: "Comments are not allowed for this notice" });
+      }
+
+      await firestore.collection("notices").doc(req.params.id).collection("comments").add({
+        guardian_name,
+        guardian_photo: guardian_photo || null,
+        comment,
+        student_id,
+        created_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add comment" });
     }
   });
 
@@ -3086,6 +3426,39 @@ async function seedDatabase() {
   });
 
   // --- Parent Login ---
+  app.post("/api/teacher-login", async (req, res) => {
+    const { identifier } = req.body;
+    if (!identifier) return res.status(400).json({ error: "মোবাইল নম্বর বা ইমেইল আবশ্যক" });
+
+    try {
+      const snapshot = await firestore.collection("teachers").where("phone", "==", identifier).get();
+      if (!snapshot.empty) {
+        const teacher = snapshot.docs[0].data();
+        if (teacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
+        return res.json({ id: snapshot.docs[0].id, ...teacher });
+      }
+
+      const emailSnapshot = await firestore.collection("teachers").where("email", "==", identifier).get();
+      if (!emailSnapshot.empty) {
+        const teacher = emailSnapshot.docs[0].data();
+        if (teacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
+        return res.json({ id: emailSnapshot.docs[0].id, ...teacher });
+      }
+
+      const codeSnapshot = await firestore.collection("teachers").where("id_code", "==", identifier).get();
+      if (!codeSnapshot.empty) {
+        const teacher = codeSnapshot.docs[0].data();
+        if (teacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
+        return res.json({ id: codeSnapshot.docs[0].id, ...teacher });
+      }
+
+      res.status(401).json({ error: "শিক্ষক খুঁজে পাওয়া যায়নি" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "লগইন করতে সমস্যা হয়েছে" });
+    }
+  });
+
   app.post("/api/parent-login", async (req, res) => {
     const identifier = req.body.identifier?.trim();
     

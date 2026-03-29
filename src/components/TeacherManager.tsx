@@ -277,6 +277,18 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                   <input name="nid" defaultValue={selectedTeacher?.nid} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                 </div>
                 <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">পিতার নাম</label>
+                  <input name="father_name" defaultValue={selectedTeacher?.father_name} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">মাতার নাম</label>
+                  <input name="mother_name" defaultValue={selectedTeacher?.mother_name} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">পিতা/মাতার এনআইডি</label>
+                  <input name="parents_nid" defaultValue={selectedTeacher?.parents_nid} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+                </div>
+                <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">বায়োমেট্রিক আইডি (মেশিন আইডি)</label>
                   <input name="biometric_id" defaultValue={selectedTeacher?.biometric_id} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: 201" />
                 </div>
