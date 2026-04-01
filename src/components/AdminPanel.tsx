@@ -430,35 +430,44 @@ export default function AdminPanel() {
   };
 
   const allTabs = [
-    { id: "dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
-    { id: "admissions", label: "ভর্তি আবেদন", icon: UserPlus, permission: "admission" },
-    { id: "students", label: "ছাত্র তালিকা", icon: Users, permission: "admission" },
-    { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users, permission: "admission" },
-    { id: "hifz", label: "হিফজ বিভাগ", icon: GraduationCap },
+    { id: "dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard, permission: "dashboard" },
+    { id: "admissions", label: "ভর্তি আবেদন", icon: UserPlus, permission: "admissions" },
+    { id: "students", label: "ছাত্র তালিকা", icon: Users, permission: "students" },
+    { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users, permission: "all_students" },
+    { id: "hifz", label: "হিফজ বিভাগ", icon: GraduationCap, permission: "hifz" },
     { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
-    { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "result" },
-    { id: "teachers", label: "শিক্ষক", icon: Users, permission: "teacher_attendance" },
-    { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "teacher_attendance" },
+    { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "results" },
+    { id: "teachers", label: "শিক্ষক", icon: Users, permission: "teachers" },
+    { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "all_teachers" },
     { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
-    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "student_attendance" },
-    { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "teacher_attendance" },
-    { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard, permission: "fee_collection" },
-    { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fee_collection" },
-    { id: "history", label: "হিস্টোরি", icon: Clock, permission: "fee_collection" },
-    { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "teacher_attendance" },
-    { id: "food-menu", label: "খাবারের তালিকা", icon: BookOpen, permission: "notice" },
-    { id: "routines", label: "রুটিন", icon: Calendar, permission: "notice" },
-    { id: "amal", label: "দৈনিক আমল", icon: Target, permission: "notice" },
-    { id: "notices", label: "নোটিশ", icon: Bell, permission: "notice" },
-    { id: "features", label: "বৈশিষ্ট্য", icon: Award, permission: "notice" },
-    { id: "showcase", label: "শোকেস", icon: Globe, permission: "notice" },
-    { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2 },
-    { id: "settings", label: "সেটিংস", icon: Settings },
+    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "device_attendance" },
+    { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "biometric" },
+    { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard, permission: "accounting" },
+    { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fees" },
+    { id: "history", label: "হিস্টোরি", icon: Clock, permission: "history" },
+    { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "recruitment" },
+    { id: "food-menu", label: "খাবারের তালিকা", icon: BookOpen, permission: "food_menu" },
+    { id: "routines", label: "রুটিন", icon: Calendar, permission: "routines" },
+    { id: "amal", label: "দৈনিক আমল", icon: Target, permission: "amal" },
+    { id: "notices", label: "নোটিশ", icon: Bell, permission: "notices" },
+    { id: "features", label: "বৈশিষ্ট্য", icon: Award, permission: "features" },
+    { id: "showcase", label: "শোকেস", icon: Globe, permission: "showcase" },
+    { id: "delete-history", label: "ডিলিট হিস্টোরি", icon: Trash2, permission: "delete_history" },
+    { id: "settings", label: "সেটিংস", icon: Settings, permission: "settings" },
   ];
 
   const tabs = adminRole === "admin" 
     ? allTabs 
     : allTabs.filter(tab => !tab.permission || adminPermissions.includes(tab.permission));
+
+  useEffect(() => {
+    if (isAuthenticated && tabs.length > 0) {
+      const isTabValid = tabs.some(t => t.id === activeTab);
+      if (!isTabValid) {
+        setActiveTab(tabs[0].id);
+      }
+    }
+  }, [isAuthenticated, adminPermissions, activeTab, tabs]);
 
   if (!isAuthenticated) {
     return (
@@ -1193,12 +1202,30 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
   const [loading, setLoading] = useState(false);
 
   const availablePermissions = [
-    { id: "admission", label: "ভর্তি আবেদন ও ছাত্র তালিকা" },
-    { id: "fee_collection", label: "বেতন ও ফি আদায়" },
+    { id: "dashboard", label: "ড্যাশবোর্ড" },
+    { id: "admissions", label: "ভর্তি আবেদন" },
+    { id: "students", label: "ছাত্র তালিকা" },
+    { id: "all_students", label: "সকল ছাত্র (আর্কাইভ)" },
+    { id: "hifz", label: "হিফজ বিভাগ" },
     { id: "student_attendance", label: "ছাত্র হাজিরা" },
+    { id: "results", label: "রেজাল্ট" },
+    { id: "teachers", label: "শিক্ষক" },
+    { id: "all_teachers", label: "শিক্ষক (আর্কাইভ)" },
     { id: "teacher_attendance", label: "শিক্ষক হাজিরা" },
-    { id: "result", label: "রেজাল্ট" },
-    { id: "notice", label: "নোটিশ" }
+    { id: "device_attendance", label: "স্মার্ট ডিভাইস হাজিরা" },
+    { id: "biometric", label: "বায়োমেট্রিক হাজিরা" },
+    { id: "accounting", label: "হিসাব-নিকাশ" },
+    { id: "fees", label: "বেতন ও ফি" },
+    { id: "history", label: "হিস্টোরি" },
+    { id: "recruitment", label: "নিয়োগ" },
+    { id: "food_menu", label: "খাবারের তালিকা" },
+    { id: "routines", label: "রুটিন" },
+    { id: "amal", label: "দৈনিক আমল" },
+    { id: "notices", label: "নোটিশ" },
+    { id: "features", label: "বৈশিষ্ট্য" },
+    { id: "showcase", label: "শোকেস" },
+    { id: "delete_history", label: "ডিলিট হিস্টোরি" },
+    { id: "settings", label: "সেটিংস" }
   ];
 
   const fetchSubAdmins = async () => {
@@ -1281,7 +1308,22 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
           <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="জিমেইল এড্রেস" className="w-full p-3 border rounded-xl" />
           
           <div className="space-y-2">
-            <label className="font-bold text-sm text-slate-600">পারমিশন সিলেক্ট করুন:</label>
+            <div className="flex justify-between items-center">
+              <label className="font-bold text-sm text-slate-600">পারমিশন সিলেক্ট করুন:</label>
+              <button 
+                type="button" 
+                onClick={() => {
+                  if (permissions.length === availablePermissions.length) {
+                    setPermissions([]);
+                  } else {
+                    setPermissions(availablePermissions.map(p => p.id));
+                  }
+                }}
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {permissions.length === availablePermissions.length ? "সব বাতিল করুন" : "সব সিলেক্ট করুন"}
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {availablePermissions.map(p => (
                 <label key={p.id} className="flex items-center gap-2 p-3 bg-white border rounded-xl cursor-pointer hover:bg-slate-50">
@@ -1337,14 +1379,22 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
     setShowPasswordModal(true);
   };
 
-  const handlePasswordSubmit = () => {
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-    if (passwordInput.trim() === adminPassword || passwordInput.trim() === "১২৩৪") {
-      setShowAdvancedSettings(true);
-      setShowPasswordModal(false);
-      setPasswordInput("");
-    } else {
-      addToast("ভুল পাসওয়ার্ড", "error");
+  const handlePasswordSubmit = async () => {
+    try {
+      const res = await fetch("/api/admin/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passwordInput.trim() })
+      });
+      if (res.ok) {
+        setShowAdvancedSettings(true);
+        setShowPasswordModal(false);
+        setPasswordInput("");
+      } else {
+        addToast("ভুল পাসওয়ার্ড বা অনুমতি নেই", "error");
+      }
+    } catch (error) {
+      addToast("সমস্যা হয়েছে", "error");
     }
   };
 
@@ -1908,6 +1958,31 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [isDeletingStudent, setIsDeletingStudent] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  const [interviewPermissions, setInterviewPermissions] = useState<any[]>([{ name: "", phone: "", relation: "", nid: "" }]);
+
+  const handleInterviewPermissionChange = (index: number, field: string, value: string) => {
+    const newList = [...interviewPermissions];
+    newList[index] = { ...newList[index], [field]: value };
+    setInterviewPermissions(newList);
+  };
+
+  const addInterviewPermission = () => {
+    setInterviewPermissions([...interviewPermissions, { name: "", phone: "", relation: "", nid: "" }]);
+  };
+
+  const removeInterviewPermission = (index: number) => {
+    if (interviewPermissions.length === 1) return;
+    setInterviewPermissions(interviewPermissions.filter((_, i) => i !== index));
+  };
+
+  useEffect(() => {
+    if (isEditing && selectedStudent) {
+      setInterviewPermissions(selectedStudent.interview_permissions || [{ name: "", phone: "", relation: "", nid: "" }]);
+    }
+    if (isAdding) {
+      setInterviewPermissions([{ name: "", phone: "", relation: "", nid: "" }]);
+    }
+  }, [isEditing, isAdding, selectedStudent]);
   
   // Fee Management State
   const [showFeeModal, setShowFeeModal] = useState(false);
@@ -2153,7 +2228,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
       const res = await fetch(`/api/admin/students/${selectedStudent.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ ...data, interview_permissions: interviewPermissions })
       });
       const result = await res.json();
       if (result.success) {
@@ -2188,7 +2263,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
       const res = await fetch("/api/admin/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ ...data, interview_permissions: interviewPermissions })
       });
       const result = await res.json();
       if (result.success) {
@@ -2221,11 +2296,11 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
               <form onSubmit={isAdding ? handleAddStudent : handleEditStudent} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">নাম (বাংলায়)</label>
+                    <label className="text-sm font-bold text-slate-700">শিক্ষার্থীর নাম</label>
                     <input name="name" required defaultValue={isEditing ? selectedStudent.name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Name (English)</label>
+                    <label className="text-sm font-bold text-slate-700">শিক্ষার্থীর নাম (ইংরেজি)</label>
                     <input name="name_en" defaultValue={isEditing ? selectedStudent.name_en : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
@@ -2266,10 +2341,6 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                     <input name="father_occupation" defaultValue={isEditing ? selectedStudent.father_occupation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">পিতার মাসিক আয়</label>
-                    <input name="father_income" type="number" defaultValue={isEditing ? selectedStudent.father_income : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-                  </div>
-                  <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">পিতার এনআইডি নম্বর</label>
                     <input name="father_nid" defaultValue={isEditing ? selectedStudent.father_nid : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
@@ -2284,10 +2355,6 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">মাতার পেশা</label>
                     <input name="mother_occupation" defaultValue={isEditing ? selectedStudent.mother_occupation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">মাতার মাসিক আয়</label>
-                    <input name="mother_income" type="number" defaultValue={isEditing ? selectedStudent.mother_income : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">মাতার এনআইডি নম্বর</label>
@@ -2371,20 +2438,68 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                   </div>
 
                   <div className="md:col-span-2 pt-4 border-t border-slate-100">
-                    <h4 className="text-lg font-bold text-slate-800 mb-4">জরুরী যোগাযোগ</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-700">নাম</label>
-                        <input name="emergency_contact_name" defaultValue={isEditing ? selectedStudent.emergency_contact_name : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-700">সম্পর্ক</label>
-                        <input name="emergency_contact_relation" defaultValue={isEditing ? selectedStudent.emergency_contact_relation : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-sm font-bold text-slate-700">মোবাইল নম্বর</label>
-                        <input name="emergency_contact_mobile" defaultValue={isEditing ? selectedStudent.emergency_contact_mobile : ""} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-                      </div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-lg font-bold text-slate-800">সাক্ষাৎকারের অনুমতি ব্যক্তিবর্গ</h4>
+                      <button 
+                        type="button" 
+                        onClick={addInterviewPermission}
+                        className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm hover:bg-emerald-200 transition-all flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" /> আরও যোগ করুন
+                      </button>
+                    </div>
+                    <div className="space-y-6">
+                      {interviewPermissions.map((person, index) => (
+                        <div key={index} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 relative">
+                          {interviewPermissions.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => removeInterviewPermission(index)}
+                              className="absolute top-4 right-4 text-rose-500 hover:text-rose-700"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase">নাম</label>
+                              <input 
+                                required 
+                                value={person.name} 
+                                onChange={(e) => handleInterviewPermissionChange(index, 'name', e.target.value)} 
+                                className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase">মোবাইল নম্বর</label>
+                              <input 
+                                required 
+                                value={person.phone} 
+                                onChange={(e) => handleInterviewPermissionChange(index, 'phone', e.target.value)} 
+                                className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase">সম্পর্ক</label>
+                              <input 
+                                required 
+                                value={person.relation} 
+                                onChange={(e) => handleInterviewPermissionChange(index, 'relation', e.target.value)} 
+                                className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase">এনআইডি নম্বর</label>
+                              <input 
+                                required 
+                                value={person.nid} 
+                                onChange={(e) => handleInterviewPermissionChange(index, 'nid', e.target.value)} 
+                                className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -2583,24 +2698,22 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                     </button>
                     <button 
                       onClick={async () => {
-                        const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-                        if ((deletePassword === adminPassword || deletePassword === "১২৩৪")) {
-                          const res = await fetch(`/api/admin/students/${selectedStudent.id}`, { 
-                            method: "DELETE",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ password: deletePassword })
-                          });
-                          if (res.ok) {
-                            addToast("ছাত্রের অ্যাকাউন্ট ডিলিট করা হয়েছে", "success");
-                            setIsDeletingStudent(false);
-                            setDeletePassword("");
-                            setSelectedStudent(null);
-                            onUpdate();
-                          } else {
-                            addToast("ডিলিট করতে সমস্যা হয়েছে।", "error");
-                          }
+                        if (!deletePassword) return addToast("পাসওয়ার্ড দিন", "error");
+                        
+                        const res = await fetch(`/api/admin/students/${selectedStudent.id}`, { 
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ password: deletePassword })
+                        });
+                        if (res.ok) {
+                          addToast("ছাত্রের অ্যাকাউন্ট ডিলিট করা হয়েছে", "success");
+                          setIsDeletingStudent(false);
+                          setDeletePassword("");
+                          setSelectedStudent(null);
+                          onUpdate();
                         } else {
-                          addToast("ভুল পাসওয়ার্ড!", "error");
+                          const err = await res.json();
+                          addToast(err.error || "ডিলিট করতে সমস্যা হয়েছে।", "error");
                         }
                       }}
                       className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all"
@@ -2674,7 +2787,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                 </div>
 
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 space-y-4">
-                  <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">অভিভাবক ও জরুরী যোগাযোগ</h4>
+                  <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">অভিভাবক ও সাক্ষাৎকারের অনুমতি ব্যক্তিবর্গ</h4>
                   <div className="space-y-4">
                     <div>
                       <p className="text-xs font-bold text-slate-400 mb-2">অভিভাবকের তথ্য</p>
@@ -2691,17 +2804,25 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                       ))}
                     </div>
                     <div className="pt-2 border-t border-slate-50">
-                      <p className="text-xs font-bold text-slate-400 mb-2">জরুরী যোগাযোগ</p>
-                      {[
-                        { label: "নাম", value: fullProfile.student.emergency_contact_name },
-                        { label: "সম্পর্ক", value: fullProfile.student.emergency_contact_relation },
-                        { label: "মোবাইল", value: fullProfile.student.emergency_contact_mobile }
-                      ].map((item, i) => (
-                        <div key={i} className="flex justify-between items-center py-1">
-                          <span className="text-slate-500 text-xs font-bold">{item.label}</span>
-                          <span className="text-slate-900 text-xs font-black">{item.value || "N/A"}</span>
+                      <p className="text-xs font-bold text-slate-400 mb-2">সাক্ষাৎকারের অনুমতি ব্যক্তিবর্গ</p>
+                      {fullProfile.student.interview_permissions && fullProfile.student.interview_permissions.length > 0 ? (
+                        <div className="space-y-3">
+                          {fullProfile.student.interview_permissions.map((person: any, idx: number) => (
+                            <div key={idx} className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-slate-900 text-[10px] font-black">{person.name}</span>
+                                <span className="text-slate-500 text-[8px] font-bold bg-white px-2 py-0.5 rounded-full border border-slate-100">{person.relation}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-500 text-[8px] font-bold">{person.phone}</span>
+                                <span className="text-slate-500 text-[8px] font-bold">NID: {person.nid}</span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        <p className="text-[10px] text-slate-400 font-bold italic">কোন তথ্য নেই</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4684,12 +4805,6 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
   };
 
   const handleDeleteSetup = async () => {
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-    if ((deletePassword !== adminPassword && deletePassword !== "১২৩৪")) {
-      addToast("ভুল পাসওয়ার্ড!", "error");
-      return;
-    }
-
     try {
       const res = await fetch(`/api/admin/fee-setups/${isDeletingSetup.id}`, {
         method: "DELETE",
@@ -5535,12 +5650,6 @@ function TransactionHistory({ settings }: { settings: any }) {
   }, [startDate, endDate]);
 
   const handleDelete = async () => {
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || "1234";
-    if ((deletePassword !== adminPassword && deletePassword !== "১২৩৪")) {
-      addToast("ভুল পাসওয়ার্ড!", "error");
-      return;
-    }
-
     try {
       const res = await fetch(`/api/admin/all-history/${isDeleting.type}/${isDeleting.id}`, {
         method: "DELETE",
@@ -6216,9 +6325,62 @@ function DeleteHistory() {
   );
 }
 
+function VoterDetails({ noticeId }: { noticeId: string }) {
+  const [voters, setVoters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const fetchVoters = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/notices/${noticeId}/votes`);
+      const data = await res.json();
+      setVoters(data.voters || []);
+    } catch (error) {
+      console.error("Failed to fetch voters", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVoters();
+  }, [noticeId]);
+
+  if (loading) return <div className="col-span-full text-center py-2 text-[10px] text-slate-400">লোড হচ্ছে...</div>;
+  if (voters.length === 0) return <div className="col-span-full text-center py-2 text-[10px] text-slate-400">কোন ভোট পড়েনি</div>;
+
+  const displayedVoters = showAll ? voters : voters.slice(0, 4);
+
+  return (
+    <>
+      {displayedVoters.map((v: any, i: number) => (
+        <div key={i} className={cn(
+          "flex items-center justify-between gap-2 text-[9px] font-bold p-2 rounded-xl border transition-all",
+          v.vote === 'yes' ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-rose-50 text-rose-700 border-rose-100"
+        )}>
+          <div className="flex items-center gap-1.5 truncate">
+            <div className={cn("w-1.5 h-1.5 rounded-full", v.vote === 'yes' ? "bg-emerald-500" : "bg-rose-500")} />
+            <span className="truncate">{v.student_name}</span>
+          </div>
+          <span className="opacity-50 font-mono text-[8px]">{v.student_id}</span>
+        </div>
+      ))}
+      {voters.length > 4 && (
+        <button 
+          onClick={() => setShowAll(!showAll)}
+          className="col-span-full text-[9px] font-black text-emerald-600 hover:text-emerald-700 mt-1"
+        >
+          {showAll ? "সংক্ষিপ্ত করুন" : `আরও ${voters.length - 4} জন দেখুন`}
+        </button>
+      )}
+    </>
+  );
+}
+
 function NoticeManager({ notices, onUpdate }: any) {
   const { addToast } = useToast();
-  const [formData, setFormData] = useState({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_comments: false });
+  const [formData, setFormData] = useState({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_poll: true });
   const [editingNotice, setEditingNotice] = useState<any>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -6239,7 +6401,7 @@ function NoticeManager({ notices, onUpdate }: any) {
         body: JSON.stringify(formData)
       });
     }
-    setFormData({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_comments: false });
+    setFormData({ title: "", content: "", is_active: 1, image_url: "", link_url: "", width: "", height: "", allow_poll: true });
     onUpdate();
   };
 
@@ -6264,7 +6426,7 @@ function NoticeManager({ notices, onUpdate }: any) {
       link_url: notice.link_url || "",
       width: notice.width || "",
       height: notice.height || "",
-      allow_comments: !!notice.allow_comments
+      allow_poll: !!notice.allow_poll
     });
   };
 
@@ -6307,12 +6469,12 @@ function NoticeManager({ notices, onUpdate }: any) {
             <div className="flex items-center gap-3">
               <input 
                 type="checkbox" 
-                id="allow_comments"
-                checked={formData.allow_comments}
-                onChange={(e) => setFormData({ ...formData, allow_comments: e.target.checked })}
+                id="allow_poll"
+                checked={formData.allow_poll}
+                onChange={(e) => setFormData({ ...formData, allow_poll: e.target.checked })}
                 className="w-5 h-5 accent-emerald-600"
               />
-              <label htmlFor="allow_comments" className="text-sm font-bold text-slate-700">কমেন্ট সেকশন চালু করুন</label>
+              <label htmlFor="allow_poll" className="text-sm font-bold text-slate-700">পোল (ভোট) চালু করুন</label>
             </div>
           </div>
           <div className="flex gap-4">
@@ -6337,7 +6499,7 @@ function NoticeManager({ notices, onUpdate }: any) {
               <h4 className="font-bold text-slate-800 pr-16">
                 {n.title} 
                 {n.is_active === 0 && <span className="text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded-full ml-2">Inactive</span>}
-                {n.allow_comments && <span className="text-xs text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full ml-2 flex items-center gap-1 inline-flex"><MessageSquare className="w-3 h-3" /> {n.comment_count || 0}</span>}
+                {n.allow_poll && <span className="text-xs text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full ml-2 flex items-center gap-1 inline-flex"><Target className="w-3 h-3" /> পোল সক্রিয়</span>}
               </h4>
               <p className="text-sm text-slate-500 mt-1">{n.content}</p>
               {n.image_url && (
@@ -6350,6 +6512,38 @@ function NoticeManager({ notices, onUpdate }: any) {
                     referrerPolicy="no-referrer"
                   />
                 </a>
+              )}
+              {n.allow_poll && (
+                <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">পোল ফলাফল:</p>
+                    <p className="text-[10px] font-bold text-slate-400">{n.total_votes || 0} ভোট</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-2 bg-emerald-100/50 rounded-xl">
+                      <p className="text-[8px] font-bold text-emerald-600 uppercase">হ্যাঁ</p>
+                      <p className="text-sm font-black text-emerald-900">
+                        {Math.round((n.yes_count / (n.total_votes || 1)) * 100)}% ({n.yes_count || 0})
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-rose-100/50 rounded-xl">
+                      <p className="text-[8px] font-bold text-rose-600 uppercase">না</p>
+                      <p className="text-sm font-black text-rose-900">
+                        {Math.round((n.no_count / (n.total_votes || 1)) * 100)}% ({n.no_count || 0})
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Voter Details List */}
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">ভোটের বিস্তারিত:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                      {/* We'll need to fetch voters for this notice if they aren't already here */}
+                      {/* For now, we'll assume they are fetched or provide a button to load them */}
+                      <VoterDetails noticeId={n.id} />
+                    </div>
+                  </div>
+                </div>
               )}
               <p className="text-[10px] text-slate-400 mt-2">{new Date(n.date).toLocaleDateString()}</p>
             </div>

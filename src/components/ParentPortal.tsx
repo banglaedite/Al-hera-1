@@ -37,9 +37,13 @@ export default function ParentPortal() {
   const [settings, setSettings] = useState<any>(null);
   const [hifzSettings, setHifzSettings] = useState<any>(null);
   const [hifzStartDate, setHifzStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [hifzEndDate, setHifzEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [hifzEndDate, setHifzEndDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [studentTasks, setStudentTasks] = useState<any[]>([]);
+  const [submissionStatus, setSubmissionStatus] = useState<any[]>([]);
+  const [fetchingStatus, setFetchingStatus] = useState(false);
+  const [selectedClass, setSelectedClass] = useState("সব");
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedPayMonths, setSelectedPayMonths] = useState<string[]>([]);
@@ -47,16 +51,18 @@ export default function ParentPortal() {
   const [paymentMessage, setPaymentMessage] = useState("");
   
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
-  const [noticeComments, setNoticeComments] = useState<Record<string, any[]>>({});
-  const [newComment, setNewComment] = useState("");
-  const [commentingOn, setCommentingOn] = useState<string | null>(null);
-  const [fetchingComments, setFetchingComments] = useState<string | null>(null);
+  const [noticeVotes, setNoticeVotes] = useState<Record<string, any>>({});
+  const [votingOn, setVotingOn] = useState<string | null>(null);
+  const [fetchingVotes, setFetchingVotes] = useState<string | null>(null);
+  const [voteMessage, setVoteMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   // Daily Amal State
   const [amalTasks, setAmalTasks] = useState<any[]>([]);
   const [amalLogs, setAmalLogs] = useState<Record<string, boolean>>({});
+  const [isAmalSubmitted, setIsAmalSubmitted] = useState(false);
   const [savingAmal, setSavingAmal] = useState(false);
-  const [amalDate, setAmalDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amalDate, setAmalDate] = useState(new Date().toLocaleDateString('en-CA'));
+  const todayDate = new Date().toLocaleDateString('en-CA');
   const [amalRankings, setAmalRankings] = useState<any[]>([]);
   const [userAmalStats, setUserAmalStats] = useState<any>(null);
 
@@ -235,53 +241,74 @@ export default function ParentPortal() {
     }
   };
 
-  const fetchComments = async (noticeId: string) => {
-    setFetchingComments(noticeId);
-    try {
-      const res = await fetch(`/api/notices/${noticeId}/comments`);
-      if (res.ok) {
-        const data = await res.json();
-        setNoticeComments(prev => ({ ...prev, [noticeId]: data }));
+  useEffect(() => {
+    if (student) {
+      if (activeTab === "amal") {
+        fetchAmalData();
+        fetchAmalRankings();
       }
-    } catch (error) {
-      console.error(error);
+      if (student.isTeacher && activeTab === "student-amal") {
+        fetchStudentAmalData();
+      }
+    }
+  }, [student, activeTab, amalDate, selectedClass]);
+
+  const fetchStudentAmalData = async () => {
+    setFetchingStatus(true);
+    try {
+      const [tasksRes, statusRes] = await Promise.all([
+        fetch("/api/amal-tasks?target=student"),
+        fetch(`/api/admin/amal-submission-status?target=student&date=${amalDate}`)
+      ]);
+      if (tasksRes.ok && statusRes.ok) {
+        setStudentTasks(await tasksRes.json());
+        let status = await statusRes.json();
+        if (selectedClass !== "সব") {
+          status = status.filter((s: any) => s.class === selectedClass);
+        }
+        setSubmissionStatus(status);
+      }
+    } catch (err) {
+      console.error("Failed to fetch student amal data:", err);
     } finally {
-      setFetchingComments(null);
+      setFetchingStatus(false);
     }
   };
 
-  const handleAddComment = async (noticeId: string) => {
-    if (!newComment.trim()) return;
-    setCommentingOn(noticeId);
+  const toggleStudentAmal = async (studentId: string, taskId: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    
+    // Optimistically update
+    setSubmissionStatus(prev => prev.map(s => {
+      if (s.userId === studentId) {
+        const newLogs = [...s.logs];
+        const logIndex = newLogs.findIndex(l => l.task_id === taskId);
+        if (logIndex > -1) {
+          newLogs[logIndex] = { ...newLogs[logIndex], status: newStatus ? "completed" : "pending" };
+        } else {
+          newLogs.push({ task_id: taskId, status: newStatus ? "completed" : "pending" });
+        }
+        return { ...s, submitted: true, logs: newLogs };
+      }
+      return s;
+    }));
+
     try {
-      const res = await fetch(`/api/notices/${noticeId}/comments`, {
+      await fetch("/api/amal-logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          guardian_name: student.father_name || student.mother_name || "অভিভাবক",
-          guardian_photo: student.photo_url || null,
-          comment: newComment,
-          student_id: student.student_id
+          user_id: studentId,
+          user_type: "student",
+          date: amalDate,
+          logs: { [taskId]: newStatus ? "completed" : "pending" }
         })
       });
-      if (res.ok) {
-        setNewComment("");
-        fetchComments(noticeId);
-        fetchNotices(); // Refresh to get updated comment count
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setCommentingOn(null);
+    } catch (err) {
+      console.error("Failed to save student amal log:", err);
+      fetchStudentAmalData();
     }
   };
-
-  useEffect(() => {
-    if (student && activeTab === "amal") {
-      fetchAmalData();
-      fetchAmalRankings();
-    }
-  }, [student, activeTab, amalDate]);
 
   const fetchAmalRankings = async () => {
     try {
@@ -323,12 +350,18 @@ export default function ParentPortal() {
         const logs = await logsRes.json();
         setAmalTasks(tasks);
         const logMap: Record<string, boolean> = {};
+        let submitted = false;
         if (Array.isArray(logs)) {
           logs.forEach((log: any) => {
-            logMap[log.task_id] = log.status === "completed";
+            if (log.task_id === "submission_record") {
+              submitted = true;
+            } else {
+              logMap[log.task_id] = log.status === "completed";
+            }
           });
         }
         setAmalLogs(logMap);
+        setIsAmalSubmitted(submitted);
       }
     } catch (err) {
       console.error("Failed to fetch amal data:", err);
@@ -346,25 +379,84 @@ export default function ParentPortal() {
     }
   };
 
-  const toggleAmal = async (taskId: string) => {
-    const newStatus = !amalLogs[taskId];
-    setAmalLogs(prev => ({ ...prev, [taskId]: newStatus }));
-    
+  const toggleAmal = (taskId: string) => {
+    if (isAmalSubmitted) return;
+    setAmalLogs(prev => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
+
+  const submitAmal = async () => {
+    if (isAmalSubmitted) return;
+    setSavingAmal(true);
     try {
-      await fetch("/api/amal-logs", {
+      const logsToSave: Record<string, string> = {
+        "submission_record": "completed"
+      };
+      
+      amalTasks.forEach(task => {
+        logsToSave[task.id] = amalLogs[task.id] ? "completed" : "pending";
+      });
+
+      const res = await fetch("/api/amal-logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: student.id,
           user_type: student.isTeacher ? "teacher" : "student",
           date: amalDate,
-          logs: { [taskId]: newStatus ? "completed" : "pending" }
+          logs: logsToSave
         })
       });
+      
+      if (res.ok) {
+        setIsAmalSubmitted(true);
+      } else {
+        alert("আমল সাবমিট করতে সমস্যা হয়েছে।");
+      }
     } catch (err) {
-      console.error("Failed to save amal log:", err);
-      // Revert on error
-      setAmalLogs(prev => ({ ...prev, [taskId]: !newStatus }));
+      console.error("Failed to submit amal:", err);
+      alert("আমল সাবমিট করতে সমস্যা হয়েছে।");
+    } finally {
+      setSavingAmal(false);
+    }
+  };
+
+  const fetchVotes = async (noticeId: string) => {
+    setFetchingVotes(noticeId);
+    try {
+      const res = await fetch(`/api/notices/${noticeId}/votes`);
+      if (res.ok) {
+        const data = await res.json();
+        setNoticeVotes((prev: any) => ({ ...prev, [noticeId]: data }));
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setFetchingVotes(null);
+    }
+  };
+
+  const handleVote = async (noticeId: string, vote: 'yes' | 'no') => {
+    if (!student) return;
+    setVotingOn(noticeId);
+    setVoteMessage(null);
+    try {
+      const res = await fetch(`/api/notices/${noticeId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: student.id, student_name: student.name, vote })
+      });
+      if (res.ok) {
+        setVoteMessage({ text: "আপনার ভোট গ্রহণ করা হয়েছে", type: 'success' });
+        fetchVotes(noticeId);
+      } else {
+        const data = await res.json();
+        setVoteMessage({ text: data.error || "ভোট দিতে সমস্যা হয়েছে", type: 'error' });
+      }
+    } catch (error) {
+      setVoteMessage({ text: "সার্ভার সমস্যা হয়েছে", type: 'error' });
+    } finally {
+      setVotingOn(null);
+      setTimeout(() => setVoteMessage(null), 3000);
     }
   };
 
@@ -409,7 +501,7 @@ export default function ParentPortal() {
       
       if (isTeacher) {
         const [attRes, salaryRes, settingsRes] = await Promise.all([
-          fetch(`/api/admin/teacher-attendance?date=${new Date().toISOString().slice(0, 10)}`),
+          fetch(`/api/admin/teacher-attendance?date=${new Date().toLocaleDateString('en-CA')}`),
           fetch(`/api/admin/teachers/${data.id}/salaries`),
           fetch("/api/site-settings")
         ]);
@@ -564,8 +656,11 @@ export default function ParentPortal() {
         <div className="flex overflow-x-auto gap-3 mb-10 pb-2 scrollbar-hide">
           {student.isTeacher ? [
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
+            { id: "amal", label: "আমার আমল", icon: Heart },
+            { id: "student-amal", label: "ছাত্রের আমল", icon: Users },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
-            { id: "payment-history", label: "বেতন হিস্টোরি", icon: CreditCard }
+            { id: "payment-history", label: "বেতন হিস্টোরি", icon: CreditCard },
+            { id: "notices", label: "নোটিশ", icon: Bell }
           ].map((tab: any) => (
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -666,6 +761,26 @@ export default function ParentPortal() {
             <AnimatePresence mode="wait">
               {activeTab === "overview" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+                  {/* Leaderboard Banner */}
+                  {amalRankings.length > 0 && userAmalStats && (
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-[2.5rem] p-8 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                      <div className="relative z-10 flex items-center gap-6">
+                        <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center border-4 border-white/30 backdrop-blur-sm">
+                          <Trophy className="w-10 h-10 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black mb-1">মাসিক লিডারবোর্ড</h3>
+                          <p className="text-amber-100 font-medium">আপনার বর্তমান অবস্থান: <span className="font-black text-white text-xl">#{userAmalStats.rank}</span></p>
+                        </div>
+                      </div>
+                      <div className="relative z-10 bg-white/20 px-8 py-4 rounded-3xl backdrop-blur-sm border border-white/30 text-center min-w-[150px]">
+                        <div className="text-sm text-amber-100 font-bold uppercase tracking-wider mb-1">মোট পয়েন্ট</div>
+                        <div className="text-4xl font-black">{userAmalStats.score}</div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                       <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
@@ -859,163 +974,184 @@ export default function ParentPortal() {
               )}
 
               {activeTab === "amal" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Stats & Ranking Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="p-4 bg-emerald-100 text-emerald-600 rounded-2xl">
-                  <Heart className="w-8 h-8" />
-                </div>
-                <div>
-                  <p className="text-slate-500 font-bold text-sm">আপনার আমল পূরণ</p>
-                  <h4 className="text-2xl font-black text-slate-900">
-                    {userAmalStats ? `${userAmalStats.percentage.toFixed(1)}%` : "0%"}
-                  </h4>
-                </div>
-              </div>
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="p-4 bg-amber-100 text-amber-600 rounded-2xl">
-                  <Trophy className="w-8 h-8" />
-                </div>
-                <div>
-                  <p className="text-slate-500 font-bold text-sm">আপনার র‍্যাংক</p>
-                  <h4 className="text-2xl font-black text-slate-900">
-                    {userAmalStats ? `#${userAmalStats.rank}` : "N/A"}
-                  </h4>
-                </div>
-              </div>
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="p-4 bg-blue-100 text-blue-600 rounded-2xl">
-                  <Calendar className="w-8 h-8" />
-                </div>
-                <div>
-                  <p className="text-slate-500 font-bold text-sm">এই মাসের আমল</p>
-                  <h4 className="text-2xl font-black text-slate-900">
-                    {userAmalStats ? `${userAmalStats.completed}/${userAmalStats.total}` : "0/0"}
-                  </h4>
-                </div>
-              </div>
-            </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
+                        <p className="text-slate-500 font-bold">আপনার আমলগুলো প্রতিদিন রেকর্ড করুন</p>
+                      </div>
+                      <input 
+                        type="date" 
+                        value={amalDate}
+                        max={todayDate}
+                        onChange={(e) => setAmalDate(e.target.value)}
+                        className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                      />
+                    </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Daily Tasks */}
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
-                    <p className="text-slate-500 font-bold">আপনার আমলগুলো প্রতিদিন রেকর্ড করুন</p>
-                  </div>
-                  <input 
-                    type="date" 
-                    value={amalDate}
-                    onChange={(e) => setAmalDate(e.target.value)}
-                    className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
-                  />
-                </div>
-
-                {amalTasks.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
-                    <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-500 font-bold">কোন আমল সেট করা নেই</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {amalTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        onClick={() => toggleAmal(task.id)}
-                        className={cn(
-                          "w-full p-4 rounded-[1.5rem] border-2 transition-all flex items-center justify-between text-left group",
-                          amalLogs[task.id]
-                            ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-900/10"
-                            : "bg-white border-slate-100 hover:border-emerald-200"
+                    {amalTasks.length === 0 ? (
+                      <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                        <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                        <p className="text-slate-500 font-bold">কোন আমল সেট করা নেই</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {amalTasks.map((task) => (
+                          <button
+                            key={task.id}
+                            onClick={() => toggleAmal(task.id)}
+                            disabled={isAmalSubmitted}
+                            className={cn(
+                              "w-full p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between text-left group",
+                              amalLogs[task.id]
+                                ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-900/10"
+                                : "bg-white border-slate-100",
+                              !isAmalSubmitted && !amalLogs[task.id] && "hover:border-emerald-200",
+                              isAmalSubmitted && "opacity-70 cursor-not-allowed"
+                            )}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={cn(
+                                "p-4 rounded-2xl transition-all",
+                                amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400",
+                                !isAmalSubmitted && !amalLogs[task.id] && "group-hover:bg-emerald-100 group-hover:text-emerald-500"
+                              )}>
+                                <Heart className="w-6 h-6 fill-current" />
+                              </div>
+                              <div>
+                                <h4 className={cn(
+                                  "font-black text-lg transition-all",
+                                  amalLogs[task.id] ? "text-emerald-900" : "text-slate-700"
+                                )}>{task.title}</h4>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                  {amalLogs[task.id] ? "সম্পন্ন হয়েছে" : "বাকি আছে"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className={cn(
+                              "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all",
+                              amalLogs[task.id] ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent"
+                            )}>
+                              <CheckCircle2 className="w-5 h-5" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {amalTasks.length > 0 && (
+                      <div className="mt-8 flex flex-col items-center justify-center border-t border-slate-100 pt-8">
+                        {isAmalSubmitted ? (
+                          <div className="flex items-center gap-3 text-emerald-600 font-bold bg-emerald-50 px-6 py-3 rounded-2xl">
+                            <CheckCircle2 className="w-6 h-6" />
+                            <span>এই দিনের আমল সাবমিট করা হয়েছে</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={submitAmal}
+                            disabled={savingAmal}
+                            className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-900/20 flex items-center gap-3 disabled:opacity-70"
+                          >
+                            {savingAmal ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+                            আমল সাবমিট করুন
+                          </button>
                         )}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "p-3 rounded-xl transition-all",
-                            amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-500"
-                          )}>
-                            <Heart className="w-5 h-5 fill-current" />
-                          </div>
-                          <div>
-                            <h4 className={cn(
-                              "font-black text-base transition-all",
-                              amalLogs[task.id] ? "text-emerald-900" : "text-slate-700"
-                            )}>{task.title}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                              {amalLogs[task.id] ? "সম্পন্ন হয়েছে" : "বাকি আছে"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className={cn(
-                          "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                          amalLogs[task.id] ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent"
-                        )}>
-                          <CheckCircle2 className="w-4 h-4" />
-                        </div>
-                      </button>
-                    ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </motion.div>
+              )}
 
-              {/* Monthly Rankings */}
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                <div className="mb-8">
-                  <h3 className="text-2xl font-black text-slate-900 mb-1">সেরা আমলকারী (চলতি মাস)</h3>
-                  <p className="text-slate-500 font-bold">এই মাসের শীর্ষ ১০ জন আমলকারী</p>
-                </div>
-
-                <div className="space-y-4">
-                  {amalRankings.slice(0, 10).map((rank, index) => (
-                    <div 
-                      key={rank.userId} 
-                      className={cn(
-                        "p-4 rounded-2xl flex items-center justify-between transition-all",
-                        rank.userId === student.id ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50 border border-transparent"
-                      )}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center font-black text-lg",
-                          index === 0 ? "bg-amber-100 text-amber-600" :
-                          index === 1 ? "bg-slate-200 text-slate-600" :
-                          index === 2 ? "bg-orange-100 text-orange-600" :
-                          "bg-white text-slate-400"
-                        )}>
-                          {index + 1}
-                        </div>
-                        <div>
-                          <h4 className="font-black text-slate-900">{rank.name}</h4>
-                          <p className="text-xs text-slate-500 font-bold">সম্পন্ন: {rank.completed}/{rank.total}</p>
-                        </div>
+              {activeTab === "student-amal" && student.isTeacher && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-900 mb-1">ছাত্রদের আমল</h3>
+                        <p className="text-slate-500 font-bold">ছাত্রদের আমলগুলো দেখুন ও টিক দিন</p>
                       </div>
-                      <div className="text-right">
-                        <div className="text-xl font-black text-emerald-600">{rank.percentage.toFixed(0)}%</div>
-                        <div className="w-24 h-1.5 bg-slate-200 rounded-full mt-1 overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-500 rounded-full" 
-                            style={{ width: `${rank.percentage}%` }}
-                          />
-                        </div>
+                      <div className="flex gap-4">
+                        <select 
+                          value={selectedClass}
+                          onChange={(e) => setSelectedClass(e.target.value)}
+                          className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                        >
+                          <option value="সব">সব শ্রেণী</option>
+                          {settings?.classes?.map((c: string) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <input 
+                          type="date" 
+                          value={amalDate}
+                          max={todayDate}
+                          onChange={(e) => setAmalDate(e.target.value)}
+                          className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                        />
                       </div>
                     </div>
-                  ))}
-                  {amalRankings.length === 0 && (
-                    <div className="text-center py-12 text-slate-400 font-bold">
-                      কোন র‍্যাঙ্কিং তথ্য পাওয়া যায়নি
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">ছাত্রের নাম</th>
+                            <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">আমলসমূহ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {fetchingStatus ? (
+                            <tr>
+                              <td colSpan={2} className="p-12 text-center">
+                                <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                              </td>
+                            </tr>
+                          ) : submissionStatus.length > 0 ? submissionStatus.map((s) => (
+                            <tr key={s.userId} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-6">
+                                <p className="font-black text-slate-900">{s.name}</p>
+                                <p className="text-[10px] text-slate-400 font-bold">ID: {s.userId} | {s.class}</p>
+                              </td>
+                              <td className="p-6">
+                                <div className="flex flex-wrap gap-2">
+                                  {studentTasks.map(task => {
+                                    const log = s.logs.find((l: any) => l.task_id === task.id);
+                                    const isCompleted = log?.status === "completed";
+                                    return (
+                                      <button
+                                        key={task.id}
+                                        onClick={() => toggleStudentAmal(s.userId, task.id, isCompleted)}
+                                        className={cn(
+                                          "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-2",
+                                          isCompleted 
+                                            ? "bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm" 
+                                            : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200"
+                                        )}
+                                      >
+                                        {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : <Heart className="w-3 h-3" />}
+                                        {task.title}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={2} className="p-12 text-center text-slate-400 font-bold">কোনো ছাত্র পাওয়া যায়নি</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
+                  </div>
+                </motion.div>
+              )}
 
         {activeTab === "syllabus" && (
           <motion.div
@@ -1449,6 +1585,18 @@ export default function ParentPortal() {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
                   <h3 className="text-2xl font-bold text-slate-900 mb-8">নোটিশ বোর্ড</h3>
                   <div className="space-y-6">
+                    {voteMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cn(
+                          "fixed top-4 right-4 z-50 p-4 rounded-2xl shadow-xl font-bold text-sm border",
+                          voteMessage.type === 'success' ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-rose-50 text-rose-700 border-rose-100"
+                        )}
+                      >
+                        {voteMessage.text}
+                      </motion.div>
+                    )}
                     {notices.length > 0 ? notices.map((notice, i) => (
                       <div key={i} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                         <div className="flex justify-between items-start mb-4">
@@ -1470,56 +1618,83 @@ export default function ParentPortal() {
                           </a>
                         )}
 
-                        {notice.allow_comments && (
+                        {notice.allow_poll && (
                           <div className="mt-6 pt-6 border-t border-slate-200">
                             <div className="flex items-center justify-between mb-4">
+                              <h5 className="text-sm font-bold text-slate-700">আপনার মতামত দিন (পোল):</h5>
+                              {voteMessage && (
+                                <span className={cn(
+                                  "text-xs font-bold px-3 py-1 rounded-full",
+                                  voteMessage.type === 'success' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                )}>
+                                  {voteMessage.text}
+                                </span>
+                              )}
                               <button 
-                                onClick={() => fetchComments(notice.id)}
-                                className="flex items-center gap-2 text-sm font-bold text-emerald-600 hover:text-emerald-700"
+                                onClick={() => fetchVotes(notice.id)}
+                                className="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1"
                               >
-                                <MessageSquare className="w-4 h-4" />
-                                {notice.comment_count || 0} টি কমেন্ট
-                                {fetchingComments === notice.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                                {fetchingVotes === notice.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <History className="w-3 h-3" />}
+                                ফলাফল দেখুন
                               </button>
                             </div>
 
-                            {noticeComments[notice.id] && (
-                              <div className="space-y-4 mb-6 max-h-60 overflow-y-auto custom-scrollbar pr-2">
-                                {noticeComments[notice.id].map((c: any) => (
-                                  <div key={c.id} className="flex gap-3">
-                                    <img 
-                                      src={c.guardian_photo || "https://picsum.photos/seed/user/100/100"} 
-                                      alt={c.guardian_name} 
-                                      className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                    <div className="flex-1 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-                                      <p className="text-xs font-black text-slate-900 mb-1">{c.guardian_name}</p>
-                                      <p className="text-xs text-slate-600">{c.comment}</p>
-                                      <p className="text-[8px] text-slate-400 mt-1">{new Date(c.created_at).toLocaleString('bn-BD')}</p>
-                                    </div>
+                            <div className="flex gap-4 mb-6">
+                              <button 
+                                disabled={votingOn === notice.id}
+                                onClick={() => handleVote(notice.id, 'yes')}
+                                className="flex-1 py-3 bg-emerald-50 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                              >
+                                {votingOn === notice.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                হ্যাঁ
+                              </button>
+                              <button 
+                                disabled={votingOn === notice.id}
+                                onClick={() => handleVote(notice.id, 'no')}
+                                className="flex-1 py-3 bg-rose-50 text-rose-700 rounded-2xl font-bold hover:bg-rose-100 transition-all flex items-center justify-center gap-2"
+                              >
+                                {votingOn === notice.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
+                                না
+                              </button>
+                            </div>
+
+                            {noticeVotes[notice.id] && (
+                              <div className="space-y-4 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="text-center p-3 bg-emerald-50 rounded-xl">
+                                    <p className="text-[10px] font-bold text-emerald-600 uppercase">হ্যাঁ</p>
+                                    <p className="text-xl font-black text-emerald-900">
+                                      {Math.round((noticeVotes[notice.id].yes_count / (noticeVotes[notice.id].total_votes || 1)) * 100)}%
+                                    </p>
+                                    <p className="text-[10px] text-emerald-600">{noticeVotes[notice.id].yes_count} জন</p>
                                   </div>
-                                ))}
+                                  <div className="text-center p-3 bg-rose-50 rounded-xl">
+                                    <p className="text-[10px] font-bold text-rose-600 uppercase">না</p>
+                                    <p className="text-xl font-black text-rose-900">
+                                      {Math.round((noticeVotes[notice.id].no_count / (noticeVotes[notice.id].total_votes || 1)) * 100)}%
+                                    </p>
+                                    <p className="text-[10px] text-rose-600">{noticeVotes[notice.id].no_count} জন</p>
+                                  </div>
+                                </div>
+                                
+                                <div className="mt-4">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">কারা ভোট দিয়েছেন:</p>
+                                  <div className="max-h-32 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
+                                    {noticeVotes[notice.id].voters?.map((v: any, idx: number) => (
+                                      <div key={idx} className="flex justify-between items-center text-[10px] py-1 border-b border-slate-50 last:border-0">
+                                        <span className="font-bold text-slate-700">{v.student_name}</span>
+                                        <span className={cn(
+                                          "px-2 py-0.5 rounded-full font-black",
+                                          v.vote === 'yes' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                        )}>
+                                          {v.vote === 'yes' ? "হ্যাঁ" : "না"}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
                               </div>
                             )}
-
-                            <div className="flex gap-2">
-                              <input 
-                                type="text" 
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="আপনার মতামত লিখুন..."
-                                className="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddComment(notice.id)}
-                              />
-                              <button 
-                                disabled={commentingOn === notice.id || !newComment.trim()}
-                                onClick={() => handleAddComment(notice.id)}
-                                className="p-2 bg-emerald-900 text-white rounded-xl hover:bg-emerald-800 disabled:opacity-50"
-                              >
-                                {commentingOn === notice.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                              </button>
-                            </div>
                           </div>
                         )}
                       </div>

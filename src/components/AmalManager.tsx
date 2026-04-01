@@ -11,12 +11,22 @@ export function AmalManager() {
   const [isAdding, setIsAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"tasks" | "rankings">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "rankings" | "status">("tasks");
+  const [submissionStatus, setSubmissionStatus] = useState<any[]>([]);
+  const [statusDate, setStatusDate] = useState(new Date().toLocaleDateString('en-CA'));
+  const [fetchingStatus, setFetchingStatus] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<"student" | "teacher">("teacher");
+
+  // Rankings state
   const [rankings, setRankings] = useState<any[]>([]);
-  const [rankingTarget, setRankingTarget] = useState<"student" | "teacher">("student");
-  const [startDate, setStartDate] = useState(new Date(new Date().setDate(1)).toISOString().slice(0, 10));
-  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [fetchingRankings, setFetchingRankings] = useState(false);
+  const [rankingTarget, setRankingTarget] = useState<"student" | "teacher">("teacher");
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toLocaleDateString('en-CA');
+  });
+  const [endDate, setEndDate] = useState(new Date().toLocaleDateString('en-CA'));
 
   const fetchTasks = async () => {
     try {
@@ -43,6 +53,19 @@ export function AmalManager() {
     }
   };
 
+  const fetchStatus = async () => {
+    setFetchingStatus(true);
+    try {
+      const res = await fetch(`/api/admin/amal-submission-status?target=${statusTarget}&date=${statusDate}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setSubmissionStatus(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setFetchingStatus(false);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
   }, []);
@@ -50,8 +73,10 @@ export function AmalManager() {
   useEffect(() => {
     if (activeTab === "rankings") {
       fetchRankings();
+    } else if (activeTab === "status") {
+      fetchStatus();
     }
-  }, [activeTab, rankingTarget, startDate, endDate]);
+  }, [activeTab, rankingTarget, startDate, endDate, statusTarget, statusDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +153,16 @@ export function AmalManager() {
               activeTab === "rankings" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
             )}
           >
-            <Trophy className="w-4 h-4" /> র‍্যাংকিং ও রিপোর্ট
+            <Trophy className="w-4 h-4" /> র‍্যাংকিং
+          </button>
+          <button 
+            onClick={() => setActiveTab("status")}
+            className={cn(
+              "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
+              activeTab === "status" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <BarChart2 className="w-4 h-4" /> জমা রিপোর্ট
           </button>
         </div>
       </div>
@@ -190,7 +224,7 @@ export function AmalManager() {
             )}
           </div>
         </>
-      ) : (
+      ) : activeTab === "rankings" ? (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -210,6 +244,7 @@ export function AmalManager() {
                 <input 
                   type="date"
                   value={startDate}
+                  max={new Date().toLocaleDateString('en-CA')}
                   onChange={(e) => setStartDate(e.target.value)}
                   className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -219,6 +254,7 @@ export function AmalManager() {
                 <input 
                   type="date"
                   value={endDate}
+                  max={new Date().toLocaleDateString('en-CA')}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -281,13 +317,109 @@ export function AmalManager() {
                         </div>
                       </td>
                       <td className="p-6 text-center font-bold text-slate-600">{rank.total}</td>
-                      <td className="p-6 text-center font-bold text-emerald-600">{rank.completed}</td>
+                      <td className="p-6 text-center font-black text-emerald-600">{rank.completed}</td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={5} className="p-12 text-center text-slate-400 font-bold">
-                        কোন তথ্য পাওয়া যায়নি
+                      <td colSpan={5} className="p-12 text-center text-slate-400 font-bold">কোনো ডাটা পাওয়া যায়নি</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">কাদের রিপোর্ট?</label>
+                <select 
+                  value={statusTarget}
+                  onChange={(e) => setStatusTarget(e.target.value as any)}
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="student">ছাত্র</option>
+                  <option value="teacher">ওস্তাদ</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">তারিখ</label>
+                <input 
+                  type="date"
+                  value={statusDate}
+                  max={new Date().toLocaleDateString('en-CA')}
+                  onChange={(e) => setStatusDate(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 text-center">
+              <p className="text-slate-500 font-bold mb-1">মোট {statusTarget === 'teacher' ? 'ওস্তাদ' : 'ছাত্র'}</p>
+              <h3 className="text-4xl font-black text-slate-900">{submissionStatus.length}</h3>
+            </div>
+            <div className="bg-emerald-50 p-8 rounded-[2.5rem] shadow-xl border border-emerald-100 text-center">
+              <p className="text-emerald-600 font-bold mb-1">জমা দিয়েছেন</p>
+              <h3 className="text-4xl font-black text-emerald-700">{submissionStatus.filter(s => s.submitted).length}</h3>
+            </div>
+            <div className="bg-rose-50 p-8 rounded-[2.5rem] shadow-xl border border-rose-100 text-center">
+              <p className="text-rose-600 font-bold mb-1">বাকি আছেন</p>
+              <h3 className="text-4xl font-black text-rose-700">{submissionStatus.filter(s => !s.submitted).length}</h3>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">নাম</th>
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider text-center">অবস্থা</th>
+                    <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">আমলসমূহ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {fetchingStatus ? (
+                    <tr>
+                      <td colSpan={3} className="p-12 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                        <p className="mt-4 text-slate-500 font-bold">লোড হচ্ছে...</p>
                       </td>
+                    </tr>
+                  ) : submissionStatus.length > 0 ? submissionStatus.map((item) => (
+                    <tr key={item.userId} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-6">
+                        <p className="font-black text-slate-900">{item.name}</p>
+                        <p className="text-xs text-slate-400 font-bold">ID: {item.userId}</p>
+                      </td>
+                      <td className="p-6 text-center">
+                        <span className={cn(
+                          "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest",
+                          item.submitted ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                        )}>
+                          {item.submitted ? "জমা হয়েছে" : "বাকি"}
+                        </span>
+                      </td>
+                      <td className="p-6">
+                        <div className="flex flex-wrap gap-2">
+                          {item.logs.length > 0 ? item.logs.map((log: any) => (
+                            <span key={log.id} className={cn(
+                              "px-3 py-1 rounded-lg text-[10px] font-bold",
+                              log.status === 'completed' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-slate-100 text-slate-400"
+                            )}>
+                              {tasks.find(t => t.id === log.task_id)?.title || "Unknown Task"}
+                            </span>
+                          )) : <span className="text-slate-400 text-xs italic">কোনো আমল রেকর্ড নেই</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={3} className="p-12 text-center text-slate-400 font-bold">কোনো ডাটা পাওয়া যায়নি</td>
                     </tr>
                   )}
                 </tbody>

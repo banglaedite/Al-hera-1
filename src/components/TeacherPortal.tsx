@@ -10,9 +10,11 @@ import {
   AlertCircle,
   LogOut,
   User,
+  Users,
   History,
   Heart,
-  Target
+  Target,
+  Send
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -25,11 +27,18 @@ export default function TeacherPortal() {
   const [settings, setSettings] = useState<any>(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedClass, setSelectedClass] = useState("সব");
+  const [submissionStatus, setSubmissionStatus] = useState<any[]>([]);
+  const [fetchingStatus, setFetchingStatus] = useState(false);
+  const [studentTasks, setStudentTasks] = useState<any[]>([]);
   
   // Daily Amal State
   const [amalTasks, setAmalTasks] = useState<any[]>([]);
   const [amalLogs, setAmalLogs] = useState<Record<string, boolean>>({});
-  const [amalDate, setAmalDate] = useState(new Date().toISOString().slice(0, 10));
+  const [isAmalSubmitted, setIsAmalSubmitted] = useState(false);
+  const [savingAmal, setSavingAmal] = useState(false);
+  const [amalDate, setAmalDate] = useState(new Date().toLocaleDateString('en-CA'));
 
   useEffect(() => {
     fetch("/api/site-settings").then(res => res.json()).then(setSettings);
@@ -41,10 +50,73 @@ export default function TeacherPortal() {
   }, []);
 
   useEffect(() => {
-    if (teacher && activeTab === "amal") {
-      fetchAmalData();
+    if (teacher) {
+      if (activeTab === "amal") {
+        fetchAmalData();
+      }
+      if (activeTab === "student-amal") {
+        fetchStudentAmalData();
+      }
     }
-  }, [teacher, activeTab, amalDate]);
+  }, [teacher, activeTab, amalDate, selectedClass]);
+
+  const fetchStudentAmalData = async () => {
+    setFetchingStatus(true);
+    try {
+      const [tasksRes, statusRes] = await Promise.all([
+        fetch("/api/amal-tasks?target=student"),
+        fetch(`/api/admin/amal-submission-status?target=student&date=${amalDate}`)
+      ]);
+      if (tasksRes.ok && statusRes.ok) {
+        setStudentTasks(await tasksRes.json());
+        let status = await statusRes.json();
+        if (selectedClass !== "সব") {
+          status = status.filter((s: any) => s.class === selectedClass);
+        }
+        setSubmissionStatus(status);
+      }
+    } catch (err) {
+      console.error("Failed to fetch student amal data:", err);
+    } finally {
+      setFetchingStatus(false);
+    }
+  };
+
+  const toggleStudentAmal = async (studentId: string, taskId: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    
+    // Optimistically update
+    setSubmissionStatus(prev => prev.map(s => {
+      if (s.userId === studentId) {
+        const newLogs = [...s.logs];
+        const logIndex = newLogs.findIndex(l => l.task_id === taskId);
+        if (logIndex > -1) {
+          newLogs[logIndex] = { ...newLogs[logIndex], status: newStatus ? "completed" : "pending" };
+        } else {
+          newLogs.push({ task_id: taskId, status: newStatus ? "completed" : "pending" });
+        }
+        return { ...s, submitted: true, logs: newLogs };
+      }
+      return s;
+    }));
+
+    try {
+      await fetch("/api/amal-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: studentId,
+          user_type: "student",
+          date: amalDate,
+          logs: { [taskId]: newStatus ? "completed" : "pending" }
+        })
+      });
+    } catch (err) {
+      console.error("Failed to save student amal log:", err);
+      // Revert on error
+      fetchStudentAmalData();
+    }
+  };
 
   const fetchAmalData = async () => {
     try {
@@ -55,36 +127,64 @@ export default function TeacherPortal() {
       if (tasksRes.ok && logsRes.ok) {
         const tasks = await tasksRes.json();
         const logs = await logsRes.json();
-        setAmalTasks(tasks);
+        setAmalTasks(Array.isArray(tasks) ? tasks : []);
         const logMap: Record<string, boolean> = {};
-        logs.forEach((log: any) => {
-          logMap[log.task_id] = log.status === "completed";
-        });
+        let submitted = false;
+        if (Array.isArray(logs)) {
+          logs.forEach((log: any) => {
+            if (log.task_id === "submission_record") {
+              submitted = true;
+            } else {
+              logMap[log.task_id] = log.status === "completed";
+            }
+          });
+        }
         setAmalLogs(logMap);
+        setIsAmalSubmitted(submitted);
       }
     } catch (err) {
       console.error("Failed to fetch amal data:", err);
     }
   };
 
-  const toggleAmal = async (taskId: string) => {
-    const newStatus = !amalLogs[taskId];
-    setAmalLogs(prev => ({ ...prev, [taskId]: newStatus }));
-    
+  const toggleAmal = (taskId: string) => {
+    if (isAmalSubmitted) return;
+    setAmalLogs(prev => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
+
+  const submitAmal = async () => {
+    if (isAmalSubmitted) return;
+    setSavingAmal(true);
     try {
-      await fetch("/api/amal-logs", {
+      const logsToSave: Record<string, string> = {
+        "submission_record": "completed"
+      };
+      
+      amalTasks.forEach(task => {
+        logsToSave[task.id] = amalLogs[task.id] ? "completed" : "pending";
+      });
+
+      const res = await fetch("/api/amal-logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: teacher.id,
           user_type: "teacher",
           date: amalDate,
-          logs: { [taskId]: newStatus ? "completed" : "pending" }
+          logs: logsToSave
         })
       });
+      
+      if (res.ok) {
+        setIsAmalSubmitted(true);
+      } else {
+        alert("আমল সাবমিট করতে সমস্যা হয়েছে।");
+      }
     } catch (err) {
-      console.error("Failed to save amal log:", err);
-      setAmalLogs(prev => ({ ...prev, [taskId]: !newStatus }));
+      console.error("Failed to submit amal:", err);
+      alert("আমল সাবমিট করতে সমস্যা হয়েছে।");
+    } finally {
+      setSavingAmal(false);
     }
   };
 
@@ -214,6 +314,7 @@ export default function TeacherPortal() {
           {[
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "amal", label: "দৈনিক আমল", icon: Heart },
+            { id: "student-amal", label: "ছাত্রের আমল", icon: Users },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "notices", label: "নোটিশ", icon: Bell },
           ].map((tab: any) => (
@@ -328,6 +429,7 @@ export default function TeacherPortal() {
                       <input 
                         type="date" 
                         value={amalDate}
+                        max={new Date().toLocaleDateString('en-CA')}
                         onChange={(e) => setAmalDate(e.target.value)}
                         className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
                       />
@@ -344,17 +446,21 @@ export default function TeacherPortal() {
                           <button
                             key={task.id}
                             onClick={() => toggleAmal(task.id)}
+                            disabled={isAmalSubmitted}
                             className={cn(
                               "p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between text-left group",
                               amalLogs[task.id]
                                 ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-900/10"
-                                : "bg-white border-slate-100 hover:border-emerald-200"
+                                : "bg-white border-slate-100",
+                              !isAmalSubmitted && !amalLogs[task.id] && "hover:border-emerald-200",
+                              isAmalSubmitted && "opacity-70 cursor-not-allowed"
                             )}
                           >
                             <div className="flex items-center gap-4">
                               <div className={cn(
                                 "p-4 rounded-2xl transition-all",
-                                amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-500"
+                                amalLogs[task.id] ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400",
+                                !isAmalSubmitted && !amalLogs[task.id] && "group-hover:bg-emerald-100 group-hover:text-emerald-500"
                               )}>
                                 <Heart className="w-6 h-6 fill-current" />
                               </div>
@@ -378,6 +484,112 @@ export default function TeacherPortal() {
                         ))}
                       </div>
                     )}
+                    
+                    {amalTasks.length > 0 && (
+                      <div className="mt-8 flex flex-col items-center justify-center border-t border-slate-100 pt-8">
+                        {isAmalSubmitted ? (
+                          <div className="flex items-center gap-3 text-emerald-600 font-bold bg-emerald-50 px-6 py-3 rounded-2xl">
+                            <CheckCircle2 className="w-6 h-6" />
+                            <span>এই দিনের আমল সাবমিট করা হয়েছে</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={submitAmal}
+                            disabled={savingAmal}
+                            className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-900/20 flex items-center gap-3 disabled:opacity-70"
+                          >
+                            {savingAmal ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+                            আমল সাবমিট করুন
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "student-amal" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-900 mb-1">ছাত্রদের আমল</h3>
+                        <p className="text-slate-500 font-bold">ছাত্রদের আমলগুলো দেখুন ও টিক দিন</p>
+                      </div>
+                      <div className="flex gap-4">
+                        <select 
+                          value={selectedClass}
+                          onChange={(e) => setSelectedClass(e.target.value)}
+                          className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                        >
+                          <option value="সব">সব শ্রেণী</option>
+                          {settings?.classes?.map((c: string) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <input 
+                          type="date" 
+                          value={amalDate}
+                          max={new Date().toLocaleDateString('en-CA')}
+                          onChange={(e) => setAmalDate(e.target.value)}
+                          className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">ছাত্রের নাম</th>
+                            <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">আমলসমূহ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {fetchingStatus ? (
+                            <tr>
+                              <td colSpan={2} className="p-12 text-center">
+                                <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                              </td>
+                            </tr>
+                          ) : submissionStatus.length > 0 ? submissionStatus.map((student) => (
+                            <tr key={student.userId} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-6">
+                                <p className="font-black text-slate-900">{student.name}</p>
+                                <p className="text-[10px] text-slate-400 font-bold">ID: {student.userId} | {student.class}</p>
+                              </td>
+                              <td className="p-6">
+                                <div className="flex flex-wrap gap-2">
+                                  {studentTasks.map(task => {
+                                    const log = student.logs.find((l: any) => l.task_id === task.id);
+                                    const isCompleted = log?.status === "completed";
+                                    return (
+                                      <button
+                                        key={task.id}
+                                        onClick={() => toggleStudentAmal(student.userId, task.id, isCompleted)}
+                                        className={cn(
+                                          "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-2",
+                                          isCompleted 
+                                            ? "bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm" 
+                                            : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200"
+                                        )}
+                                      >
+                                        {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : <Heart className="w-3 h-3" />}
+                                        {task.title}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={2} className="p-12 text-center text-slate-400 font-bold">কোনো ছাত্র পাওয়া যায়নি</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </motion.div>
               )}

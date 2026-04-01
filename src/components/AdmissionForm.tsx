@@ -13,7 +13,9 @@ import {
   CheckCircle2,
   ArrowRight,
   Loader2,
-  ArrowLeft
+  ArrowLeft,
+  Plus,
+  X
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { LoadingButton } from "./LoadingButton";
@@ -48,10 +50,8 @@ export default function AdmissionForm() {
     nationality: "বাংলাদেশী",
     religion: "ইসলাম",
     father_occupation: "",
-    father_income: "",
     father_nid: "",
     mother_occupation: "",
-    mother_income: "",
     mother_nid: "",
     studentId: "",
     photo_url: "",
@@ -62,9 +62,7 @@ export default function AdmissionForm() {
     guardian_relation: "",
     guardian_nid: "",
     guardian_mobile: "",
-    emergency_contact_name: "",
-    emergency_contact_relation: "",
-    emergency_contact_mobile: ""
+    interview_permissions: [{ name: "", phone: "", relation: "", nid: "" }]
   });
 
   useEffect(() => {
@@ -73,6 +71,25 @@ export default function AdmissionForm() {
       .then(data => setSettings(data))
       .catch(err => console.error("Failed to load settings:", err));
   }, []);
+
+  const handleInterviewPermissionChange = (index: number, field: string, value: string) => {
+    const newList = [...formData.interview_permissions];
+    newList[index] = { ...newList[index], [field]: value };
+    setFormData({ ...formData, interview_permissions: newList });
+  };
+
+  const addInterviewPermission = () => {
+    setFormData({
+      ...formData,
+      interview_permissions: [...formData.interview_permissions, { name: "", phone: "", relation: "", nid: "" }]
+    });
+  };
+
+  const removeInterviewPermission = (index: number) => {
+    if (formData.interview_permissions.length === 1) return;
+    const newList = formData.interview_permissions.filter((_, i) => i !== index);
+    setFormData({ ...formData, interview_permissions: newList });
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
@@ -198,7 +215,7 @@ export default function AdmissionForm() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">ছাত্রের নাম (বাংলায়)</label>
+                <label className="text-sm font-semibold text-slate-700">শিক্ষার্থীর নাম</label>
                 <input required name="name" value={formData.name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="পূর্ণ নাম লিখুন" />
               </div>
               <div className="space-y-2">
@@ -218,10 +235,6 @@ export default function AdmissionForm() {
                 <input name="father_occupation" value={formData.father_occupation} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">পিতার মাসিক আয়</label>
-                <input name="father_income" type="number" value={formData.father_income} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">পিতার এনআইডি নম্বর</label>
                 <input name="father_nid" value={formData.father_nid} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
               </div>
@@ -236,10 +249,6 @@ export default function AdmissionForm() {
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">মাতার পেশা</label>
                 <input name="mother_occupation" value={formData.mother_occupation} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">মাতার মাসিক আয়</label>
-                <input name="mother_income" type="number" value={formData.mother_income} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">মাতার এনআইডি নম্বর</label>
@@ -352,20 +361,68 @@ export default function AdmissionForm() {
               </div>
 
               <div className="md:col-span-2 pt-4 border-t border-slate-100">
-                <h4 className="text-lg font-bold text-slate-800 mb-4">জরুরী যোগাযোগ</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">নাম</label>
-                    <input name="emergency_contact_name" value={formData.emergency_contact_name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">সম্পর্ক</label>
-                    <input name="emergency_contact_relation" value={formData.emergency_contact_relation} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-semibold text-slate-700">মোবাইল নম্বর</label>
-                    <input name="emergency_contact_mobile" value={formData.emergency_contact_mobile} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-bold text-slate-800">সাক্ষাৎকারের অনুমতি ব্যক্তিবর্গ</h4>
+                  <button 
+                    type="button" 
+                    onClick={addInterviewPermission}
+                    className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm hover:bg-emerald-200 transition-all flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> আরও যোগ করুন
+                  </button>
+                </div>
+                <div className="space-y-6">
+                  {formData.interview_permissions.map((person, index) => (
+                    <div key={index} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 relative">
+                      {formData.interview_permissions.length > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => removeInterviewPermission(index)}
+                          className="absolute top-4 right-4 text-rose-500 hover:text-rose-700"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase">নাম</label>
+                          <input 
+                            required 
+                            value={person.name} 
+                            onChange={(e) => handleInterviewPermissionChange(index, 'name', e.target.value)} 
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase">মোবাইল নম্বর</label>
+                          <input 
+                            required 
+                            value={person.phone} 
+                            onChange={(e) => handleInterviewPermissionChange(index, 'phone', e.target.value)} 
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase">সম্পর্ক</label>
+                          <input 
+                            required 
+                            value={person.relation} 
+                            onChange={(e) => handleInterviewPermissionChange(index, 'relation', e.target.value)} 
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase">এনআইডি নম্বর</label>
+                          <input 
+                            required 
+                            value={person.nid} 
+                            onChange={(e) => handleInterviewPermissionChange(index, 'nid', e.target.value)} 
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

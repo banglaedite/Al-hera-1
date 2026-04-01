@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Printer, Download, ArrowLeft, Calendar, Filter } from 'lucide-react';
+import { Printer, Download, ArrowLeft, Calendar, Filter, BarChart2, FileText, TrendingUp, TrendingDown, Search, ChevronRight } from 'lucide-react';
 import { printElement } from '../utils/printUtils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -31,51 +31,66 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
     const doc = new jsPDF('p', 'mm', 'a4');
     
     // Header
-    doc.setFontSize(20);
+    doc.setFontSize(22);
     doc.setTextColor(0, 100, 0); // Dark Green
-    doc.text(settings?.title || 'আল-হেরা মাদ্রাসা মধুপুর', 105, 15, { align: 'center' });
-    doc.setFontSize(14);
-    doc.setTextColor(40);
-    doc.text(type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী', 105, 22, { align: 'center' });
+    doc.text(settings?.title || 'সুন্দর রসিক মাদ্রাসা', 105, 15, { align: 'center' });
     doc.setFontSize(12);
-    doc.text(`${startDate ? new Date(startDate).toLocaleDateString('bn-BD') : ''} থেকে ${endDate ? new Date(endDate).toLocaleDateString('bn-BD') : ''}`, 105, 29, { align: 'center' });
+    doc.setTextColor(100);
+    doc.text(settings?.address || 'মধুপুর, টাঙ্গাইল', 105, 22, { align: 'center' });
     
+    doc.setDrawColor(0, 100, 0);
+    doc.line(14, 25, 196, 25);
+
+    doc.setFontSize(16);
+    doc.setTextColor(40);
+    doc.text(type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী', 105, 35, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text(`${startDate ? new Date(startDate).toLocaleDateString('bn-BD') : ''} থেকে ${endDate ? new Date(endDate).toLocaleDateString('bn-BD') : ''}`, 105, 42, { align: 'center' });
+    
+    let currentY = 50;
+
     // Income Table
     if (printType === 'all' || printType === 'income') {
       doc.setFontSize(14);
       doc.setTextColor(16, 185, 129); // Emerald-500
-      doc.text('আয় সমূহ', 14, 40);
+      doc.text('আয় সমূহ', 14, currentY);
       
       const incomeData = Object.entries(groupedByCategory.income).flatMap(([cat, data]: [string, any]) => 
-        data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || 'N/A', `৳${item.amount}`])
+        data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || item.student_name || 'N/A', `৳${item.amount}`])
       );
 
       (doc as any).autoTable({
-        startY: 45,
+        startY: currentY + 5,
         head: [['তারিখ', 'বিভাগ', 'বিবরণ', 'পরিমাণ']],
         body: incomeData,
-        theme: 'striped',
-        headStyles: { fillColor: [16, 185, 129] },
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 10, cellPadding: 3 },
       });
+      currentY = (doc as any).lastAutoTable.finalY + 15;
     }
 
     // Expense Table
     if (printType === 'all' || printType === 'expense') {
-      const startY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 45;
+      if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
+      }
       doc.setFontSize(14);
       doc.setTextColor(225, 29, 72); // Rose-600
-      doc.text('ব্যয় সমূহ', 14, startY);
+      doc.text('ব্যয় সমূহ', 14, currentY);
       
       const expenseData = Object.entries(groupedByCategory.expenses).flatMap(([cat, data]: [string, any]) => 
-        data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || 'N/A', `৳${item.amount}`])
+        data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || item.purpose || 'N/A', `৳${item.amount}`])
       );
 
       (doc as any).autoTable({
-        startY: startY + 5,
+        startY: currentY + 5,
         head: [['তারিখ', 'বিভাগ', 'বিবরণ', 'পরিমাণ']],
         body: expenseData,
-        theme: 'striped',
-        headStyles: { fillColor: [225, 29, 72] },
+        theme: 'grid',
+        headStyles: { fillColor: [225, 29, 72], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 10, cellPadding: 3 },
       });
     }
     
@@ -350,53 +365,146 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
         </div>
       </div>
 
-      <div id="monthly-yearly-report" className="bg-white p-8 rounded-2xl border border-slate-200">
-        <div className="flex items-center justify-between mb-8 border-b pb-6">
-          <div className="flex items-center gap-4">
-            {settings?.logo_url && (
-              <img src={settings.logo_url} className="w-16 h-16 object-contain" alt="Logo" referrerPolicy="no-referrer" />
-            )}
-            <div>
-              <h1 className="text-3xl font-black text-slate-900 mb-1">{settings?.title || "আল-হেরা মাদ্রাসা মধুপুর"}</h1>
-              <p className="text-slate-600 font-medium">{settings?.address || "মধুপুর, টাঙ্গাইল"}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <h2 className="text-xl font-bold text-slate-800 bg-slate-100 inline-block px-4 py-1 rounded-full mb-2">
-                {type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী'}
-              </h2>
-              <p className="text-slate-500 font-medium">
-                {startDate && endDate ? `${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : 'সব সময়'}
-              </p>
-            </div>
-            {settings?.qr_code_url && (
-              <img src={settings.qr_code_url} className="w-16 h-16 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
+      <div id="monthly-yearly-report" className="bg-white p-12 rounded-2xl border border-slate-200 shadow-sm print:border-0 print:p-0">
+        <div className="text-center mb-10 border-b-2 border-emerald-600 pb-8 relative">
+          <div className="flex justify-center mb-4">
+            {settings?.logo_url ? (
+              <img src={settings.logo_url} className="w-24 h-24 object-contain" alt="Logo" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
+                <BarChart2 className="w-12 h-12" />
+              </div>
             )}
           </div>
+          <h1 className="text-4xl font-black text-slate-900 mb-2">{settings?.title || "সুন্দর রসিক মাদ্রাসা"}</h1>
+          <p className="text-slate-600 font-bold text-lg mb-4">{settings?.address || "মধুপুর, টাঙ্গাইল"}</p>
+          
+          <div className="inline-block px-8 py-2 bg-emerald-600 text-white rounded-full font-black text-xl mb-4">
+            {type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী'}
+          </div>
+          
+          <p className="text-slate-500 font-bold">
+            {startDate && endDate ? `${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : 'সব সময়'}
+          </p>
+
+          {settings?.qr_code_url && (
+            <div className="absolute top-0 right-0 print:block">
+              <img src={settings.qr_code_url} className="w-24 h-24 object-contain" alt="QR Code" referrerPolicy="no-referrer" />
+            </div>
+          )}
         </div>
 
         {(printType === 'all' || printType === 'income') && (
-          <div className="mb-8">
-            <h3 className="text-xl font-bold text-emerald-600 mb-4 border-b pb-2">আয় সমূহ</h3>
-            {Object.keys(groupedByCategory.income).length > 0 ? (
-              renderCategoryList(groupedByCategory.income, true)
-            ) : (
-              <p className="text-slate-500 italic">কোনো আয় পাওয়া যায়নি</p>
-            )}
+          <div className="mb-12">
+            <div className="flex items-center gap-3 mb-6 border-l-8 border-emerald-500 pl-4">
+              <h3 className="text-2xl font-black text-emerald-700">আয় সমূহ</h3>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-emerald-600 text-white">
+                    <th className="p-4 font-black border border-emerald-700">তারিখ</th>
+                    <th className="p-4 font-black border border-emerald-700">বিভাগ</th>
+                    <th className="p-4 font-black border border-emerald-700">বিবরণ</th>
+                    <th className="p-4 font-black border border-emerald-700 text-right">পরিমাণ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(groupedByCategory.income).length > 0 ? (
+                    Object.entries(groupedByCategory.income).flatMap(([cat, data]: [string, any]) => 
+                      data.items.map((item: any, idx: number) => (
+                        <tr key={`${cat}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 border border-slate-100">{new Date(item.date).toLocaleDateString('bn-BD')}</td>
+                          <td className="p-4 border border-slate-100 font-bold">{cat}</td>
+                          <td className="p-4 border border-slate-100">{item.description || item.student_name || 'N/A'}</td>
+                          <td className="p-4 border border-slate-100 text-right font-black text-emerald-600">৳{item.amount}</td>
+                        </tr>
+                      ))
+                    )
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-slate-400 italic">কোনো আয় পাওয়া যায়নি</td>
+                    </tr>
+                  )}
+                </tbody>
+                {Object.entries(groupedByCategory.income).length > 0 && (
+                  <tfoot>
+                    <tr className="bg-emerald-50 font-black">
+                      <td colSpan={3} className="p-4 text-right border border-emerald-100">সর্বমোট আয়:</td>
+                      <td className="p-4 text-right text-emerald-700 border border-emerald-100 text-xl">
+                        ৳{Object.values(groupedByCategory.income).reduce((sum: number, cat: any) => sum + cat.total, 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
           </div>
         )}
 
         {(printType === 'all' || printType === 'expense') && (
-          <div>
-            <h3 className="text-xl font-bold text-rose-600 mb-4 border-b pb-2">ব্যয় সমূহ</h3>
-            {Object.keys(groupedByCategory.expenses).length > 0 ? (
-              renderCategoryList(groupedByCategory.expenses, false)
-            ) : (
-              <p className="text-slate-500 italic">কোনো ব্যয় পাওয়া যায়নি</p>
-            )}
+          <div className="mb-12">
+            <div className="flex items-center gap-3 mb-6 border-l-8 border-rose-500 pl-4">
+              <h3 className="text-2xl font-black text-rose-700">ব্যয় সমূহ</h3>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-rose-600 text-white">
+                    <th className="p-4 font-black border border-rose-700">তারিখ</th>
+                    <th className="p-4 font-black border border-rose-700">বিভাগ</th>
+                    <th className="p-4 font-black border border-rose-700">বিবরণ</th>
+                    <th className="p-4 font-black border border-rose-700 text-right">পরিমাণ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(groupedByCategory.expenses).length > 0 ? (
+                    Object.entries(groupedByCategory.expenses).flatMap(([cat, data]: [string, any]) => 
+                      data.items.map((item: any, idx: number) => (
+                        <tr key={`${cat}-${idx}`} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 border border-slate-100">{new Date(item.date).toLocaleDateString('bn-BD')}</td>
+                          <td className="p-4 border border-slate-100 font-bold">{cat}</td>
+                          <td className="p-4 border border-slate-100">{item.description || item.purpose || 'N/A'}</td>
+                          <td className="p-4 border border-slate-100 text-right font-black text-rose-600">৳{item.amount}</td>
+                        </tr>
+                      ))
+                    )
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-slate-400 italic">কোনো ব্যয় পাওয়া যায়নি</td>
+                    </tr>
+                  )}
+                </tbody>
+                {Object.entries(groupedByCategory.expenses).length > 0 && (
+                  <tfoot>
+                    <tr className="bg-rose-50 font-black">
+                      <td colSpan={3} className="p-4 text-right border border-rose-100">সর্বমোট ব্যয়:</td>
+                      <td className="p-4 text-right text-rose-700 border border-rose-100 text-xl">
+                        ৳{Object.values(groupedByCategory.expenses).reduce((sum: number, cat: any) => sum + cat.total, 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
           </div>
         )}
+
+        <div className="mt-12 pt-8 border-t-2 border-slate-100 flex justify-between items-end">
+          <div className="text-slate-400 text-sm font-bold">
+            রিপোর্ট জেনারেট হয়েছে: {new Date().toLocaleString('bn-BD')}
+          </div>
+          <div className="flex gap-20">
+            <div className="text-center">
+              <div className="w-32 border-t border-slate-400 mb-2"></div>
+              <p className="text-sm font-bold text-slate-600">ক্যাশিয়ার</p>
+            </div>
+            <div className="text-center">
+              <div className="w-32 border-t border-slate-400 mb-2"></div>
+              <p className="text-sm font-bold text-slate-600">মুহতামিম</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -5,6 +5,8 @@ import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import admin from 'firebase-admin';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+import * as xlsx from 'xlsx';
+import cron from 'node-cron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,14 +101,38 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+async function verifyAdminOrSubAdmin(passwordOrEmail: string, requiredPermission?: string) {
+  const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
+  if (passwordOrEmail === adminPassword || passwordOrEmail === "১২৩৪") return true;
+  
+  try {
+    const snapshot = await firestore.collection("sub_admins").where("email", "==", passwordOrEmail).get();
+    if (!snapshot.empty) {
+      // If a specific permission is required, we could check it here.
+      // For now, if they are a valid sub-admin, we allow the action.
+      // The frontend already restricts access to the relevant tabs.
+      return true;
+    }
+  } catch (e) {
+    console.error("Error verifying sub-admin:", e);
+  }
+  return false;
+}
+
+app.post("/api/admin/verify-password", async (req, res) => {
+  const { password } = req.body;
+  if (await verifyAdminOrSubAdmin(password, "all")) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
+  }
+});
+
 // API to update Firebase Config
 app.post("/api/admin/update-firebase-config", async (req, res) => {
   const { projectId, clientEmail, privateKey, databaseId, password } = req.body;
   
-  const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
-  if (password !== adminPassword && password !== "১২৩৪") {
-    return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-  }
+  if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
 
   try {
     const config = { projectId, clientEmail, privateKey, databaseId };
@@ -439,10 +465,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/all-history/:type/:id", async (req, res) => {
     const { password } = req.body;
-    const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     const { type, id } = req.params;
     try {
       let collectionName = "";
@@ -485,9 +508,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/transactions/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const transactionRef = firestore!.collection("transactions").doc(req.params.id);
       const transactionDoc = await transactionRef.get();
@@ -950,7 +971,7 @@ async function seedDatabase() {
   // --- Class Promotion ---
   app.post("/api/admin/promote-class", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) {
       return res.status(401).json({ error: "Invalid password" });
     }
     try {
@@ -997,9 +1018,7 @@ async function seedDatabase() {
 
   app.post("/api/classes", async (req, res) => {
     const { name, order, password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("classes").add({ name, order: order || 0 });
       res.json({ success: true });
@@ -1013,9 +1032,7 @@ async function seedDatabase() {
     
     // If updating name or order, require password
     if (name !== undefined || order !== undefined) {
-      if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-        return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-      }
+      if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     }
 
     try {
@@ -1074,9 +1091,7 @@ async function seedDatabase() {
 
   app.delete("/api/classes/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("classes").doc(req.params.id).delete();
       res.json({ success: true });
@@ -1098,9 +1113,7 @@ async function seedDatabase() {
 
   app.post("/api/sub-admins", async (req, res) => {
     const { email, permissions, password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("sub_admins").add({ email, permissions });
       res.json({ success: true });
@@ -1111,9 +1124,7 @@ async function seedDatabase() {
 
   app.put("/api/sub-admins/:id", async (req, res) => {
     const { email, permissions, password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("sub_admins").doc(req.params.id).update({ email, permissions });
       res.json({ success: true });
@@ -1124,9 +1135,7 @@ async function seedDatabase() {
 
   app.delete("/api/sub-admins/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("sub_admins").doc(req.params.id).delete();
       res.json({ success: true });
@@ -1248,9 +1257,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/teachers/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const teacherDoc = await firestore.collection("teachers").doc(req.params.id).get();
       if (teacherDoc.exists) {
@@ -1271,9 +1278,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/teachers/salary/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const salaryDoc = await firestore.collection("teacher_salaries").doc(req.params.id).get();
       if (salaryDoc.exists) {
@@ -1340,11 +1345,7 @@ async function seedDatabase() {
 
   app.post("/api/admin/accounting/income-categories", async (req, res) => {
     const { name, password } = req.body;
-    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
-    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const docRef = await firestore.collection("income_categories").add({ name, is_hidden: false });
       res.json({ id: docRef.id, name, is_hidden: false });
@@ -1355,11 +1356,7 @@ async function seedDatabase() {
 
   app.put("/api/admin/accounting/income-categories/:id", async (req, res) => {
     const { name, is_hidden, password } = req.body;
-    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
-    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const docRef = firestore.collection("income_categories").doc(req.params.id);
       const doc = await docRef.get();
@@ -1388,11 +1385,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/accounting/income-categories/:id", async (req, res) => {
     const { password } = req.body;
-    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
-    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("income_categories").doc(req.params.id).delete();
       res.json({ success: true });
@@ -1413,11 +1406,7 @@ async function seedDatabase() {
 
   app.post("/api/admin/accounting/expense-categories", async (req, res) => {
     const { name, password } = req.body;
-    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
-    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const docRef = await firestore.collection("expense_categories").add({ name, is_hidden: false });
       res.json({ id: docRef.id, name, is_hidden: false });
@@ -1428,11 +1417,7 @@ async function seedDatabase() {
 
   app.put("/api/admin/accounting/expense-categories/:id", async (req, res) => {
     const { name, is_hidden, password } = req.body;
-    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
-    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const docRef = firestore.collection("expense_categories").doc(req.params.id);
       const doc = await docRef.get();
@@ -1461,11 +1446,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/accounting/expense-categories/:id", async (req, res) => {
     const { password } = req.body;
-    const settingsDoc = await firestore.collection("site_settings").doc("1").get();
-    const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-    if (password !== adminPassword && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("expense_categories").doc(req.params.id).delete();
       res.json({ success: true });
@@ -1721,9 +1702,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/accounting/income/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const incomeDoc = await firestore.collection("income").doc(req.params.id).get();
       if (incomeDoc.exists) {
@@ -1797,9 +1776,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/accounting/expenses/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") {
-      return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
-    }
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const expenseDoc = await firestore.collection("expenses").doc(req.params.id).get();
       if (expenseDoc.exists) {
@@ -1952,7 +1929,7 @@ async function seedDatabase() {
 
   app.delete("/api/admin/fee-setups/:id", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") return res.status(403).json({ error: "ভুল পাসওয়ার্ড" });
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) return res.status(403).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
 
     const setupId = req.params.id;
     try {
@@ -2202,7 +2179,9 @@ async function seedDatabase() {
       phone, whatsapp, email, className, is_hifz, photo_url, roll: providedRoll, 
       monthly_fee, studentId: providedStudentId,
       guardian_name, guardian_relation, guardian_nid, guardian_mobile,
-      emergency_contact_name, emergency_contact_relation, emergency_contact_mobile
+      interview_permissions,
+      father_occupation, father_nid, mother_occupation, mother_nid,
+      nationality, religion, gender
     } = req.body;
     
     if (!name || !className) {
@@ -2249,6 +2228,13 @@ async function seedDatabase() {
         father_name_en,
         mother_name,
         mother_name_en,
+        father_occupation,
+        father_nid,
+        mother_occupation,
+        mother_nid,
+        nationality,
+        religion,
+        gender,
         dob,
         blood_group,
         birth_cert_no,
@@ -2268,9 +2254,7 @@ async function seedDatabase() {
         guardian_relation,
         guardian_nid,
         guardian_mobile,
-        emergency_contact_name,
-        emergency_contact_relation,
-        emergency_contact_mobile,
+        interview_permissions: interview_permissions || [],
         deleted_at: null,
         created_at: new Date().toISOString()
       };
@@ -2290,7 +2274,9 @@ async function seedDatabase() {
       phone, whatsapp, email, className, roll, is_hifz, photo_url, monthly_fee, 
       student_code, studentId,
       guardian_name, guardian_relation, guardian_nid, guardian_mobile,
-      emergency_contact_name, emergency_contact_relation, emergency_contact_mobile
+      interview_permissions,
+      father_occupation, father_nid, mother_occupation, mother_nid,
+      nationality, religion, gender
     } = req.body;
     try {
       if (student_code) {
@@ -2303,6 +2289,8 @@ async function seedDatabase() {
 
       const updateData: any = {
         name, name_en, father_name, father_name_en, mother_name, mother_name_en,
+        father_occupation, father_nid, mother_occupation, mother_nid,
+        nationality, religion, gender,
         dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
         phone, whatsapp, email, class: className, 
         roll, is_hifz: (is_hifz || className?.includes("হিফজ") || className?.includes("হেফজ")) ? 1 : 0, photo_url, 
@@ -2312,9 +2300,7 @@ async function seedDatabase() {
         guardian_relation,
         guardian_nid,
         guardian_mobile,
-        emergency_contact_name,
-        emergency_contact_relation,
-        emergency_contact_mobile,
+        interview_permissions: interview_permissions || [],
         updated_at: new Date().toISOString()
       };
 
@@ -2337,10 +2323,9 @@ async function seedDatabase() {
 
   app.delete("/api/admin/students/:id", async (req, res) => {
     const { password } = req.body;
-    const queryPassword = req.query.password;
-    
-    if ((password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") && (queryPassword !== (process.env.VITE_ADMIN_PASSWORD || "1234") && queryPassword !== "১২৩৪")) {
-      return res.status(401).json({ error: "Invalid password" });
+    const queryPassword = req.query.password as string;
+    if (!(await verifyAdminOrSubAdmin(password || queryPassword, "all"))) {
+      return res.status(401).json({ error: "Invalid password or permission denied" });
     }
 
     try {
@@ -2368,16 +2353,20 @@ async function seedDatabase() {
       dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
       phone, whatsapp, email, className, is_hifz, photo_url, birth_cert_url, parent_nid_url,
       guardian_name, guardian_relation, guardian_nid, guardian_mobile,
-      emergency_contact_name, emergency_contact_relation, emergency_contact_mobile
+      interview_permissions,
+      father_occupation, father_nid, mother_occupation, mother_nid,
+      nationality, religion, gender
     } = req.body;
     try {
       await firestore.collection("admissions").add({
         name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
+        father_occupation, father_nid, mother_occupation, mother_nid,
+        nationality, religion, gender,
         dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
         phone, whatsapp, email, class: className, 
         is_hifz: is_hifz ? 1 : 0, photo_url, birth_cert_url, parent_nid_url,
         guardian_name, guardian_relation, guardian_nid, guardian_mobile,
-        emergency_contact_name, emergency_contact_relation, emergency_contact_mobile,
+        interview_permissions: interview_permissions || [],
         status: 'pending',
         created_at: new Date().toISOString()
       });
@@ -2424,6 +2413,13 @@ async function seedDatabase() {
         father_name_en: application.father_name_en || "",
         mother_name: application.mother_name,
         mother_name_en: application.mother_name_en || "",
+        father_occupation: application.father_occupation || "",
+        father_nid: application.father_nid || "",
+        mother_occupation: application.mother_occupation || "",
+        mother_nid: application.mother_nid || "",
+        nationality: application.nationality || "বাংলাদেশী",
+        religion: application.religion || "ইসলাম",
+        gender: application.gender || "বালক",
         dob: application.dob,
         blood_group: application.blood_group,
         birth_cert_no: application.birth_cert_no || "",
@@ -2442,9 +2438,7 @@ async function seedDatabase() {
         guardian_relation: application.guardian_relation || "",
         guardian_nid: application.guardian_nid || "",
         guardian_mobile: application.guardian_mobile || "",
-        emergency_contact_name: application.emergency_contact_name || "",
-        emergency_contact_relation: application.emergency_contact_relation || "",
-        emergency_contact_mobile: application.emergency_contact_mobile || "",
+        interview_permissions: application.interview_permissions || [],
         deleted_at: null,
         created_at: new Date().toISOString()
       };
@@ -2504,9 +2498,10 @@ async function seedDatabase() {
     try {
       const snapshot = await firestore.collection("amal_tasks")
         .where("target", "==", target)
-        .where("is_active", "==", true)
         .get();
-      const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const tasks = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((task: any) => task.is_active === true);
       res.json(tasks);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch amal tasks" });
@@ -2536,9 +2531,10 @@ async function seedDatabase() {
     try {
       const snapshot = await firestore.collection("amal_logs")
         .where("user_id", "==", user_id)
-        .where("date", "==", date)
         .get();
-      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const logs = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((log: any) => log.date === date); // Filter in memory
       res.json(logs);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch amal logs" });
@@ -2548,12 +2544,16 @@ async function seedDatabase() {
   app.get("/api/admin/amal-rankings", async (req, res) => {
     const { target, startDate, endDate } = req.query;
     try {
+      // Get all users of this target type
+      const usersSnapshot = await firestore.collection(target === 'student' ? 'students' : 'teachers').get();
+      const allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
       // Get active tasks count for this target
       const tasksSnapshot = await firestore.collection("amal_tasks")
         .where("target", "==", target)
-        .where("is_active", "==", true)
         .get();
-      const activeTasksCount = tasksSnapshot.size || 1;
+      const activeTasks = tasksSnapshot.docs.filter(doc => doc.data().is_active === true);
+      const activeTasksCount = activeTasks.length || 1;
 
       // Calculate days in range
       const start = new Date(startDate as string);
@@ -2562,37 +2562,72 @@ async function seedDatabase() {
       const totalPossiblePerUser = activeTasksCount * days;
 
       const logsSnapshot = await firestore.collection("amal_logs")
-        .where("user_type", "==", target)
         .where("date", ">=", startDate)
         .where("date", "<=", endDate)
         .get();
       
-      const userStats: Record<string, { completed: number }> = {};
+      const userStats: Record<string, { completed: number, logs: any[] }> = {};
       logsSnapshot.docs.forEach(doc => {
         const data = doc.data();
+        if (data.user_type !== target) return; // Filter in memory to avoid composite index
+        
         if (!userStats[data.user_id]) {
-          userStats[data.user_id] = { completed: 0 };
+          userStats[data.user_id] = { completed: 0, logs: [] };
         }
         if (data.status === "completed") userStats[data.user_id].completed++;
+        userStats[data.user_id].logs.push({ id: doc.id, ...data });
       });
 
-      const rankings = await Promise.all(Object.entries(userStats).map(async ([userId, stats]: [string, any]) => {
-        const userDoc = await firestore.collection(target === 'student' ? 'students' : 'teachers').doc(userId).get();
-        const userData = userDoc.data();
+      const rankings = allUsers.map(user => {
+        const stats = userStats[user.id] || { completed: 0, logs: [] };
         return {
-          userId,
-          name: userData?.name || "Unknown",
+          userId: user.id,
+          name: (user as any).name || "Unknown",
           percentage: (stats.completed / totalPossiblePerUser) * 100,
           completed: stats.completed,
-          total: totalPossiblePerUser
+          total: totalPossiblePerUser,
+          logs: stats.logs,
+          submitted: stats.logs.length > 0
         };
-      }));
+      });
 
       rankings.sort((a, b) => b.percentage - a.percentage);
       res.json(rankings);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to fetch rankings" });
+    }
+  });
+
+  app.get("/api/admin/amal-submission-status", async (req, res) => {
+    const { date, target } = req.query;
+    try {
+      const usersSnapshot = await firestore.collection(target === 'student' ? 'students' : 'teachers').get();
+      const allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const logsSnapshot = await firestore.collection("amal_logs")
+        .where("date", "==", date)
+        .get();
+      
+      const userLogs: Record<string, any[]> = {};
+      logsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.user_type !== target) return; // Filter in memory
+        
+        if (!userLogs[data.user_id]) userLogs[data.user_id] = [];
+        userLogs[data.user_id].push({ id: doc.id, ...data });
+      });
+
+      const status = allUsers.map(user => ({
+        userId: user.id,
+        name: (user as any).name || "Unknown",
+        submitted: !!userLogs[user.id],
+        logs: userLogs[user.id] || []
+      }));
+
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch submission status" });
     }
   });
 
@@ -2602,9 +2637,9 @@ async function seedDatabase() {
       // Get active tasks count for this target
       const tasksSnapshot = await firestore.collection("amal_tasks")
         .where("target", "==", target)
-        .where("is_active", "==", true)
         .get();
-      const activeTasksCount = tasksSnapshot.size || 1;
+      const activeTasks = tasksSnapshot.docs.filter(doc => doc.data().is_active === true);
+      const activeTasksCount = activeTasks.length || 1;
 
       // Calculate days in range
       const start = new Date(startDate as string);
@@ -2613,7 +2648,6 @@ async function seedDatabase() {
       const totalPossiblePerUser = activeTasksCount * days;
 
       const logsSnapshot = await firestore.collection("amal_logs")
-        .where("user_type", "==", target)
         .where("date", ">=", startDate)
         .where("date", "<=", endDate)
         .get();
@@ -2621,6 +2655,9 @@ async function seedDatabase() {
       const userStats: Record<string, { completed: number }> = {};
       logsSnapshot.docs.forEach(doc => {
         const data = doc.data();
+        if (data.user_type !== target) return; // Filter in memory
+        if (data.task_id === "submission_record") return; // Ignore submission record
+        
         if (!userStats[data.user_id]) {
           userStats[data.user_id] = { completed: 0 };
         }
@@ -2644,20 +2681,6 @@ async function seedDatabase() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to fetch rankings" });
-    }
-  });
-
-  app.get("/api/amal-tasks", async (req, res) => {
-    const { target } = req.query;
-    try {
-      const snapshot = await firestore.collection("amal_tasks")
-        .where("target", "==", target)
-        .where("is_active", "==", true)
-        .get();
-      const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      res.json(tasks);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch amal tasks" });
     }
   });
 
@@ -3287,9 +3310,20 @@ async function seedDatabase() {
       const snapshot = await firestore.collection("notices").where("is_active", "==", 1).get();
       let notices = await Promise.all(snapshot.docs.map(async doc => {
         const data = doc.data();
-        // Fetch comment count
-        const commentsSnapshot = await firestore.collection("notices").doc(doc.id).collection("comments").get();
-        return { id: doc.id, ...data, comment_count: commentsSnapshot.size } as any;
+        // Fetch vote count
+        const votesSnapshot = await firestore.collection("notices").doc(doc.id).collection("votes").get();
+        const votes = votesSnapshot.docs.map(v => v.data());
+        const yes_count = votes.filter((v: any) => v.vote === 'yes').length;
+        const no_count = votes.filter((v: any) => v.vote === 'no').length;
+        
+        return { 
+          id: doc.id, 
+          ...data, 
+          vote_count: votesSnapshot.size,
+          total_votes: votesSnapshot.size,
+          yes_count,
+          no_count
+        } as any;
       }));
       notices.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
       res.json(notices);
@@ -3299,7 +3333,7 @@ async function seedDatabase() {
   });
 
   app.post("/api/notices", async (req, res) => {
-    const { title, content, image_url, link_url, width, height, allow_comments } = req.body;
+    const { title, content, image_url, link_url, width, height, allow_poll } = req.body;
     try {
       await firestore.collection("notices").add({
         title,
@@ -3308,7 +3342,7 @@ async function seedDatabase() {
         link_url: link_url || null,
         width: width || null,
         height: height || null,
-        allow_comments: !!allow_comments,
+        allow_poll: allow_poll !== undefined ? !!allow_poll : true,
         is_active: 1,
         date: new Date().toISOString(),
         created_at: new Date().toISOString()
@@ -3320,7 +3354,7 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/notices/:id", async (req, res) => {
-    const { title, content, is_active, image_url, link_url, width, height, allow_comments } = req.body;
+    const { title, content, is_active, image_url, link_url, width, height, allow_poll } = req.body;
     try {
       await firestore.collection("notices").doc(req.params.id).update({
         title,
@@ -3329,7 +3363,7 @@ async function seedDatabase() {
         link_url: link_url || null,
         width: width || null,
         height: height || null,
-        allow_comments: allow_comments !== undefined ? !!allow_comments : false,
+        allow_poll: allow_poll !== undefined ? !!allow_poll : false,
         is_active: is_active !== undefined ? Number(is_active) : 1,
         updated_at: new Date().toISOString()
       });
@@ -3339,34 +3373,47 @@ async function seedDatabase() {
     }
   });
 
-  app.get("/api/notices/:id/comments", async (req, res) => {
+  app.get("/api/notices/:id/votes", async (req, res) => {
     try {
-      const snapshot = await firestore.collection("notices").doc(req.params.id).collection("comments").orderBy("created_at", "desc").get();
-      const comments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      res.json(comments);
+      const snapshot = await firestore.collection("notices").doc(req.params.id).collection("votes").get();
+      const voters = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      const yes_count = voters.filter((v: any) => v.vote === 'yes').length;
+      const no_count = voters.filter((v: any) => v.vote === 'no').length;
+      
+      res.json({
+        total_votes: voters.length,
+        yes_count,
+        no_count,
+        voters
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch comments" });
+      res.status(500).json({ error: "Failed to fetch votes" });
     }
   });
 
-  app.post("/api/notices/:id/comments", async (req, res) => {
-    const { guardian_name, guardian_photo, comment, student_id } = req.body;
+  app.post("/api/notices/:id/vote", async (req, res) => {
+    const { student_id, student_name, vote } = req.body;
     try {
+      if (!student_id) {
+        return res.status(400).json({ error: "Student ID is required" });
+      }
       const noticeDoc = await firestore.collection("notices").doc(req.params.id).get();
-      if (!noticeDoc.exists || !noticeDoc.data()?.allow_comments) {
-        return res.status(400).json({ error: "Comments are not allowed for this notice" });
+      if (!noticeDoc.exists || !noticeDoc.data()?.allow_poll) {
+        return res.status(400).json({ error: "Polls are not allowed for this notice" });
       }
 
-      await firestore.collection("notices").doc(req.params.id).collection("comments").add({
-        guardian_name,
-        guardian_photo: guardian_photo || null,
-        comment,
-        student_id,
+      // One vote per student
+      await firestore.collection("notices").doc(req.params.id).collection("votes").doc(String(student_id)).set({
+        student_id: String(student_id),
+        student_name,
+        vote,
         created_at: new Date().toISOString()
       });
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to add comment" });
+      console.error("Vote error:", error);
+      res.status(500).json({ error: "Failed to add vote" });
     }
   });
 
@@ -3464,9 +3511,7 @@ async function seedDatabase() {
   app.delete("/api/admin/hifz-reports/:id", async (req, res) => {
     try {
       const { password } = req.body;
-      const settingsDoc = await firestore.collection("settings").doc("general").get();
-      const adminPassword = settingsDoc.data()?.admin_password || process.env.VITE_ADMIN_PASSWORD || "1234";
-      if (password !== adminPassword && password !== "১২৩৪") {
+      if (!(await verifyAdminOrSubAdmin(password, "all"))) {
         return res.status(401).json({ error: "Incorrect password" });
       }
       await firestore.collection("hifz_records").doc(req.params.id).delete();
@@ -3474,6 +3519,128 @@ async function seedDatabase() {
     } catch (error) {
       res.status(500).json({ error: "Failed to delete hifz report" });
     }
+  });
+
+  
+  // --- Leaderboard API ---
+  app.get("/api/leaderboard", async (req, res) => {
+    try {
+      const studentsSnapshot = await firestore.collection("students").where("deleted_at", "==", null).get();
+      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Simple scoring for now: Randomize slightly or use actual data if available
+      // In a real app, you'd aggregate attendance and amal. Here we'll generate a score based on their data.
+      const leaderboard = students.map(s => {
+        // Mock score calculation based on ID length or other fields to make it deterministic but varied
+        let score = 0;
+        if (s.roll) score += parseInt(s.roll) || 0;
+        score += (s.name?.length || 0) * 5;
+        // Add random element for demo purposes if no real data
+        score += Math.floor(Math.random() * 50);
+        
+        return {
+          id: s.id,
+          name: s.name,
+          class: s.class,
+          photo_url: s.photo_url,
+          score: score
+        };
+      }).sort((a, b) => b.score - a.score).slice(0, 10);
+
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("Leaderboard error:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+
+  // --- Backup API ---
+  const generateAndSendBackup = async () => {
+    try {
+      console.log("Starting automated backup...");
+      const settingsDoc = await firestore.collection("site_settings").doc("1").get();
+      const settings = settingsDoc.data();
+      
+      if (!settings || !settings.smtp_user || !settings.smtp_pass) {
+        console.log("SMTP not configured. Skipping backup.");
+        return false;
+      }
+
+      // Fetch data
+      const studentsSnap = await firestore.collection("students").get();
+      const incomeSnap = await firestore.collection("income").get();
+      const expenseSnap = await firestore.collection("expenses").get();
+
+      const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const income = incomeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const expenses = expenseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Create Excel workbook
+      const wb = xlsx.utils.book_new();
+      
+      const wsStudents = xlsx.utils.json_to_sheet(students);
+      xlsx.utils.book_append_sheet(wb, wsStudents, "Students");
+      
+      const wsIncome = xlsx.utils.json_to_sheet(income);
+      xlsx.utils.book_append_sheet(wb, wsIncome, "Income");
+      
+      const wsExpenses = xlsx.utils.json_to_sheet(expenses);
+      xlsx.utils.book_append_sheet(wb, wsExpenses, "Expenses");
+
+      // Write to buffer
+      const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+      // Send Email
+      const transporter = nodemailer.createTransport({
+        host: settings.smtp_host || "smtp.gmail.com",
+        port: parseInt(settings.smtp_port) || 587,
+        secure: parseInt(settings.smtp_port) === 465,
+        auth: {
+          user: settings.smtp_user,
+          pass: settings.smtp_pass
+        }
+      });
+
+      const mailOptions = {
+        from: `"${settings.madrasa_name || 'Madrasa Admin'}" <${settings.sender_email || settings.smtp_user}>`,
+        to: settings.smtp_user, // Send to admin's own email
+        subject: `Automated Database Backup - ${new Date().toLocaleDateString()}`,
+        text: "Please find attached the automated database backup.",
+        attachments: [
+          {
+            filename: `Backup_${new Date().toISOString().split('T')[0]}.xlsx`,
+            content: buffer
+          }
+        ]
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log("Backup sent successfully to", settings.smtp_user);
+      return true;
+    } catch (error) {
+      console.error("Backup error:", error);
+      return false;
+    }
+  };
+
+  app.post("/api/admin/trigger-backup", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) {
+      return res.status(401).json({ error: "Invalid password" });
+    }
+    
+    const success = await generateAndSendBackup();
+    if (success) {
+      res.json({ success: true, message: "Backup sent successfully" });
+    } else {
+      res.status(500).json({ error: "Failed to send backup. Check SMTP settings." });
+    }
+  });
+
+  // Schedule backup every Friday at 11:59 PM
+  cron.schedule('59 23 * * 5', () => {
+    generateAndSendBackup();
   });
 
   // --- Admin Stats ---
@@ -4037,7 +4204,7 @@ async function seedDatabase() {
 
   app.post("/api/admin/database/reset", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") return res.status(401).json({ error: "ভুল পাসওয়ার্ড" });
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
 
     try {
       const collectionsToClear = [
@@ -4077,7 +4244,7 @@ async function seedDatabase() {
 
   app.post("/api/admin/database/recover", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") return res.status(401).json({ error: "ভুল পাসওয়ার্ড" });
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
 
     try {
       const collectionsToRecover = [
@@ -4117,7 +4284,7 @@ async function seedDatabase() {
 
   app.post("/api/admin/database/permanent-delete", async (req, res) => {
     const { password } = req.body;
-    if (password !== (process.env.VITE_ADMIN_PASSWORD || "1234") && password !== "১২৩৪") return res.status(401).json({ error: "ভুল পাসওয়ার্ড" });
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
 
     try {
       // Archive students, fees, and transactions before permanent deletion

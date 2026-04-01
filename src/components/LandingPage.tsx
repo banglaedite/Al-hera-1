@@ -68,6 +68,7 @@ const LandingPage = () => {
   const [showcaseItems, setShowcaseItems] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
   const [routines, setRoutines] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
 
@@ -86,6 +87,15 @@ const LandingPage = () => {
       const id = setTimeout(() => controller.abort(), timeout);
       return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
     };
+
+    fetchWithTimeout("/api/leaderboard")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setLeaderboard(data);
+        }
+      })
+      .catch(err => console.error("Failed to load leaderboard:", err));
 
     fetchWithTimeout("/api/site-settings")
       .then((res) => {
@@ -444,7 +454,7 @@ const LandingPage = () => {
             )}
             {settings?.show_routines_directly !== 1 && (
               <a href="#routines" className="px-8 py-4 bg-indigo-50 text-indigo-900 rounded-2xl font-black shadow-sm border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2">
-                <FileText className="w-5 h-5" /> সিলেবাস ও রুটিন
+                <FileText className="w-5 h-5" /> সাজেশন শিট
               </a>
             )}
           </div>
@@ -463,8 +473,8 @@ const LandingPage = () => {
               >
                 <FileText className="w-4 h-4" /> Academic Resources
               </motion.div>
-              <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">সিলেবাস ও রুটিন</h2>
-              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের রুটিন এবং সিলেবাস এখান থেকে ডাউনলোড করুন</p>
+              <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">সাজেশন শিট</h2>
+              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের সাজেশন শিট এখান থেকে ডাউনলোড করুন</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -672,6 +682,62 @@ const LandingPage = () => {
                   </div>
                 </motion.div>
               )})}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Leaderboard Section */}
+      {leaderboard.length > 0 && (
+        <section className="py-24 bg-slate-50 relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100/80 text-amber-700 font-bold text-sm mb-6 border border-amber-200/50 shadow-sm">
+                <Award className="w-4 h-4" />
+                <span>মাসিক সেরা ছাত্র</span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 font-sans tracking-tight">
+                সেরা ১০ জন ছাত্র
+              </h2>
+              <p className="text-xl text-slate-500 font-medium font-sans leading-relaxed">
+                দৈনিক আমল, হাজিরা এবং রেজাল্টের ওপর ভিত্তি করে নির্বাচিত এই মাসের সেরা ছাত্ররা।
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+              {leaderboard.map((student, index) => (
+                <motion.div
+                  key={student.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center text-center relative overflow-hidden group hover:-translate-y-2 transition-transform duration-300"
+                >
+                  <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-emerald-500 to-teal-400 opacity-10 group-hover:opacity-20 transition-opacity" />
+                  
+                  <div className="relative mb-4">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg relative z-10 bg-slate-100 flex items-center justify-center">
+                      {student.photo_url ? (
+                        <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <Users className="w-10 h-10 text-slate-300" />
+                      )}
+                    </div>
+                    <div className="absolute -bottom-3 -right-3 w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-black text-lg shadow-lg border-2 border-white z-20">
+                      #{index + 1}
+                    </div>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-slate-900 mb-1 line-clamp-1">{student.name}</h3>
+                  <p className="text-sm text-emerald-600 font-bold mb-3">{student.class}</p>
+                  
+                  <div className="mt-auto w-full bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">মোট পয়েন্ট</div>
+                    <div className="text-2xl font-black text-slate-800">{student.score}</div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </section>
