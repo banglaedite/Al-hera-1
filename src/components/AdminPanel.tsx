@@ -327,6 +327,7 @@ export default function AdminPanel() {
   const [stats, setStats] = useState<any>({ students: 0, income: 0, expenses: 0 });
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<any[]>([]);
+  const [fullProfile, setFullProfile] = useState<any>(null);
   const [notices, setNotices] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [classes, setClasses] = useState<any[]>([]);
@@ -632,6 +633,8 @@ export default function AdminPanel() {
                 onUpdate={fetchStudents} 
                 classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} 
                 setActiveTab={setActiveTab}
+                fullProfile={fullProfile}
+                setFullProfile={setFullProfile}
               />
             )}
 
@@ -1198,6 +1201,7 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
   const [subAdmins, setSubAdmins] = useState<any[]>([]);
   const [newEmail, setNewEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [subAdminPassword, setSubAdminPassword] = useState("");
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -1247,18 +1251,19 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
 
   const handleAddSubAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail.trim() || !password) return addToast("ইমেইল এবং পাসওয়ার্ড দিন", "error");
+    if (!newEmail.trim() || !password || !subAdminPassword) return addToast("ইমেইল, মেইন এডমিন পাসওয়ার্ড এবং সাব-এডমিন পাসওয়ার্ড দিন", "error");
     setLoading(true);
     try {
       const res = await fetch("/api/sub-admins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: newEmail, permissions, password })
+        body: JSON.stringify({ email: newEmail, permissions, password, subAdminPassword })
       });
       if (res.ok) {
         addToast("সাব-এডমিন যুক্ত করা হয়েছে", "success");
         setNewEmail("");
         setPassword("");
+        setSubAdminPassword("");
         setPermissions([]);
         fetchSubAdmins();
       } else {
@@ -1306,6 +1311,7 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
         <form onSubmit={handleAddSubAdmin} className="mb-8 space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
           <h4 className="font-bold text-slate-700">নতুন সাব-এডমিন যুক্ত করুন</h4>
           <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="জিমেইল এড্রেস" className="w-full p-3 border rounded-xl" />
+          <input type="password" value={subAdminPassword} onChange={(e) => setSubAdminPassword(e.target.value)} placeholder="সাব-এডমিন পাসওয়ার্ড" className="w-full p-3 border rounded-xl" />
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
@@ -1946,12 +1952,11 @@ const printElement = (elementId: string) => {
   }
 };
 
-function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { settings: any, onUpdate: () => void, classesList: string[], setActiveTab: (tab: string) => void }) {
+function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullProfile, setFullProfile }: { settings: any, onUpdate: () => void, classesList: string[], setActiveTab: (tab: string) => void, fullProfile: any, setFullProfile: (profile: any) => void }) {
   const { addToast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClass, setSelectedClass] = useState("All");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
-  const [fullProfile, setFullProfile] = useState<any>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
@@ -3135,7 +3140,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab }: { set
                   </div>
                 </div>
 
-                {selectedResultExam && fullProfile.examStats && fullProfile.examStats[selectedResultExam] && (
+                {selectedResultExam && fullProfile && fullProfile.examStats && fullProfile.examStats[selectedResultExam] && (
                   <div className="grid grid-cols-3 gap-4 mb-8">
                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
                       <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>মোট নম্বর</p>
@@ -3720,7 +3725,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
   const [viewMode, setViewMode] = useState<"detailed" | "short">("detailed");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [studentSubjects, setStudentSubjects] = useState<{ name: string, marks: string }[]>([]);
-  const [printStudent, setPrintStudent] = useState<any>(null);
+
   const [activeTab, setActiveTab] = useState<"results" | "subjects">("results");
   
   // Subject Management State
@@ -3730,6 +3735,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
   
   // Exam Management State
   const [exams, setExams] = useState<any[]>([]);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [newExamName, setNewExamName] = useState("");
   const [isAddingExam, setIsAddingExam] = useState(false);
 
@@ -3961,7 +3967,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
       )}
       
       {/* Marksheet Print View (Hidden) */}
-      {printStudent && (
+      {fullProfile && (
         <div className="hidden print:block p-12 bg-white w-full">
           <PrintHeader settings={settings} />
           <div className="text-center mb-12">
@@ -3972,11 +3978,11 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
             <div className="space-y-4">
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">ছাত্রের নাম:</span>
-                <span className="font-black text-slate-900">{printStudent.name}</span>
+                <span className="font-black text-slate-900">{fullProfile.name}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">আইডি নম্বর:</span>
-                <span className="font-black text-slate-900">{printStudent.id}</span>
+                <span className="font-black text-slate-900">{fullProfile.id}</span>
               </div>
             </div>
             <div className="space-y-4">
@@ -3986,7 +3992,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">রোল নম্বর:</span>
-                <span className="font-black text-slate-900">{printStudent.roll}</span>
+                <span className="font-black text-slate-900">{fullProfile.roll}</span>
               </div>
             </div>
           </div>
@@ -4000,7 +4006,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
               </tr>
             </thead>
             <tbody>
-              {printStudent.subjects.map((s: any, i: number) => (
+              {fullProfile.subjects.map((s: any, i: number) => (
                 <tr key={i} className="border-b border-slate-200">
                   <td className="p-4 font-bold border border-slate-200">{s.subject}</td>
                   <td className="p-4 text-center border border-slate-200">১০০</td>
@@ -4010,8 +4016,8 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
               ))}
               <tr className="bg-slate-50 font-black">
                 <td colSpan={2} className="p-4 text-right border border-slate-200">সর্বমোট নম্বর:</td>
-                <td className="p-4 text-center border border-slate-200">{printStudent.totalMarks}</td>
-                <td className="p-4 text-center border border-slate-200">গড়: {printStudent.avgMarks.toFixed(2)}</td>
+                <td className="p-4 text-center border border-slate-200">{fullProfile.totalMarks}</td>
+                <td className="p-4 text-center border border-slate-200">গড়: {fullProfile.avgMarks.toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
@@ -4144,11 +4150,19 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                   <div className="flex gap-4">
                     <div className="relative flex items-center gap-2">
                       <select 
+                        value={selectedYear} 
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold appearance-none pr-10"
+                      >
+                        {[...new Set(exams.map(e => e.year || new Date().getFullYear().toString()))].map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-[115px] top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                      <select 
                         value={selectedExam} 
                         onChange={(e) => setSelectedExam(e.target.value)}
                         className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold appearance-none pr-10"
                       >
-                        {exams.map(e => <option key={e.id || e.name || e} value={e.name || e}>{e.name || e}</option>)}
+                        {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map(e => <option key={e.id || e.name || e} value={e.name || e}>{e.name || e}</option>)}
                       </select>
                       <ChevronDown className="absolute right-14 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                       <button 
@@ -4188,7 +4202,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                 {loading ? (
                   <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div id="results-table-template" className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b-2 border-slate-100">
@@ -4252,8 +4266,12 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                                   <Edit className="w-4 h-4" />
                                 </button>
                                 <button 
-                                  onClick={() => {
-                                    setPrintStudent(r);
+                                  onClick={async () => {
+                                    setLoading(true);
+                                    const res = await fetch(`/api/students/${r.studentId || r.id}/full-profile`);
+                                    const data = await res.json();
+                                    setFullProfile(data);
+                                    setLoading(false);
                                     setTimeout(() => window.print(), 100);
                                   }}
                                   title="মার্কশিট প্রিন্ট"

@@ -22,66 +22,117 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
   const [isDeletingSalary, setIsDeletingSalary] = useState<any>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [selectedSalary, setSelectedSalary] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [payingSalary, setPayingSalary] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
+  const fetchTeachers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/teachers?t=" + Date.now());
+      const data = await res.json();
+      setTeachers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching teachers:", err);
+      setTeachers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
+    if (submitting) return;
     
-    if (isEditing) {
-      await fetch(`/api/admin/teachers/${selectedTeacher.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-    } else {
-      await fetch("/api/admin/teachers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
+    setSubmitting(true);
+    try {
+      const formData = new FormData(e.target as HTMLFormElement);
+      const data = Object.fromEntries(formData.entries());
+      
+      let res;
+      if (isEditing) {
+        res = await fetch(`/api/admin/teachers/${selectedTeacher.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+      } else {
+        res = await fetch("/api/admin/teachers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+      }
+      
+      const result = await res.json();
+      if (result.success) {
+        setIsAdding(false);
+        setIsEditing(false);
+        setSelectedTeacher(null);
+        addToast("শিক্ষকের তথ্য সেভ হয়েছে", "success");
+        fetchTeachers();
+      } else {
+        addToast(result.error || "সেভ করতে সমস্যা হয়েছে", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("সার্ভারে সমস্যা হয়েছে", "error");
+    } finally {
+      setSubmitting(false);
     }
-    
-    setIsAdding(false);
-    setIsEditing(false);
-    setSelectedTeacher(null);
-    fetch("/api/admin/teachers").then(res => res.json()).then(setTeachers);
-    addToast("শিক্ষকের তথ্য সেভ হয়েছে", "success");
   };
 
   const handleDelete = async () => {
-    const res = await fetch(`/api/admin/teachers/${isDeleting.id}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: deletePassword })
-    });
-    const data = await res.json();
-    if (data.success) {
-      addToast("শিক্ষক আর্কাইভ করা হয়েছে", "success");
-      setIsDeleting(null);
-      setDeletePassword("");
-      fetch("/api/admin/teachers").then(res => res.json()).then(setTeachers);
-    } else {
-      addToast("পাসওয়ার্ড ভুল", "error");
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/teachers/${isDeleting.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast("শিক্ষক আর্কাইভ করা হয়েছে", "success");
+        setIsDeleting(null);
+        setDeletePassword("");
+        fetchTeachers();
+      } else {
+        addToast(data.error || "পাসওয়ার্ড ভুল", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("সার্ভারে সমস্যা হয়েছে", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
   const handleDeleteSalary = async () => {
-    const res = await fetch(`/api/admin/teachers/salary/${isDeletingSalary.id}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: deletePassword })
-    });
-    const data = await res.json();
-    if (data.success) {
-      addToast("বেতন রেকর্ড ডিলিট হয়েছে", "success");
-      setIsDeletingSalary(null);
-      setDeletePassword("");
-      fetchSalaries(selectedTeacher.id);
-    } else {
-      addToast(data.error || "পাসওয়ার্ড ভুল", "error");
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/teachers/salary/${isDeletingSalary.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast("বেতন রেকর্ড ডিলিট হয়েছে", "success");
+        setIsDeletingSalary(null);
+        setDeletePassword("");
+        fetchSalaries(selectedTeacher.id);
+      } else {
+        addToast(data.error || "পাসওয়ার্ড ভুল", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("সার্ভারে সমস্যা হয়েছে", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -89,28 +140,38 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
 
   const handlePaySalary = async (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
+    if (payingSalary) return;
+    
+    setPayingSalary(true);
+    try {
+      const formData = new FormData(e.target as HTMLFormElement);
+      const data = Object.fromEntries(formData.entries());
 
-    if (editingSalary) {
-      await fetch(`/api/admin/teachers/salary/${editingSalary.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-      addToast("বেতন আপডেট সফল হয়েছে", "success");
-      setEditingSalary(null);
-    } else {
-      await fetch(`/api/admin/teachers/${selectedTeacher.id}/salary`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-      addToast("বেতন প্রদান সফল হয়েছে", "success");
+      if (editingSalary) {
+        await fetch(`/api/admin/teachers/salary/${editingSalary.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        addToast("বেতন আপডেট সফল হয়েছে", "success");
+        setEditingSalary(null);
+      } else {
+        await fetch(`/api/admin/teachers/${selectedTeacher.id}/salary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        addToast("বেতন প্রদান সফল হয়েছে", "success");
+      }
+
+      fetchSalaries(selectedTeacher.id);
+      (e.target as HTMLFormElement).reset();
+    } catch (err) {
+      console.error(err);
+      addToast("সার্ভারে সমস্যা হয়েছে", "error");
+    } finally {
+      setPayingSalary(false);
     }
-
-    fetchSalaries(selectedTeacher.id);
-    (e.target as HTMLFormElement).reset();
   };
 
   const fetchSalaries = async (id: string) => {
@@ -125,22 +186,7 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/admin/teachers")
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setTeachers(data);
-        } else {
-          setTeachers([]);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setTeachers([]);
-        setLoading(false);
-      });
+    fetchTeachers();
   }, []);
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
@@ -302,8 +348,20 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                   <textarea name="address" defaultValue={selectedTeacher?.address} className="w-full p-4 bg-slate-50 border rounded-2xl" />
                 </div>
               </div>
-              <button type="submit" className="flex items-center justify-center gap-2 w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
-                <Save className="w-6 h-6" /> সেভ করুন
+              <button 
+                type="submit" 
+                disabled={submitting}
+                className={cn(
+                  "flex items-center justify-center gap-2 w-full py-4 text-white rounded-2xl font-black text-lg transition-all shadow-lg shadow-emerald-600/20",
+                  submitting ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+                )}
+              >
+                {submitting ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : (
+                  <Save className="w-6 h-6" />
+                )}
+                {submitting ? "প্রসেসিং..." : "সেভ করুন"}
               </button>
             </form>
           </div>
@@ -360,10 +418,22 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
-                    {editingSalary ? "বেতন আপডেট করুন" : "বেতন প্রদান সম্পন্ন করুন"}
+                  <button 
+                    type="submit" 
+                    disabled={payingSalary}
+                    className={cn(
+                      "flex-1 py-4 text-white rounded-2xl font-black text-lg transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2",
+                      payingSalary ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+                    )}
+                  >
+                    {payingSalary ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <Save className="w-6 h-6" />
+                    )}
+                    {payingSalary ? "প্রসেসিং..." : (editingSalary ? "বেতন আপডেট করুন" : "বেতন প্রদান সম্পন্ন করুন")}
                   </button>
-                  {editingSalary && (
+                  {editingSalary && !payingSalary && (
                     <button type="button" onClick={() => setEditingSalary(null)} className="py-4 px-6 bg-slate-200 text-slate-700 rounded-2xl font-black text-lg hover:bg-slate-300 transition-all">
                       বাতিল
                     </button>
@@ -486,9 +556,13 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
               </button>
               <button 
                 onClick={handleDelete}
-                className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all"
+                disabled={deleting}
+                className={cn(
+                  "flex-1 py-4 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
+                  deleting ? "bg-rose-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
+                )}
               >
-                ডিলিট করুন
+                {deleting ? <Loader2 className="w-6 h-6 animate-spin" /> : "ডিলিট করুন"}
               </button>
             </div>
           </div>
@@ -521,9 +595,13 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
               </button>
               <button 
                 onClick={handleDeleteSalary}
-                className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all"
+                disabled={deleting}
+                className={cn(
+                  "flex-1 py-4 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
+                  deleting ? "bg-rose-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
+                )}
               >
-                ডিলিট করুন
+                {deleting ? <Loader2 className="w-6 h-6 animate-spin" /> : "ডিলিট করুন"}
               </button>
             </div>
           </div>

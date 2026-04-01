@@ -83,7 +83,8 @@ function getFirestoreInstance() {
     const finalDbId = dbId === "(default)" ? undefined : dbId;
     const appInstance = admin.app();
     firestore = finalDbId ? getAdminFirestore(appInstance, finalDbId) : getAdminFirestore(appInstance);
-    console.log("Firestore instance created.");
+    firestore.settings({ ignoreUndefinedProperties: true });
+    console.log("Firestore instance created with ignoreUndefinedProperties: true");
     return firestore;
   } catch (err) {
     console.error("Firebase Admin init error:", err);
@@ -1112,10 +1113,10 @@ async function seedDatabase() {
   });
 
   app.post("/api/sub-admins", async (req, res) => {
-    const { email, permissions, password } = req.body;
+    const { email, permissions, password, subAdminPassword } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("sub_admins").add({ email, permissions });
+      await firestore.collection("sub_admins").add({ email, permissions, password: subAdminPassword });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to add sub-admin" });
@@ -1123,10 +1124,12 @@ async function seedDatabase() {
   });
 
   app.put("/api/sub-admins/:id", async (req, res) => {
-    const { email, permissions, password } = req.body;
+    const { email, permissions, password, subAdminPassword } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("sub_admins").doc(req.params.id).update({ email, permissions });
+      const updateData: any = { email, permissions };
+      if (subAdminPassword) updateData.password = subAdminPassword;
+      await firestore.collection("sub_admins").doc(req.params.id).update(updateData);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to update sub-admin" });
@@ -1190,25 +1193,57 @@ async function seedDatabase() {
   });
 
   app.post("/api/admin/teachers", async (req, res) => {
-    const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id } = req.body;
+    const data = req.body;
     try {
-      await firestore!.collection("teachers").add({ 
-        name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, 
-        biometric_id: biometric_id || null, 
+      const docRef = await firestore!.collection("teachers").add({ 
+        name: data.name || "",
+        address: data.address || "",
+        qualification: data.qualification || "",
+        photo_url: data.photo_url || "",
+        salary: data.salary || 0,
+        phone: data.phone || "",
+        email: data.email || "",
+        dob: data.dob || "",
+        join_date: data.join_date || "",
+        nid: data.nid || "",
+        id_code: data.id_code || "",
+        father_name: data.father_name || "",
+        mother_name: data.mother_name || "",
+        parents_nid: data.parents_nid || "",
+        biodata: data.biodata || "",
+        biometric_id: data.biometric_id || null, 
         created_at: new Date().toISOString(),
         deleted_at: null
       });
       res.json({ success: true });
     } catch (e) {
-      console.error(e);
+      console.error("Error adding teacher:", e);
       res.status(500).json({ error: "Failed to add teacher" });
     }
   });
 
   app.put("/api/admin/teachers/:id", async (req, res) => {
-    const { name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id } = req.body;
+    const data = req.body;
     try {
-      await firestore.collection("teachers").doc(req.params.id).update({ name, address, qualification, photo_url, salary, phone, email, dob, join_date, nid, id_code, father_name, mother_name, parents_nid, biodata, biometric_id: biometric_id || null, updated_at: new Date().toISOString() });
+      await firestore.collection("teachers").doc(req.params.id).update({ 
+        name: data.name || "",
+        address: data.address || "",
+        qualification: data.qualification || "",
+        photo_url: data.photo_url || "",
+        salary: data.salary || 0,
+        phone: data.phone || "",
+        email: data.email || "",
+        dob: data.dob || "",
+        join_date: data.join_date || "",
+        nid: data.nid || "",
+        id_code: data.id_code || "",
+        father_name: data.father_name || "",
+        mother_name: data.mother_name || "",
+        parents_nid: data.parents_nid || "",
+        biodata: data.biodata || "",
+        biometric_id: data.biometric_id || null,
+        updated_at: new Date().toISOString() 
+      });
       res.json({ success: true });
     } catch (e) {
       console.error(e);

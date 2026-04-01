@@ -89,13 +89,14 @@
   #transaction-detail, #transaction-detail *,
   #id-card-template, #id-card-template *,
   #marksheet-template, #marksheet-template *,
+  #results-table-template, #results-table-template *,
   .print-only, .print-only *,
   .print-header, .print-header * {
     visibility: visible !important;
   }
   
   /* Position the printable element at the top left */
-  #history-receipt, #payment-receipt, #salary-receipt, #transaction-detail, #id-card-template, #marksheet-template, .print-only {
+  #history-receipt, #payment-receipt, #salary-receipt, #transaction-detail, #id-card-template, #marksheet-template, #results-table-template, .print-only {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
