@@ -437,6 +437,11 @@ const LandingPage = () => {
                 <Bell className="w-5 h-5" /> নোটিশ বোর্ড
               </a>
             )}
+            {leaderboard.length > 0 && (
+              <a href="#leaderboard" className="px-8 py-4 bg-amber-50 text-amber-900 rounded-2xl font-black shadow-sm border border-amber-100 hover:bg-amber-100 transition-all flex items-center gap-2">
+                <Award className="w-5 h-5" /> সেরা ছাত্র
+              </a>
+            )}
             {settings?.show_features_directly !== 1 && (
               <a href="#features" className="px-8 py-4 bg-emerald-50 text-emerald-900 rounded-2xl font-black shadow-sm border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center gap-2">
                 <Star className="w-5 h-5" /> আমাদের বৈশিষ্ট্য
@@ -689,7 +694,7 @@ const LandingPage = () => {
 
       {/* Leaderboard Section */}
       {leaderboard.length > 0 && (
-        <section className="py-24 bg-slate-50 relative overflow-hidden">
+        <section id="leaderboard" className={`py-24 bg-slate-50 relative overflow-hidden hidden target:block`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="text-center max-w-3xl mx-auto mb-16">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100/80 text-amber-700 font-bold text-sm mb-6 border border-amber-200/50 shadow-sm">
