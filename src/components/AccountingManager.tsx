@@ -15,7 +15,7 @@ import autoTable from "jspdf-autotable";
 import { printElement } from '../utils/printUtils';
 import MonthlyYearlyReport from './MonthlyYearlyReport';
 
-const PrintDownloadMenu = ({ targetId, filename }: { targetId: string, filename: string }) => {
+const PrintDownloadMenu = ({ targetId, filename, onPrint }: { targetId: string, filename: string, onPrint?: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +29,15 @@ const PrintDownloadMenu = ({ targetId, filename }: { targetId: string, filename:
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handlePrint = () => {
+    setIsOpen(false);
+    if (onPrint) {
+      onPrint();
+    } else {
+      printElement(targetId, 'A4');
+    }
+  };
+
   const handleDownload = async () => {
     setIsOpen(false);
     const element = document.getElementById(targetId);
@@ -41,11 +50,15 @@ const PrintDownloadMenu = ({ targetId, filename }: { targetId: string, filename:
       const contentWidth = pdfWidth - (2 * margin);
       const img = new Image();
       img.src = imgData;
-      img.onload = () => {
-        const contentHeight = (img.height * contentWidth) / img.width;
-        pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-        pdf.save(`${filename}.pdf`);
-      };
+      await new Promise((resolve, reject) => {
+        img.onload = () => {
+          const contentHeight = (img.height * contentWidth) / img.width;
+          pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+          pdf.save(`${filename}.pdf`);
+          resolve(null);
+        };
+        img.onerror = reject;
+      });
     } catch (err) {
       console.error("PDF generation failed", err);
     }
@@ -68,7 +81,7 @@ const PrintDownloadMenu = ({ targetId, filename }: { targetId: string, filename:
             className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50"
           >
             <button 
-              onClick={() => { setIsOpen(false); printElement(targetId, 'A4'); }}
+              onClick={handlePrint}
               className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3 text-sm font-bold text-slate-700 transition-colors"
             >
               <Printer className="w-4 h-4 text-slate-400" /> প্রিন্ট করুন
@@ -423,6 +436,150 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handlePrintReport = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      
+      // Fetch ALL income and expenses for the report (no limit)
+      const [incomeRes, expenseRes] = await Promise.all([
+        fetch(`/api/admin/accounting/income?${params}&limit=10000`),
+        fetch(`/api/admin/accounting/expenses?${params}&limit=10000`)
+      ]);
+      
+      const incomeData = await incomeRes.json();
+      const expenseData = await expenseRes.json();
+      
+      const allIncome = incomeData.data || [];
+      const allExpenses = expenseData.data || [];
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const html = generatePrintableHTMLForData(allIncome, allExpenses);
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    } catch (error) {
+      console.error("Print report failed", error);
+      addToast("রিপোর্ট প্রিন্ট করতে সমস্যা হয়েছে।", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generatePrintableHTMLForData = (reportIncome: any[], reportExpenses: any[]) => {
+    const title = settings?.title || "Madrasa";
+    let reportTitle = "অ্যাকাউন্টিং রিপোর্ট";
+    let dateRange = startDate && endDate ? `তারিখ: ${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : "";
+    
+    let contentHtml = `
+      <div class="section-title">সারসংক্ষেপ</div>
+      <table>
+        <thead>
+          <tr>
+            <th class="summary-th">মোট আয়</th>
+            <th class="summary-th">মোট ব্যয়</th>
+            <th class="summary-th">অবশিষ্ট</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>৳${summary.totalIncome}</td>
+            <td>৳${summary.totalExpense}</td>
+            <td>৳${summary.balance}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">আয়ের বিস্তারিত</div>
+      <table>
+        <thead>
+          <tr>
+            <th class="income-th">তারিখ</th>
+            <th class="income-th">ক্যাটাগরি/উৎস</th>
+            <th class="income-th">পরিমাণ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reportIncome.map(i => `
+            <tr>
+              <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
+              <td>${i.student_name || i.category || ''}</td>
+              <td>৳${i.amount}</td>
+            </tr>
+          `).join('')}
+          ${reportIncome.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
+        </tbody>
+      </table>
+
+      <div class="section-title">ব্যয়ের বিস্তারিত</div>
+      <table>
+        <thead>
+          <tr>
+            <th class="expense-th">তারিখ</th>
+            <th class="expense-th">ক্যাটাগরি</th>
+            <th class="expense-th">পরিমাণ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reportExpenses.map(e => `
+            <tr>
+              <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
+              <td>${e.category || ''}</td>
+              <td>৳${e.amount}</td>
+            </tr>
+          `).join('')}
+          ${reportExpenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
+        </tbody>
+      </table>
+    `;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${reportTitle}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;700&display=swap');
+            body { font-family: 'Hind Siliguri', sans-serif; padding: 40px; color: #1e293b; }
+            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
+            .madrasa-name { font-size: 28px; font-weight: 800; color: #0f172a; margin-bottom: 5px; }
+            .report-title { font-size: 20px; font-weight: 700; color: #475569; margin-bottom: 5px; }
+            .date-range { font-size: 14px; color: #64748b; }
+            .section-title { font-size: 16px; font-weight: 800; margin: 30px 0 15px 0; padding-left: 10px; border-left: 4px solid #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-size: 14px; }
+            th { background-color: #f8fafc; font-weight: 700; color: #334155; }
+            .summary-th { background-color: #0f172a; color: white; }
+            .income-th { background-color: #f0fdf4; color: #166534; }
+            .expense-th { background-color: #fef2f2; color: #991b1b; }
+            .footer { margin-top: 60px; display: flex; justify-content: space-between; }
+            .signature { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 10px; font-size: 12px; font-weight: 700; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="madrasa-name">${title}</div>
+            <div class="report-title">${reportTitle}</div>
+            <div class="date-range">${dateRange}</div>
+          </div>
+          ${contentHtml}
+          <div class="footer">
+            <div class="signature">হিসাবরক্ষকের স্বাক্ষর</div>
+            <div class="signature">মুহতামিমের স্বাক্ষর</div>
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   const generatePrintableHTML = () => {
@@ -1105,7 +1262,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <TrendingUp className="text-emerald-600" /> বিস্তারিত আয়
               </h3>
-              <PrintDownloadMenu targetId="income-report" filename="income-report" />
+              <PrintDownloadMenu targetId="income-report" filename="income-report" onPrint={handlePrintReport} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -1172,7 +1329,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <TrendingDown className="text-rose-600" /> বিস্তারিত ব্যয়
               </h3>
-              <PrintDownloadMenu targetId="expense-report" filename="expense-report" />
+              <PrintDownloadMenu targetId="expense-report" filename="expense-report" onPrint={handlePrintReport} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -1242,7 +1399,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
-              <PrintDownloadMenu targetId="category-report" filename="category-report" />
+              <PrintDownloadMenu targetId="category-report" filename="category-report" onPrint={handlePrintReport} />
             </div>
             
             {loadingReport ? (
@@ -1317,7 +1474,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   {classesList?.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <PrintDownloadMenu targetId="class-report" filename="class-report" />
+              <PrintDownloadMenu targetId="class-report" filename="class-report" onPrint={handlePrintReport} />
             </div>
             
             {loadingReport ? (
@@ -1605,6 +1762,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                 <button onClick={async () => {
                   const element = document.getElementById('transaction-detail');
                   if (!element) return;
+                  const toastId = addToast("PDF তৈরি হচ্ছে...", "info");
                   try {
                     const imgData = await toPng(element, { 
                       quality: 1,
@@ -1621,11 +1779,16 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                     
                     const img = new Image();
                     img.src = imgData;
-                    img.onload = () => {
-                      const contentHeight = (img.height * contentWidth) / img.width;
-                      pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-                      pdf.save(`receipt-${selectedTransaction.id}.pdf`);
-                    };
+                    await new Promise((resolve, reject) => {
+                      img.onload = () => {
+                        const contentHeight = (img.height * contentWidth) / img.width;
+                        pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+                        pdf.save(`receipt-${selectedTransaction.id}.pdf`);
+                        resolve(null);
+                      };
+                      img.onerror = reject;
+                    });
+                    addToast("PDF সফলভাবে ডাউনলোড হয়েছে।", "success");
                   } catch (err) {
                     console.error("PDF generation failed", err);
                     addToast("PDF তৈরি করতে সমস্যা হয়েছে।", "error");

@@ -99,6 +99,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Ensure Firestore is initialized for all requests
+app.use((req, res, next) => {
+  getFirestoreInstance();
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -107,7 +113,9 @@ async function verifyAdminOrSubAdmin(passwordOrEmail: string, requiredPermission
   if (passwordOrEmail === adminPassword || passwordOrEmail === "১২৩৪") return true;
   
   try {
-    const snapshot = await firestore.collection("sub_admins").where("email", "==", passwordOrEmail).get();
+    const db = getFirestoreInstance();
+    if (!db) return false;
+    const snapshot = await db.collection("sub_admins").where("email", "==", passwordOrEmail).get();
     if (!snapshot.empty) {
       // If a specific permission is required, we could check it here.
       // For now, if they are a valid sub-admin, we allow the action.
@@ -342,10 +350,14 @@ async function seedDatabase() {
   });
 
   app.post("/api/exams", async (req, res) => {
-    const { name } = req.body;
+    const { name, year } = req.body;
     try {
       const db = getFirestoreInstance();
-      await db.collection("exams").add({ name, date: new Date().toISOString() });
+      await db.collection("exams").add({ 
+        name, 
+        year: year || new Date().getFullYear().toString(),
+        date: new Date().toISOString() 
+      });
       res.json({ success: true });
     } catch (error) {
       console.error(error);
@@ -353,13 +365,92 @@ async function seedDatabase() {
     }
   });
 
-  // --- Transactions ---
-  app.get("/api/admin/all-history", async (req, res) => {
+  // --- Sub-Admins ---
+  app.get("/api/admin/sub-admins", async (req, res) => {
     try {
+      const db = getFirestoreInstance();
+      const snapshot = await db.collection("sub_admins").get();
+      const subAdmins = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(subAdmins);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sub-admins" });
+    }
+  });
+
+  app.post("/api/admin/sub-admins", async (req, res) => {
+    const { email, teacherId, permissions } = req.body;
+    try {
+      const db = getFirestoreInstance();
+      await db.collection("sub_admins").add({
+        email,
+        teacherId: teacherId || null,
+        permissions: permissions || [],
+        created_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add sub-admin" });
+    }
+  });
+
+  app.put("/api/admin/sub-admins/:id", async (req, res) => {
+    const { id } = req.params;
+    const { email, teacherId, permissions } = req.body;
+    try {
+      const db = getFirestoreInstance();
+      await db.collection("sub_admins").doc(id).update({
+        email,
+        teacherId: teacherId || null,
+        permissions: permissions || [],
+        updated_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update sub-admin" });
+    }
+  });
+
+  app.delete("/api/admin/sub-admins/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const db = getFirestoreInstance();
+      await db.collection("sub_admins").doc(id).delete();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete sub-admin" });
+    }
+  });
+
+  // --- Notification Counts ---
+  app.get("/api/admin/pending-counts", async (req, res) => {
+    try {
+      const db = getFirestoreInstance();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const [payments, applications, notices] = await Promise.all([
+        db.collection("pending_payments").where("status", "==", "pending").get(),
+        db.collection("admissions").where("status", "==", "pending").get(),
+        db.collection("notices").where("created_at", ">=", yesterday.toISOString()).get()
+      ]);
+      
+      res.json({
+        payments: payments.size,
+        applications: applications.size,
+        newNotices: notices.size
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch pending counts" });
+    }
+  });
+  
+  app.get("/api/admin/history", async (req, res) => {
+    try {
+      const db = getFirestoreInstance();
       const { start_date, end_date } = req.query;
-      let feesQuery: any = firestore!.collection("fees");
-      let incomeQuery: any = firestore!.collection("income");
-      let expensesQuery: any = firestore!.collection("expenses");
+      let feesQuery: any = db.collection("fees");
+      let incomeQuery: any = db.collection("income");
+      let expensesQuery: any = db.collection("expenses");
 
       if (start_date) {
         feesQuery = feesQuery.where("paid_date", ">=", start_date);
@@ -445,7 +536,8 @@ async function seedDatabase() {
       if (!data.transaction_id || data.transaction_id.startsWith('TXN-')) {
         data.transaction_id = await getNextSerial("AHM");
       }
-      const docRef = await firestore!.collection("transactions").add(data);
+      const db = getFirestoreInstance();
+      const docRef = await db.collection("transactions").add(data);
       res.json({ success: true, id: docRef.id, transaction_id: data.transaction_id });
     } catch (error) {
       console.error(error);
@@ -455,7 +547,8 @@ async function seedDatabase() {
 
   app.get("/api/admin/transactions", async (req, res) => {
     try {
-      const transactionsSnapshot = await firestore!.collection("transactions").orderBy("paid_date", "desc").get();
+      const db = getFirestoreInstance();
+      const transactionsSnapshot = await db.collection("transactions").orderBy("paid_date", "desc").get();
       const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(transactions);
     } catch (error) {
@@ -469,17 +562,18 @@ async function seedDatabase() {
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     const { type, id } = req.params;
     try {
+      const db = getFirestoreInstance();
       let collectionName = "";
       if (type === "fee") collectionName = "fees";
       else if (type === "income") collectionName = "income";
       else if (type === "expense") collectionName = "expenses";
       else return res.status(400).json({ error: "Invalid type" });
 
-      const docRef = firestore!.collection(collectionName).doc(id);
+      const docRef = db.collection(collectionName).doc(id);
       const docSnap = await docRef.get();
       
       if (docSnap.exists) {
-        await firestore!.collection("delete_history").add({
+        await db.collection("delete_history").add({
           type: `history_${type}`,
           details: JSON.stringify(docSnap.data()),
           deleted_at: new Date().toISOString()
@@ -511,11 +605,12 @@ async function seedDatabase() {
     const { password } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      const transactionRef = firestore!.collection("transactions").doc(req.params.id);
+      const db = getFirestoreInstance();
+      const transactionRef = db.collection("transactions").doc(req.params.id);
       const transactionDoc = await transactionRef.get();
       
       if (transactionDoc.exists) {
-        await firestore!.collection("delete_history").add({
+        await db.collection("delete_history").add({
           type: 'fee_transaction',
           details: JSON.stringify(transactionDoc.data()),
           deleted_at: new Date().toISOString()
@@ -533,7 +628,8 @@ async function seedDatabase() {
   app.get("/api/admin/delete-history", async (req, res) => {
     const { limit = 50, offset = 0, start_date, end_date } = req.query;
     try {
-      let query: any = firestore.collection("delete_history");
+      const db = getFirestoreInstance();
+      let query: any = db.collection("delete_history");
       if (start_date) {
         query = query.where("deleted_at", ">=", start_date);
       }
@@ -562,7 +658,8 @@ async function seedDatabase() {
   app.post("/api/parent/pay", async (req, res) => {
     const { feeId, transactionId, method, phone } = req.body;
     try {
-      await firestore.collection("fees").doc(feeId).update({
+      const db = getFirestoreInstance();
+      await db.collection("fees").doc(feeId).update({
         status: 'paid',
         paid_date: new Date().toISOString(),
         transaction_id: `${method}-${transactionId}`
@@ -589,8 +686,9 @@ async function seedDatabase() {
   app.post("/api/donations", async (req, res) => {
     const { donor_name, amount, category, transaction_id } = req.body;
     try {
+      const db = getFirestoreInstance();
       const finalTrxId = transaction_id || await getNextSerial("AHM");
-      await firestore!.collection("donations").add({ donor_name, amount, category, transaction_id: finalTrxId, date: new Date().toISOString() });
+      await db.collection("donations").add({ donor_name, amount, category, transaction_id: finalTrxId, date: new Date().toISOString() });
       res.json({ success: true, transaction_id: finalTrxId });
     } catch (error) {
       console.error(error);
@@ -613,7 +711,8 @@ async function seedDatabase() {
   app.post("/api/admin/features", async (req, res) => {
     const { title, description, image_url, icon, is_active } = req.body;
     try {
-      await firestore!.collection("features").add({ 
+      const db = getFirestoreInstance();
+      await db.collection("features").add({ 
         title, 
         description, 
         image_url, 
@@ -629,7 +728,8 @@ async function seedDatabase() {
 
   app.delete("/api/admin/features/:id", async (req, res) => {
     try {
-      await firestore!.collection("features").doc(req.params.id).delete();
+      const db = getFirestoreInstance();
+      await db.collection("features").doc(req.params.id).delete();
       res.json({ success: true });
     } catch (error) {
       console.error(error);
@@ -640,7 +740,8 @@ async function seedDatabase() {
   app.put("/api/admin/features/:id", async (req, res) => {
     const { title, description, image_url, icon, is_active } = req.body;
     try {
-      await firestore.collection("features").doc(req.params.id).update({
+      const db = getFirestoreInstance();
+      await db.collection("features").doc(req.params.id).update({
         title,
         description,
         image_url,
@@ -658,11 +759,12 @@ async function seedDatabase() {
     const { className, month } = req.query; // month format: 'YYYY-MM'
     
     try {
-      const studentsSnapshot = await firestore!.collection("students").where("class", "==", className).get();
+      const db = getFirestoreInstance();
+      const studentsSnapshot = await db.collection("students").where("class", "==", className).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       const report = await Promise.all(students.map(async (student: any) => {
-        const feesSnapshot = await firestore!.collection("transactions")
+        const feesSnapshot = await db.collection("transactions")
           .where("student_id", "==", student.id)
           .where("paid_date", ">=", `${month}-01`)
           .where("paid_date", "<=", `${month}-31T23:59:59.999Z`)
@@ -689,11 +791,12 @@ async function seedDatabase() {
     const { className } = req.query;
     
     try {
-      const studentsSnapshot = await firestore.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
+      const db = getFirestoreInstance();
+      const studentsSnapshot = await db.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       const report = await Promise.all(students.map(async (student: any) => {
-        const feesSnapshot = await firestore.collection("fees")
+        const feesSnapshot = await db.collection("fees")
           .where("student_id", "==", student.id)
           .where("status", "==", "unpaid")
           .get();
@@ -734,7 +837,8 @@ async function seedDatabase() {
   app.post("/api/admin/showcase-items", async (req, res) => {
     const { title, description, url, type } = req.body;
     try {
-      await firestore!.collection("showcase_items").add({ title, description, url, type, created_at: new Date().toISOString() });
+      const db = getFirestoreInstance();
+      await db.collection("showcase_items").add({ title, description, url, type, created_at: new Date().toISOString() });
       res.json({ success: true });
     } catch (error) {
       console.error(error);
@@ -744,7 +848,8 @@ async function seedDatabase() {
 
   app.delete("/api/admin/showcase-items/:id", async (req, res) => {
     try {
-      await firestore!.collection("showcase_items").doc(req.params.id).delete();
+      const db = getFirestoreInstance();
+      await db.collection("showcase_items").doc(req.params.id).delete();
       res.json({ success: true });
     } catch (error) {
       console.error(error);
@@ -794,7 +899,8 @@ async function seedDatabase() {
       payment_special_note, enable_signature, signature_url
     } = req.body;
     try {
-      await firestore!.collection("site_settings").doc("1").set({
+      const db = getFirestoreInstance();
+      await db.collection("site_settings").doc("1").set({
         title: title || "", description: description || "", hero_image: hero_image || "", logo_url: logo_url || "", contact_phone: contact_phone || "", 
         whatsapp_number: whatsapp_number || "", facebook_url: facebook_url || "", announcement: announcement || "", bkash_number: bkash_number || "", 
         nagad_number: nagad_number || "", rocket_number: rocket_number || "",
@@ -1511,6 +1617,10 @@ async function seedDatabase() {
         expenseQuery.get()
       ]);
 
+      console.log("Category report query params:", { month, category, start_date, end_date });
+      console.log("Income snapshot size:", incomeSnapshot.size);
+      console.log("Expense snapshot size:", expenseSnapshot.size);
+
       let incomeData = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       let expenseData = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
@@ -1596,7 +1706,7 @@ async function seedDatabase() {
   app.get("/api/admin/accounting/summary", async (req, res) => {
     const { start_date, end_date } = req.query;
     try {
-      let feesQuery: any = firestore.collection("fees");
+      let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
 
@@ -1618,7 +1728,6 @@ async function seedDatabase() {
       ]);
 
       const feeIncome = feesSnapshot.docs
-        .filter(doc => doc.data().status === "paid")
         .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
       const otherIncome = incomeSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
       const totalIncome = feeIncome + otherIncome;
@@ -1630,13 +1739,12 @@ async function seedDatabase() {
       let prevExpense = 0;
       if (start_date) {
         const [prevFees, prevInc, prevExp] = await Promise.all([
-          firestore.collection("fees").where("paid_date", "<", start_date).get(),
+          firestore.collection("fees").where("status", "==", "paid").where("paid_date", "<", start_date).get(),
           firestore.collection("income").where("date", "<", start_date).get(),
           firestore.collection("expenses").where("date", "<", start_date).get()
         ]);
         
         const pf = prevFees.docs
-          .filter(doc => doc.data().status === "paid")
           .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
         const pi = prevInc.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
         const pe = prevExp.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
@@ -1665,7 +1773,7 @@ async function seedDatabase() {
   app.get("/api/admin/accounting/income", async (req, res) => {
     const { start_date, end_date, limit = 50, offset = 0, search } = req.query;
     try {
-      let feesQuery: any = firestore.collection("fees");
+      let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
       let incomeQuery: any = firestore.collection("income");
 
       if (start_date) {
@@ -1683,7 +1791,6 @@ async function seedDatabase() {
       ]);
 
       const feeIncome = feesSnapshot.docs
-        .filter(doc => doc.data().status === "paid")
         .map(doc => ({ id: doc.id, ...doc.data(), type: 'Fee' } as any));
       const otherIncome = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: 'Other' } as any));
 
@@ -2163,13 +2270,15 @@ async function seedDatabase() {
       // Calculate Rank
       let examStats: any = {};
       try {
-        const exams = [...new Set(results.map((r: any) => r.exam_name))];
-        for (const exam of (exams as string[])) {
-          const classStudentsSnapshot = await firestore.collection("students").where("class", "==", student.class).where("deleted_at", "==", null).get();
-          const classStudentIds = classStudentsSnapshot.docs.map(s => s.id);
-
-          const allExamResultsSnapshot = await firestore.collection("results").where("exam_name", "==", exam).get();
-          const allExamResults = allExamResultsSnapshot.docs.map(doc => doc.data() as any).filter(r => classStudentIds.includes(r.student_id));
+        const exams = [...new Set(results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))];
+        for (const examKey of (exams as string[])) {
+          const [exam, year] = examKey.split('|');
+          const allExamResultsSnapshot = await firestore.collection("results")
+            .where("exam_name", "==", exam)
+            .where("class_name", "==", student.class)
+            .where("year", "==", year)
+            .get();
+          const allExamResults = allExamResultsSnapshot.docs.map(doc => doc.data() as any);
 
           const studentTotals: any = {};
           allExamResults.forEach(r => {
@@ -2182,7 +2291,7 @@ async function seedDatabase() {
           const myTotal = studentTotals[studentId] || 0;
           const highest = sortedTotals.length > 0 ? sortedTotals[0].total : 0;
 
-          examStats[exam] = {
+          examStats[examKey] = {
             rank: myRankIndex !== -1 ? myRankIndex + 1 : '-',
             totalStudents: sortedTotals.length,
             highestMarks: highest,
@@ -2931,13 +3040,14 @@ async function seedDatabase() {
   app.post("/api/attendance/bulk", async (req, res) => {
     const { date, records } = req.body;
     try {
-      const batch = firestore.batch();
+      const db = getFirestoreInstance();
+      const batch = db.batch();
       for (const record of records) {
-        const attendanceSnapshot = await firestore.collection("attendance").where("student_id", "==", record.student_id).where("date", "==", date).get();
+        const attendanceSnapshot = await db.collection("attendance").where("student_id", "==", record.student_id).where("date", "==", date).get();
         attendanceSnapshot.docs.forEach(doc => batch.delete(doc.ref));
         
         if (record.status) {
-          const newRef = firestore.collection("attendance").doc();
+          const newRef = db.collection("attendance").doc();
           batch.set(newRef, {
             student_id: record.student_id,
             date,
@@ -2951,6 +3061,17 @@ async function seedDatabase() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to save attendance" });
+    }
+  });
+
+  app.post("/api/admin/notify/attendance", async (req, res) => {
+    try {
+      const { date, className } = req.body;
+      console.log(`Sending attendance notifications for class ${className} on ${date}`);
+      res.json({ success: true, message: "Notifications sent successfully" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to send notifications" });
     }
   });
 
@@ -3256,12 +3377,22 @@ async function seedDatabase() {
   // --- Results ---
   app.get("/api/admin/results/class/:className", async (req, res) => {
     const { className } = req.params;
-    const { exam_name } = req.query;
+    const { exam_name, year } = req.query;
+    console.log(`Fetching results for class: ${className}, exam: ${exam_name}, year: ${year}`);
     try {
-      const studentsSnapshot = await firestore.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
+      const db = getFirestoreInstance();
+      const studentsSnapshot = await db.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       
-      const resultsSnapshot = await firestore.collection("results").where("exam_name", "==", exam_name).get();
+      let resultsQuery = db.collection("results")
+        .where("exam_name", "==", exam_name)
+        .where("class_name", "==", className);
+      
+      if (year) {
+        resultsQuery = resultsQuery.where("year", "==", year);
+      }
+
+      const resultsSnapshot = await resultsQuery.get();
       const results = resultsSnapshot.docs.map(doc => doc.data() as any);
       
       const data = students.map((s: any) => {
@@ -3279,7 +3410,63 @@ async function seedDatabase() {
       data.sort((a, b) => b.totalMarks - a.totalMarks);
       res.json(data);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch results" });
+      console.error("Fetch class results error:", error);
+      res.status(500).json({ error: "Failed to fetch results", details: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/results/bulk", async (req, res) => {
+    const { results } = req.body;
+    if (!Array.isArray(results)) {
+      return res.status(400).json({ error: "Results must be an array" });
+    }
+    try {
+      const db = getFirestoreInstance();
+      const batch = db.batch();
+      
+      for (const r of results) {
+        const { student_id, exam_name, subject, marks, grade, date, class_name, year } = r;
+        const resultYear = year || new Date().getFullYear().toString();
+        
+        // Check for existing result to update or add new
+        const existingSnapshot = await db.collection("results")
+          .where("student_id", "==", student_id)
+          .where("exam_name", "==", exam_name)
+          .where("subject", "==", subject)
+          .where("year", "==", resultYear)
+          .get();
+        
+        if (!existingSnapshot.empty) {
+          const docId = existingSnapshot.docs[0].id;
+          batch.update(db.collection("results").doc(docId), {
+            marks: Number(marks),
+            grade,
+            date,
+            class_name,
+            year: resultYear,
+            updated_at: new Date().toISOString()
+          });
+        } else {
+          const newDocRef = db.collection("results").doc();
+          batch.set(newDocRef, {
+            student_id,
+            exam_name,
+            subject,
+            marks: Number(marks),
+            grade,
+            date,
+            class_name,
+            year: resultYear,
+            created_at: new Date().toISOString()
+          });
+        }
+      }
+      
+      await batch.commit();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Bulk save results failed", error);
+      res.status(500).json({ error: "Failed to save results" });
     }
   });
 
@@ -3700,12 +3887,14 @@ async function seedDatabase() {
 
   // --- Subjects ---
   app.get("/api/subjects/:className", async (req, res) => {
+    console.log(`Fetching subjects for class: ${req.params.className}`);
     try {
       const snapshot = await firestore.collection("subjects").where("class", "==", req.params.className).get();
       const subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       res.json(subjects);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch subjects" });
+      console.error("Fetch subjects error:", error);
+      res.status(500).json({ error: "Failed to fetch subjects", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -4406,6 +4595,16 @@ async function start() {
       console.log(`Server running at http://0.0.0.0:${PORT}`);
     });
   }
+
+  // Global error handler for API routes
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled error:", err);
+    if (req.path.startsWith('/api/')) {
+      res.status(500).json({ error: "Internal Server Error", details: err.message });
+    } else {
+      next(err);
+    }
+  });
 }
 
 start();

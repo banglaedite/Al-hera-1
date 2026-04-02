@@ -668,7 +668,7 @@ export default function ParentPortal() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
+                "relative flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
                 activeTab === tab.id 
                   ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
                   : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
@@ -676,6 +676,14 @@ export default function ParentPortal() {
             >
               <tab.icon className="w-5 h-5" />
               {tab.label}
+              {tab.id === "notices" && notices.some(n => {
+                const noticeDate = new Date(n.created_at);
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                return noticeDate >= yesterday;
+              }) && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
+              )}
             </motion.button>
           )) : [
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
@@ -695,7 +703,7 @@ export default function ParentPortal() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
+                "relative flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
                 activeTab === tab.id 
                   ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
                   : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
@@ -703,6 +711,14 @@ export default function ParentPortal() {
             >
               <tab.icon className="w-5 h-5" />
               {tab.label}
+              {tab.id === "notices" && notices.some(n => {
+                const noticeDate = new Date(n.created_at);
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                return noticeDate >= yesterday;
+              }) && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
+              )}
             </motion.button>
           ))}
         </div>
@@ -1381,7 +1397,7 @@ export default function ParentPortal() {
                             onClick={() => initiateLivePayment("nagad")}
                             className="p-4 bg-white border-2 border-orange-50 hover:border-orange-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
                           >
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Nagad_Logo.svg/1200px-Nagad_Logo.svg.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Nagad_Logo.svg/1200px-Nagad_Logo.svg.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
                             <span className="text-xs font-bold text-orange-600">নগদ</span>
                           </button>
 
@@ -1390,7 +1406,7 @@ export default function ParentPortal() {
                             onClick={() => initiateLivePayment("rocket")}
                             className="p-4 bg-white border-2 border-purple-50 hover:border-purple-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
                           >
-                            <img src="https://www.rocket.com.bd/assets/images/rocket-logo.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="rocket" />
+                            <img src="https://seeklogo.com/images/D/dutch-bangla-rocket-logo-B4D1CC458D-seeklogo.com.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="rocket" />
                             <span className="text-xs font-bold text-purple-600">রকেট</span>
                           </button>
                         </div>

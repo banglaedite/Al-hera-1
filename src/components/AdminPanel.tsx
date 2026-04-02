@@ -324,9 +324,15 @@ function CategoryManager({ type }: { type: "income" | "expense" }) {
 export default function AdminPanel() {
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("adminActiveTab") || "dashboard");
+  const [pendingCounts, setPendingCounts] = useState({ payments: 0, applications: 0, newNotices: 0 });
+  const [amalCheckedToday, setAmalCheckedToday] = useState(() => {
+    const lastChecked = localStorage.getItem('amal_last_checked');
+    return lastChecked === new Date().toDateString();
+  });
   const [stats, setStats] = useState<any>({ students: 0, income: 0, expenses: 0 });
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [notices, setNotices] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
@@ -340,16 +346,35 @@ export default function AdminPanel() {
   const [password, setPassword] = useState("");
   const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
 
+  const isDataLoaded = isAuthenticated && !loading;
+
+  const fetchPendingCounts = async () => {
+    try {
+      const res = await fetch("/api/admin/pending-counts");
+      if (res.ok) setPendingCounts(await res.json());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem("isAdmin", isAuthenticated.toString());
     localStorage.setItem("adminRole", adminRole);
     localStorage.setItem("adminPermissions", JSON.stringify(adminPermissions));
     if (isAuthenticated) {
-      fetchStats();
-      fetchStudents();
-      fetchNotices();
-      fetchSettings();
-      fetchClasses();
+      Promise.all([
+        fetchStats(),
+        fetchStudents(),
+        fetchTeachers(),
+        fetchNotices(),
+        fetchSettings(),
+        fetchClasses(),
+        fetchPendingCounts()
+      ]).finally(() => {
+        setLoading(false);
+      });
+      const interval = setInterval(fetchPendingCounts, 30000);
+      return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
 
@@ -413,8 +438,16 @@ export default function AdminPanel() {
       }
     } catch (error) {
       console.error("Error fetching stats:", error);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchTeachers = async () => {
+    try {
+      const res = await fetch("/api/admin/teachers?t=" + Date.now());
+      const data = await res.json();
+      if (Array.isArray(data)) setTeachers(data);
+    } catch (err) {
+      console.error("Error fetching teachers:", err);
     }
   };
 
@@ -509,8 +542,6 @@ export default function AdminPanel() {
     );
   }
 
-  if (loading && isAuthenticated) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
-
   return (
     <>
       <div className="max-w-7xl mx-auto">
@@ -520,16 +551,41 @@ export default function AdminPanel() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (tab.id === 'amal') {
+                  const today = new Date().toDateString();
+                  localStorage.setItem('amal_last_checked', today);
+                  setAmalCheckedToday(true);
+                }
+              }}
               className={cn(
-                "w-full flex items-center gap-3 px-6 py-4 rounded-2xl font-bold transition-all",
+                "w-full flex items-center justify-between px-6 py-4 rounded-2xl font-bold transition-all relative",
                 activeTab === tab.id 
                   ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20" 
                   : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"
               )}
             >
-              <tab.icon className="w-5 h-5" />
-              {tab.label}
+              <div className="flex items-center gap-3">
+                <tab.icon className="w-5 h-5" />
+                {tab.label}
+              </div>
+              {tab.id === "fees" && pendingCounts.payments > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-black text-white shadow-sm border-2 border-white z-10">
+                  {pendingCounts.payments}
+                </span>
+              )}
+              {tab.id === "admissions" && pendingCounts.applications > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-black text-white shadow-sm border-2 border-white z-10">
+                  {pendingCounts.applications}
+                </span>
+              )}
+              {tab.id === "notices" && pendingCounts.newNotices > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10"></span>
+              )}
+              {tab.id === "amal" && !amalCheckedToday && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10"></span>
+              )}
             </button>
           ))}
           <button
@@ -546,151 +602,207 @@ export default function AdminPanel() {
 
         {/* Main Content */}
         <main className="flex-1 print:w-full print:max-w-none">
-          <AnimatePresence mode="wait">
-            {activeTab === "hifz" && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                <HifzManager classesList={classes.map(c => c.name)} />
-              </motion.div>
-            )}
-            {activeTab === "dashboard" && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <AdminStat label="মোট ছাত্র" value={stats.students} icon={Users} color="bg-blue-500" />
-                  <AdminStat label="মোট আয়" value={`৳ ${stats.income}`} icon={TrendingUp} color="bg-emerald-500" />
-                  <AdminStat label="মোট ব্যয়" value={`৳ ${stats.expenses}`} icon={TrendingDown} color="bg-rose-500" />
-                </div>
-
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <h3 className="text-xl font-bold text-slate-900 mb-6">সাম্প্রতিক ভর্তি</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-slate-400 text-xs uppercase tracking-wider font-bold border-b border-slate-50">
-                          <th className="pb-4">ছাত্রের নাম</th>
-                          <th className="pb-4">শ্রেণী</th>
-                          <th className="pb-4">আইডি</th>
-                          <th className="pb-4">তারিখ</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-sm">
-                        {students?.slice(0, 5).map((s) => (
-                          <tr key={s.id} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50" onClick={() => {
-                            setActiveTab("students");
-                            // Need a way to trigger profile view for this student
-                          }}>
-                            <td className="py-4 font-bold text-slate-700">{s.name}</td>
-                            <td className="py-4 text-slate-500">{s.class}</td>
-                            <td className="py-4 font-mono text-emerald-600">{s.id}</td>
-                            <td className="py-4 text-slate-400">{new Date(s.admission_date).toLocaleDateString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {loading ? (
+            <div className="flex items-center justify-center h-96">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+            </div>
+          ) : (
+            <AnimatePresence mode="wait">
+              {activeTab === "hifz" && (
+                <motion.div key="hifz" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <HifzManager classesList={classes.map(c => c.name)} />
+                </motion.div>
+              )}
+              {activeTab === "dashboard" && (
+                <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <AdminStat label="মোট ছাত্র" value={stats.students} icon={Users} color="bg-blue-500" />
+                    <AdminStat label="মোট আয়" value={`৳ ${stats.income}`} icon={TrendingUp} color="bg-emerald-500" />
+                    <AdminStat label="মোট ব্যয়" value={`৳ ${stats.expenses}`} icon={TrendingDown} color="bg-rose-500" />
                   </div>
-                </div>
-              </motion.div>
-            )}
 
-            {activeTab === "teachers" && (
-              <TeacherManager addToast={addToast} settings={settings} />
-            )}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                    <h3 className="text-xl font-bold text-slate-900 mb-6">সাম্প্রতিক ভর্তি</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-slate-400 text-xs uppercase tracking-wider font-bold border-b border-slate-50">
+                            <th className="pb-4">ছাত্রের নাম</th>
+                            <th className="pb-4">শ্রেণী</th>
+                            <th className="pb-4">আইডি</th>
+                            <th className="pb-4">তারিখ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {students?.slice(0, 5).map((s) => (
+                            <tr key={s.id} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50" onClick={() => {
+                              setActiveTab("students");
+                            }}>
+                              <td className="py-4 font-bold text-slate-700">{s.name}</td>
+                              <td className="py-4 text-slate-500">{s.class}</td>
+                              <td className="py-4 font-mono text-emerald-600">{s.id}</td>
+                              <td className="py-4 text-slate-400">{new Date(s.admission_date).toLocaleDateString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
-            {activeTab === "all-teachers" && (
-              <TeacherArchiveManager settings={settings} />
-            )}
+              {activeTab === "teachers" && (
+                <motion.div key="teachers" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <TeacherManager 
+                    addToast={addToast} 
+                    settings={settings} 
+                    teachers={teachers} 
+                    refreshTeachers={fetchTeachers} 
+                  />
+                </motion.div>
+              )}
 
-            {activeTab === "biometric" && (
-              <BiometricManager addToast={addToast} />
-            )}
+              {activeTab === "all-teachers" && (
+                <motion.div key="all-teachers" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <TeacherArchiveManager settings={settings} />
+                </motion.div>
+              )}
 
-            {activeTab === "accounting" && (
-              <AccountingManager settings={settings} addToast={addToast} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
-            )}
+              {activeTab === "biometric" && (
+                <motion.div key="biometric" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <BiometricManager addToast={addToast} />
+                </motion.div>
+              )}
 
-            {activeTab === "recruitment" && (
-              <RecruitmentManager />
-            )}
+              {activeTab === "accounting" && (
+                <motion.div key="accounting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AccountingManager settings={settings} addToast={addToast} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
+                </motion.div>
+              )}
 
-            {activeTab === "food-menu" && (
-              <FoodMenuManager />
-            )}
+              {activeTab === "recruitment" && (
+                <motion.div key="recruitment" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <RecruitmentManager />
+                </motion.div>
+              )}
 
-            {activeTab === "routines" && (
-              <RoutineManager />
-            )}
+              {activeTab === "food-menu" && (
+                <motion.div key="food-menu" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <FoodMenuManager />
+                </motion.div>
+              )}
 
-            {activeTab === "amal" && (
-              <AmalManager />
-            )}
+              {activeTab === "routines" && (
+                <motion.div key="routines" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <RoutineManager />
+                </motion.div>
+              )}
 
-            {activeTab === "admissions" && (
-              <AdmissionManager onApprove={fetchStudents} />
-            )}
+              {activeTab === "amal" && (
+                <motion.div key="amal" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AmalManager />
+                </motion.div>
+              )}
 
-            {activeTab === "students" && (
-              <StudentManager 
-                settings={settings} 
-                onUpdate={fetchStudents} 
-                classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} 
-                setActiveTab={setActiveTab}
-                fullProfile={fullProfile}
-                setFullProfile={setFullProfile}
-              />
-            )}
+              {activeTab === "admissions" && (
+                <motion.div key="admissions" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AdmissionManager onApprove={fetchStudents} />
+                </motion.div>
+              )}
 
-            {activeTab === "all-students" && (
-              <AllStudentsManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
-            )}
+              {activeTab === "students" && (
+                <motion.div key="students" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <StudentManager 
+                    settings={settings} 
+                    onUpdate={fetchStudents} 
+                    classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} 
+                    setActiveTab={setActiveTab}
+                    fullProfile={fullProfile}
+                    setFullProfile={setFullProfile}
+                  />
+                </motion.div>
+              )}
 
-            {activeTab === "attendance" && (
-              <AttendanceManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
-            )}
+              {activeTab === "all-students" && (
+                <motion.div key="all-students" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AllStudentsManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
+                </motion.div>
+              )}
 
-            {activeTab === "device-attendance" && (
-              <DeviceAttendanceManager settings={settings} />
-            )}
+              {activeTab === "attendance" && (
+                <motion.div key="attendance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <AttendanceManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
+                </motion.div>
+              )}
 
-            {activeTab === "teacher-attendance" && (
-              <TeacherAttendanceManager settings={settings} />
-            )}
+              {activeTab === "device-attendance" && (
+                <motion.div key="device-attendance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <DeviceAttendanceManager settings={settings} />
+                </motion.div>
+              )}
 
-            {activeTab === "results" && (
-              <ResultManager students={students} settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
-            )}
+              {activeTab === "teacher-attendance" && (
+                <motion.div key="teacher-attendance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <TeacherAttendanceManager settings={settings} />
+                </motion.div>
+              )}
 
-            {activeTab === "fees" && (
-              <FeeManager students={students} settings={settings} onUpdate={fetchStats} initialStudentId={initialStudentId} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
-            )}
+              {activeTab === "results" && (
+                <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <ResultManager 
+                    students={students} 
+                    settings={settings} 
+                    classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} 
+                    fullProfile={fullProfile}
+                    setFullProfile={setFullProfile}
+                  />
+                </motion.div>
+              )}
 
-            {activeTab === "history" && (
-              <TransactionHistory settings={settings} />
-            )}
+              {activeTab === "fees" && (
+                <motion.div key="fees" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <FeeManager students={students} settings={settings} onUpdate={fetchStats} initialStudentId={initialStudentId} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
+                </motion.div>
+              )}
 
-            {activeTab === "notices" && (
-              <NoticeManager notices={notices} onUpdate={fetchNotices} />
-            )}
+              {activeTab === "history" && (
+                <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <TransactionHistory settings={settings} />
+                </motion.div>
+              )}
 
-            {activeTab === "features" && (
-              <FeatureManager />
-            )}
+              {activeTab === "notices" && (
+                <motion.div key="notices" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <NoticeManager notices={notices} onUpdate={fetchNotices} />
+                </motion.div>
+              )}
 
-            {activeTab === "showcase" && (
-              <ShowcaseManager />
-            )}
+              {activeTab === "features" && (
+                <motion.div key="features" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <FeatureManager />
+                </motion.div>
+              )}
 
-            {activeTab === "delete-history" && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                <DeleteHistory />
-              </motion.div>
-            )}
+              {activeTab === "showcase" && (
+                <motion.div key="showcase" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <ShowcaseManager />
+                </motion.div>
+              )}
 
-            {activeTab === "settings" && (
-              <div className="space-y-8">
-                <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
-                <DatabaseResetManager />
-              </div>
-            )}
-          </AnimatePresence>
+              {activeTab === "delete-history" && (
+                <motion.div key="delete-history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <DeleteHistory />
+                </motion.div>
+              )}
+
+              {activeTab === "settings" && (
+                <motion.div key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+                  <SettingsManager settings={settings} setSettings={setSettings} onUpdate={fetchSettings} classes={classes} fetchClasses={fetchClasses} />
+                  <DatabaseResetManager />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
         </main>
       </div>
     </div>
@@ -1199,11 +1311,26 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
 function SubAdminManagerModal({ isOpen, onClose }: any) {
   const { addToast } = useToast();
   const [subAdmins, setSubAdmins] = useState<any[]>([]);
-  const [newEmail, setNewEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [subAdminPassword, setSubAdminPassword] = useState("");
-  const [permissions, setPermissions] = useState<string[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [formData, setFormData] = useState({
+    email: "",
+    teacherId: "",
+    permissions: [] as string[]
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [teacherSearch, setTeacherSearch] = useState("");
+
+  useEffect(() => {
+    if (formData.teacherId) {
+      const teacher = teachers.find(t => t.id === formData.teacherId);
+      if (teacher) {
+        setTeacherSearch(`${teacher.name} (${teacher.email})`);
+      }
+    } else {
+      setTeacherSearch("");
+    }
+  }, [formData.teacherId, teachers]);
 
   const availablePermissions = [
     { id: "dashboard", label: "ড্যাশবোর্ড" },
@@ -1234,37 +1361,55 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
 
   const fetchSubAdmins = async () => {
     try {
-      const res = await fetch("/api/sub-admins");
+      const res = await fetch("/api/admin/sub-admins");
       if (res.ok) setSubAdmins(await res.json());
     } catch (error) {
       console.error(error);
     }
   };
 
+  const fetchTeachers = async () => {
+    try {
+      const res = await fetch("/api/admin/teachers");
+      if (res.ok) setTeachers(await res.json());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
-    if (isOpen) fetchSubAdmins();
+    if (isOpen) {
+      fetchSubAdmins();
+      fetchTeachers();
+    }
   }, [isOpen]);
 
   const handleTogglePermission = (id: string) => {
-    setPermissions(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(id) 
+        ? prev.permissions.filter(p => p !== id) 
+        : [...prev.permissions, id]
+    }));
   };
 
   const handleAddSubAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail.trim() || !password || !subAdminPassword) return addToast("ইমেইল, মেইন এডমিন পাসওয়ার্ড এবং সাব-এডমিন পাসওয়ার্ড দিন", "error");
+    if (!formData.email.trim()) return addToast("ইমেইল দিন", "error");
     setLoading(true);
     try {
-      const res = await fetch("/api/sub-admins", {
-        method: "POST",
+      const method = editingId ? "PUT" : "POST";
+      const url = editingId ? `/api/admin/sub-admins/${editingId}` : "/api/admin/sub-admins";
+      
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: newEmail, permissions, password, subAdminPassword })
+        body: JSON.stringify(formData)
       });
       if (res.ok) {
-        addToast("সাব-এডমিন যুক্ত করা হয়েছে", "success");
-        setNewEmail("");
-        setPassword("");
-        setSubAdminPassword("");
-        setPermissions([]);
+        addToast(editingId ? "সাব-এডমিন আপডেট করা হয়েছে" : "সাব-এডমিন যুক্ত করা হয়েছে", "success");
+        setFormData({ email: "", teacherId: "", permissions: [] });
+        setEditingId(null);
         fetchSubAdmins();
       } else {
         const err = await res.json();
@@ -1277,21 +1422,22 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
     }
   };
 
+  const handleEdit = (admin: any) => {
+    setEditingId(admin.id);
+    setFormData({
+      email: admin.email,
+      teacherId: admin.teacherId || "",
+      permissions: admin.permissions || []
+    });
+  };
+
   const handleDeleteSubAdmin = async (id: string) => {
-    const pwd = prompt("সাব-এডমিন ডিলিট করতে পাসওয়ার্ড দিন:");
-    if (!pwd) return;
+    if (!confirm("আপনি কি নিশ্চিত?")) return;
     try {
-      const res = await fetch(`/api/sub-admins/${id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pwd })
-      });
+      const res = await fetch(`/api/admin/sub-admins/${id}`, { method: "DELETE" });
       if (res.ok) {
-        addToast("সাব-এডমিন ডিলিট করা হয়েছে", "success");
+        addToast("সাব-এডমিন মুছে ফেলা হয়েছে", "success");
         fetchSubAdmins();
-      } else {
-        const err = await res.json();
-        addToast(err.error || "সমস্যা হয়েছে", "error");
       }
     } catch (error) {
       addToast("সমস্যা হয়েছে", "error");
@@ -1301,70 +1447,160 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden p-8 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-black text-slate-900">সাব-এডমিন ম্যানেজমেন্ট</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><CloseIcon className="w-6 h-6" /></button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 max-h-[90vh] flex flex-col"
+      >
+        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">সাব-এডমিন ম্যানেজার</h2>
+            <p className="text-slate-500 text-sm font-medium">স্টাফ এক্সেস এবং পারমিশন পরিচালনা করুন</p>
+          </div>
+          <button onClick={onClose} className="p-3 hover:bg-slate-100 rounded-2xl transition-all duration-300">
+            <X className="w-6 h-6 text-slate-400" />
+          </button>
         </div>
         
-        <form onSubmit={handleAddSubAdmin} className="mb-8 space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-          <h4 className="font-bold text-slate-700">নতুন সাব-এডমিন যুক্ত করুন</h4>
-          <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="জিমেইল এড্রেস" className="w-full p-3 border rounded-xl" />
-          <input type="password" value={subAdminPassword} onChange={(e) => setSubAdminPassword(e.target.value)} placeholder="সাব-এডমিন পাসওয়ার্ড" className="w-full p-3 border rounded-xl" />
-          
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="font-bold text-sm text-slate-600">পারমিশন সিলেক্ট করুন:</label>
-              <button 
-                type="button" 
-                onClick={() => {
-                  if (permissions.length === availablePermissions.length) {
-                    setPermissions([]);
-                  } else {
-                    setPermissions(availablePermissions.map(p => p.id));
-                  }
-                }}
-                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                {permissions.length === availablePermissions.length ? "সব বাতিল করুন" : "সব সিলেক্ট করুন"}
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {availablePermissions.map(p => (
-                <label key={p.id} className="flex items-center gap-2 p-3 bg-white border rounded-xl cursor-pointer hover:bg-slate-50">
-                  <input type="checkbox" checked={permissions.includes(p.id)} onChange={() => handleTogglePermission(p.id)} className="w-4 h-4 text-emerald-600 rounded" />
-                  <span className="text-sm font-medium text-slate-700">{p.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="মেইন এডমিন পাসওয়ার্ড" className="w-full p-3 border rounded-xl" />
-          
-          <LoadingButton loading={loading} type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">
-            <Plus className="w-5 h-5 inline mr-2" /> যুক্ত করুন
-          </LoadingButton>
-        </form>
-
-        <div className="space-y-3">
-          <h4 className="font-bold text-slate-700">বর্তমান সাব-এডমিনগণ</h4>
-          {subAdmins.map((admin: any) => (
-            <div key={admin.id} className="p-4 bg-white border rounded-xl">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-slate-800">{admin.email}</span>
-                <button onClick={() => handleDeleteSubAdmin(admin.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="w-5 h-5" /></button>
+        <div className="p-8 overflow-y-auto custom-scrollbar space-y-8 flex-1">
+          <form onSubmit={handleAddSubAdmin} className="space-y-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="relative">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">শিক্ষক নির্বাচন করুন (সার্চ করুন)</label>
+                <input 
+                  type="text"
+                  placeholder="শিক্ষকের নাম বা ইমেইল লিখে খুঁজুন..."
+                  value={teacherSearch}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTeacherSearch(val);
+                    const teacher = teachers.find(t => `${t.name} (${t.email})`.toLowerCase().includes(val.toLowerCase()));
+                    if (teacher) {
+                      setFormData({ ...formData, teacherId: teacher.id, email: teacher.email || formData.email });
+                    } else {
+                      setFormData({ ...formData, teacherId: "" });
+                    }
+                  }}
+                  list="teachers-datalist"
+                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-white font-medium text-slate-700"
+                />
+                <datalist id="teachers-datalist">
+                  {teachers.map(t => (
+                    <option key={t.id} value={`${t.name} (${t.email})`} />
+                  ))}
+                </datalist>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {admin.permissions.map((p: string) => (
-                  <span key={p} className="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md font-medium">
-                    {availablePermissions.find(ap => ap.id === p)?.label || p}
-                  </span>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">জিমেইল এড্রেস</label>
+                <input 
+                  type="email"
+                  placeholder="এক্সেস এর জন্য জিমেইল দিন"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-white font-medium text-slate-700"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 ml-1">পারমিশন নির্বাচন করুন</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {availablePermissions.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleTogglePermission(p.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border-2",
+                      formData.permissions.includes(p.id)
+                        ? "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm"
+                        : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-4 h-4 rounded flex items-center justify-center border",
+                      formData.permissions.includes(p.id) ? "bg-emerald-500 border-emerald-500" : "border-slate-300"
+                    )}>
+                      {formData.permissions.includes(p.id) && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    {p.label}
+                  </button>
                 ))}
               </div>
             </div>
-          ))}
-          {subAdmins.length === 0 && <p className="text-center text-slate-500 py-4">কোনো সাব-এডমিন নেই</p>}
+
+            <div className="flex gap-3">
+              <button 
+                type="submit"
+                disabled={loading || !formData.email}
+                className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-black transition-all duration-300 disabled:opacity-50 shadow-lg shadow-slate-200 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>{editingId ? "আপডেট করুন" : "এক্সেস প্রদান করুন"}</>
+                )}
+              </button>
+              {editingId && (
+                <button 
+                  type="button"
+                  onClick={() => { setEditingId(null); setFormData({ email: "", teacherId: "", permissions: [] }); }}
+                  className="px-6 py-4 rounded-2xl border-2 border-slate-200 font-bold text-slate-500 hover:bg-slate-50 transition-all"
+                >
+                  বাতিল
+                </button>
+              )}
+            </div>
+          </form>
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">সক্রিয় সাব-এডমিন</h3>
+            <div className="space-y-3">
+              {subAdmins.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                  <p className="text-slate-400 font-medium">কোন সাব-এডমিন যুক্ত করা হয়নি</p>
+                </div>
+              ) : (
+                subAdmins.map((admin) => (
+                  <div key={admin.id} className="group flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-emerald-200 hover:shadow-md transition-all duration-300">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-lg">
+                        {admin.email.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-slate-900 font-bold leading-none mb-1.5">{admin.email}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                            {teachers.find(t => t.id === admin.teacherId)?.name || "External Admin"}
+                          </p>
+                          <span className="w-1 h-1 rounded-full bg-slate-300" />
+                          <p className="text-emerald-600 text-[10px] font-bold uppercase tracking-wider">
+                            {admin.permissions?.length || 0} পারমিশন
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEdit(admin)}
+                        className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                      >
+                        <Edit className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteSubAdmin(admin.id)}
+                        className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -1439,12 +1675,6 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           </button>
           <button type="button" onClick={() => setShowSubAdminModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all">
             <Users className="w-5 h-5" /> সাব-এডমিন
-          </button>
-          <button type="button" onClick={() => (window as any).setActiveTab("routines")} className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-xl font-bold hover:bg-blue-200 transition-all">
-            <FileText className="w-5 h-5" /> সিলেবাস ও রুটিন
-          </button>
-          <button type="button" onClick={() => (window as any).setActiveTab("amal")} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold hover:bg-emerald-200 transition-all">
-            <Target className="w-5 h-5" /> দৈনিক আমল
           </button>
         </div>
       </div>
@@ -2902,21 +3132,23 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         onChange={(e) => setSelectedResultExam(e.target.value)}
                         className="p-2 border rounded-xl bg-slate-50 text-sm font-bold"
                       >
-                        {[...new Set(fullProfile.results.map((r: any) => r.exam_name))].map((exam: any) => (
-                          <option key={exam} value={exam}>{exam}</option>
-                        ))}
+                        {[...new Set(fullProfile.results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))].map((examKey: any) => {
+                          const [exam, year] = examKey.split('|');
+                          return <option key={examKey} value={examKey}>{exam} ({year})</option>
+                        })}
                       </select>
                       <button 
                         onClick={() => {
                           const exam = prompt("পরীক্ষার নাম:");
+                          const year = prompt("সাল:", new Date().getFullYear().toString());
                           const subject = prompt("বিষয়:");
                           const marks = prompt("প্রাপ্ত নম্বর:");
                           const grade = prompt("গ্রেড:");
-                          if (exam && subject && marks) {
+                          if (exam && year && subject && marks) {
                             fetch("/api/results", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ student_id: fullProfile.student.id, exam_name: exam, subject, marks: Number(marks), grade, date: new Date().toISOString() })
+                              body: JSON.stringify({ student_id: fullProfile.student.id, exam_name: exam, year, subject, marks: Number(marks), grade, date: new Date().toISOString() })
                             }).then(() => fetchFullProfile(fullProfile.student.id));
                           }
                         }}
@@ -2938,7 +3170,8 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">গড় নম্বর</p>
                         <p className="text-2xl font-black text-slate-900">
                           {(() => {
-                            const results = fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam);
+                            const [exam, year] = selectedResultExam.split('|');
+                            const results = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
                             return results.length > 0 
                               ? (fullProfile.examStats[selectedResultExam].myTotal / results.length).toFixed(1)
                               : "0.0";
@@ -2966,11 +3199,17 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">ফলাফল</p>
                         <p className={cn("text-2xl font-black", 
-                          fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).some((r: any) => r.grade === 'F') 
-                            ? "text-rose-600" 
-                            : "text-emerald-600"
+                          (() => {
+                            const [exam, year] = selectedResultExam.split('|');
+                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                              ? "text-rose-600" 
+                              : "text-emerald-600"
+                          })()
                         )}>
-                          {fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"}
+                          {(() => {
+                            const [exam, year] = selectedResultExam.split('|');
+                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"
+                          })()}
                         </p>
                       </div>
                     </div>
@@ -2980,9 +3219,9 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                     <div className="flex flex-wrap gap-2 mb-6">
                       <button 
                         onClick={() => {
-                          const exam = selectedResultExam;
-                          const stats = fullProfile.examStats[exam];
-                          const text = `*${fullProfile.student.name}* এর ${exam} এর ফলাফল:\nমোট নম্বর: ${stats.myTotal}\nমেধা স্থান: ${stats.rank}\n\nবিস্তারিত জানতে মাদরাসায় যোগাযোগ করুন।`;
+                          const [exam, year] = selectedResultExam.split('|');
+                          const stats = fullProfile.examStats[selectedResultExam];
+                          const text = `*${fullProfile.student.name}* এর ${exam} (${year}) এর ফলাফল:\nমোট নম্বর: ${stats.myTotal}\nমেধা স্থান: ${stats.rank}\n\nবিস্তারিত জানতে মাদরাসায় যোগাযোগ করুন।`;
                           const cleanPhone = fullProfile.student.whatsapp.replace(/[^0-9]/g, '');
                           const formattedPhone = cleanPhone.startsWith('0') ? '88' + cleanPhone : cleanPhone;
                           window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`, '_blank');
@@ -2997,10 +3236,10 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             addToast("ছাত্রের ইমেইল দেওয়া নেই", "error");
                             return;
                           }
-                          const exam = selectedResultExam;
-                          const stats = fullProfile.examStats[exam];
-                          const subject = `${exam} এর ফলাফল - ${fullProfile.student.name}`;
-                          const body = `${fullProfile.student.name} এর ${exam} এর ফলাফল:\nমোট নম্বর: ${stats.myTotal}\nমেধা স্থান: ${stats.rank}\n\nবিস্তারিত জানতে মাদরাসায় যোগাযোগ করুন।`;
+                          const [exam, year] = selectedResultExam.split('|');
+                          const stats = fullProfile.examStats[selectedResultExam];
+                          const subject = `${exam} (${year}) এর ফলাফল - ${fullProfile.student.name}`;
+                          const body = `${fullProfile.student.name} এর ${exam} (${year}) এর ফলাফল:\nমোট নম্বর: ${stats.myTotal}\nমেধা স্থান: ${stats.rank}\n\nবিস্তারিত জানতে মাদরাসায় যোগাযোগ করুন।`;
                           window.open(`mailto:${fullProfile.student.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
                         }}
                         className="px-4 py-2 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2 text-xs font-bold"
@@ -3014,7 +3253,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         <Printer className="w-4 h-4" /> Print Result
                       </button>
                       <button 
-                        onClick={() => downloadPDF('marksheet-template', `${fullProfile.student.id}_${selectedResultExam}_Result.pdf`, addToast)}
+                        onClick={() => downloadPDF('marksheet-template', `${fullProfile.student.id}_${selectedResultExam.replace('|', '_')}_Result.pdf`, addToast)}
                         className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-all flex items-center gap-2 text-xs font-bold"
                       >
                         <Download className="w-4 h-4" /> Download PDF
@@ -3032,7 +3271,11 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).map((r: any) => (
+                        {(() => {
+                          if (!selectedResultExam) return [];
+                          const [exam, year] = selectedResultExam.split('|');
+                          return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                        })().map((r: any) => (
                           <tr key={r.id}>
                             <td className="py-4 text-slate-600 font-bold">{r.subject}</td>
                             <td className="py-4 font-black text-emerald-600">{r.marks}</td>
@@ -3123,7 +3366,11 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   <GraduationCap className="w-12 h-12 text-emerald-600" style={{ color: '#059669' }} />
                   <div>
                     <h2 className="text-4xl font-black text-emerald-900" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                    <p className="text-lg font-bold text-slate-500 mt-1" style={{ color: '#64748b' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট - {selectedResultExam}</p>
+                    <p className="text-lg font-bold text-slate-500 mt-1" style={{ color: '#64748b' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট - {(() => {
+                      if (!selectedResultExam) return "";
+                      const [exam, year] = selectedResultExam.split('|');
+                      return `${exam} (${year})`;
+                    })()}</p>
                   </div>
                 </div>
                 
@@ -3150,7 +3397,8 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                       <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>গড় নম্বর</p>
                       <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
                         {(() => {
-                          const results = fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam);
+                          const [exam, year] = selectedResultExam.split('|');
+                          const results = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
                           return results.length > 0 
                             ? (fullProfile.examStats[selectedResultExam].myTotal / results.length).toFixed(1)
                             : "0.0";
@@ -3178,11 +3426,20 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
                       <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>ফলাফল</p>
                       <p className={cn("text-xl font-black", 
-                        fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).some((r: any) => r.grade === 'F') 
-                          ? "text-rose-600" 
-                          : "text-emerald-600"
-                      )} style={{ color: fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).some((r: any) => r.grade === 'F') ? '#e11d48' : '#059669' }}>
-                        {fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"}
+                        (() => {
+                          const [exam, year] = selectedResultExam.split('|');
+                          return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                            ? "text-rose-600" 
+                            : "text-emerald-600"
+                        })()
+                      )} style={{ color: (() => {
+                        const [exam, year] = selectedResultExam.split('|');
+                        return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? '#e11d48' : '#059669'
+                      })() }}>
+                        {(() => {
+                          const [exam, year] = selectedResultExam.split('|');
+                          return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -3197,7 +3454,11 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                     </tr>
                   </thead>
                   <tbody>
-                    {fullProfile.results.filter((r: any) => r.exam_name === selectedResultExam).map((r: any, idx: number) => (
+                    {(() => {
+                      if (!selectedResultExam) return [];
+                      const [exam, year] = selectedResultExam.split('|');
+                      return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                    })().map((r: any, idx: number) => (
                       <tr key={idx}>
                         <td className="border border-slate-300 p-4 font-bold text-slate-800" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{r.subject}</td>
                         <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.marks}</td>
@@ -3715,10 +3976,10 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
   );
 }
 
-function ResultManager({ students, settings, classesList }: { students: any[], settings: any, classesList: string[] }) {
+function ResultManager({ students, settings, classesList, fullProfile, setFullProfile }: { students: any[], settings: any, classesList: string[], fullProfile: any, setFullProfile: (profile: any) => void }) {
   const { addToast } = useToast();
   const [selectedClass, setSelectedClass] = useState("");
-  const [selectedExam, setSelectedExam] = useState("প্রথম সাময়িক");
+  const [selectedExam, setSelectedExam] = useState("");
   const [classResults, setClassResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -3736,27 +3997,62 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
   // Exam Management State
   const [exams, setExams] = useState<any[]>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [newExamName, setNewExamName] = useState("");
   const [isAddingExam, setIsAddingExam] = useState(false);
 
   const classes = classesList;
 
   const fetchExams = async () => {
-    const res = await fetch("/api/exams");
-    const data = await res.json();
-    const examsData = Array.isArray(data) ? data : [];
-    setExams(examsData);
-    if (examsData.length > 0 && !selectedExam) {
-      setSelectedExam(examsData[0].name);
+    try {
+      const res = await fetch("/api/exams");
+      if (!res.ok) throw new Error("Failed to fetch exams");
+      const data = await res.json();
+      const examsData = Array.isArray(data) ? data : [];
+      setExams(examsData);
+      
+      const currentYear = new Date().getFullYear();
+      const years = new Set<string>();
+      for (let y = 2020; y <= 2050; y++) {
+        years.add(y.toString());
+      }
+      examsData.forEach((e: any) => {
+        if (e.year) years.add(e.year.toString());
+      });
+      
+      setAvailableYears(Array.from(years).sort().reverse());
+      
+      if (examsData.length > 0 && !selectedExam) {
+        const currentYearExams = examsData.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear);
+        if (currentYearExams.length > 0) {
+          setSelectedExam(currentYearExams[0].name);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching exams:", error);
+      addToast("পরীক্ষার তালিকা লোড করতে সমস্যা হয়েছে", "error");
     }
   };
+
+  useEffect(() => {
+    const currentYearExams = exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear);
+    if (currentYearExams.length > 0) {
+      if (!currentYearExams.some(e => e.name === selectedExam)) {
+        setSelectedExam(currentYearExams[0].name);
+      }
+    } else {
+      setSelectedExam("");
+    }
+  }, [selectedYear, exams]);
+
+  const filteredExams = exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear);
 
   const handleAddExam = async () => {
     if (!newExamName) return;
     await fetch("/api/exams", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newExamName })
+      body: JSON.stringify({ name: newExamName, year: selectedYear })
     });
     setNewExamName("");
     setIsAddingExam(false);
@@ -3764,18 +4060,38 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
   };
 
   const fetchClassResults = async () => {
-    if (!selectedClass) return;
+    if (!selectedClass || !selectedExam) return;
     setLoading(true);
-    const res = await fetch(`/api/admin/results/class/${selectedClass}?exam_name=${selectedExam}`);
-    setClassResults(await res.json());
-    setLoading(false);
+    try {
+      const url = `/api/admin/results/class/${encodeURIComponent(selectedClass)}?exam_name=${encodeURIComponent(selectedExam)}&year=${encodeURIComponent(selectedYear)}`;
+      console.log("Fetching results from:", url);
+      const res = await fetch(url);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Server error response:", errorText);
+        throw new Error(`Failed to fetch results: ${res.status} ${res.statusText}`);
+      }
+      const data = await res.json();
+      setClassResults(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching results:", error);
+      addToast("রেজাল্ট লোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchClassSubjects = async () => {
     if (!selectedClass) return;
-    const res = await fetch(`/api/subjects/${selectedClass}`);
-    const data = await res.json();
-    setClassSubjects(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetch(`/api/subjects/${encodeURIComponent(selectedClass)}`);
+      if (!res.ok) throw new Error("Failed to fetch subjects");
+      const data = await res.json();
+      setClassSubjects(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+      addToast("বিষয় লোড করতে সমস্যা হয়েছে", "error");
+    }
   };
 
   useEffect(() => {
@@ -3787,7 +4103,20 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
       fetchClassResults();
       fetchClassSubjects();
     }
-  }, [selectedClass, selectedExam]);
+  }, [selectedClass, selectedExam, selectedYear]);
+
+  useEffect(() => {
+    if (exams.length > 0) {
+      const currentYearExams = exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear);
+      if (currentYearExams.length > 0) {
+        if (!currentYearExams.find(e => e.name === selectedExam)) {
+          setSelectedExam(currentYearExams[0].name);
+        }
+      } else {
+        setSelectedExam("");
+      }
+    }
+  }, [selectedYear, exams]);
 
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
@@ -3820,28 +4149,45 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
 
     setLoading(true);
     try {
-      for (const sub of studentSubjects) {
-        if (!sub.marks) continue; // Skip empty marks
-        const grade = Number(sub.marks) >= 80 ? "A+" : Number(sub.marks) >= 70 ? "A" : Number(sub.marks) >= 60 ? "A-" : Number(sub.marks) >= 50 ? "B" : Number(sub.marks) >= 40 ? "C" : Number(sub.marks) >= 33 ? "D" : "F";
-        await fetch("/api/results", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            student_id: selectedStudent.id,
+      const resultsToSave = studentSubjects
+        .filter(sub => sub.marks !== "")
+        .map(sub => {
+          const marks = Number(sub.marks);
+          const grade = marks >= 80 ? "A+" : marks >= 70 ? "A" : marks >= 60 ? "A-" : marks >= 50 ? "B" : marks >= 40 ? "C" : marks >= 33 ? "D" : "F";
+          return {
+            student_id: selectedStudent.studentId || selectedStudent.id,
             exam_name: selectedExam,
             subject: sub.name,
-            marks: Number(sub.marks),
+            marks,
             grade,
-            date: new Date().toISOString()
-          })
+            year: selectedYear,
+            date: new Date().toISOString(),
+            class_name: selectedClass
+          };
         });
+
+      if (resultsToSave.length === 0) {
+        addToast("কোন নম্বর প্রদান করা হয়নি", "info");
+        setLoading(false);
+        return;
       }
 
-      addToast("রেজাল্ট সফলভাবে সংরক্ষিত হয়েছে", "success");
-      setIsAdding(false);
-      fetchClassResults();
+      const res = await fetch("/api/results/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ results: resultsToSave })
+      });
+
+      if (res.ok) {
+        addToast("রেজাল্ট সফলভাবে সংরক্ষিত হয়েছে", "success");
+        setIsAdding(false);
+        fetchClassResults();
+      } else {
+        throw new Error("Failed to save results");
+      }
     } catch (error) {
       console.error("Save result failed", error);
+      addToast("রেজাল্ট সেভ করতে সমস্যা হয়েছে", "error");
     } finally {
       setLoading(false);
     }
@@ -3968,7 +4314,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
       
       {/* Marksheet Print View (Hidden) */}
       {fullProfile && (
-        <div className="hidden print:block p-12 bg-white w-full">
+        <div id="marksheet-print" className="hidden print:block p-12 bg-white w-full">
           <PrintHeader settings={settings} />
           <div className="text-center mb-12">
             <h2 className="text-3xl font-black text-slate-900 uppercase tracking-widest border-b-4 border-slate-900 inline-block pb-2 mb-4">একাডেমিক ট্রান্সক্রিপ্ট</h2>
@@ -3978,21 +4324,21 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
             <div className="space-y-4">
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">ছাত্রের নাম:</span>
-                <span className="font-black text-slate-900">{fullProfile.name}</span>
+                <span className="font-black text-slate-900">{fullProfile.student?.name || fullProfile.name}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">আইডি নম্বর:</span>
-                <span className="font-black text-slate-900">{fullProfile.id}</span>
+                <span className="font-black text-slate-900">{fullProfile.student?.studentId || fullProfile.student?.id || fullProfile.studentId || fullProfile.id}</span>
               </div>
             </div>
             <div className="space-y-4">
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">শ্রেণী:</span>
-                <span className="font-black text-slate-900">{selectedClass}</span>
+                <span className="font-black text-slate-900">{selectedClass || fullProfile.student?.class}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="font-bold text-slate-500">রোল নম্বর:</span>
-                <span className="font-black text-slate-900">{fullProfile.roll}</span>
+                <span className="font-black text-slate-900">{fullProfile.student?.roll || fullProfile.roll}</span>
               </div>
             </div>
           </div>
@@ -4006,7 +4352,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
               </tr>
             </thead>
             <tbody>
-              {fullProfile.subjects.map((s: any, i: number) => (
+              {(fullProfile.subjects || fullProfile.results?.filter((r: any) => r.exam_name === selectedExam) || []).map((s: any, i: number) => (
                 <tr key={i} className="border-b border-slate-200">
                   <td className="p-4 font-bold border border-slate-200">{s.subject}</td>
                   <td className="p-4 text-center border border-slate-200">১০০</td>
@@ -4016,8 +4362,12 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
               ))}
               <tr className="bg-slate-50 font-black">
                 <td colSpan={2} className="p-4 text-right border border-slate-200">সর্বমোট নম্বর:</td>
-                <td className="p-4 text-center border border-slate-200">{fullProfile.totalMarks}</td>
-                <td className="p-4 text-center border border-slate-200">গড়: {fullProfile.avgMarks.toFixed(2)}</td>
+                <td className="p-4 text-center border border-slate-200">
+                  {fullProfile.totalMarks || (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).reduce((sum: number, r: any) => sum + r.marks, 0))}
+                </td>
+                <td className="p-4 text-center border border-slate-200">
+                  গড়: {(fullProfile.avgMarks || (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).length > 0 ? (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).reduce((sum: number, r: any) => sum + r.marks, 0) / fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).length) : 0)).toFixed(2)}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -4154,7 +4504,7 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                         onChange={(e) => setSelectedYear(e.target.value)}
                         className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold appearance-none pr-10"
                       >
-                        {[...new Set(exams.map(e => e.year || new Date().getFullYear().toString()))].map(y => <option key={y} value={y}>{y}</option>)}
+                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                       <ChevronDown className="absolute right-[115px] top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                       <select 
@@ -4191,8 +4541,9 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                       )}
                     </div>
                     <button 
-                      onClick={() => window.print()}
-                      className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
+                      onClick={() => printElement('class-results-report-template')}
+                      className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl hover:bg-emerald-200 transition-all"
+                      title="পুরো ক্লাসের রেজাল্ট প্রিন্ট করুন"
                     >
                       <Printer className="w-6 h-6" />
                     </button>
@@ -4202,7 +4553,21 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                 {loading ? (
                   <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
                 ) : (
-                  <div id="results-table-template" className="overflow-x-auto">
+                  <div id="class-results-report-template" className="p-8">
+                    <div className="hidden print:flex justify-between items-center mb-8 border-b-2 border-slate-900 pb-4">
+                      <div className="flex items-center gap-4">
+                        {settings.logo && <img src={settings.logo} alt="Logo" className="w-16 h-16 object-contain" />}
+                        <div>
+                          <h1 className="text-2xl font-black text-slate-900">{settings.name || "মাদ্রাসা"}</h1>
+                          <p className="text-sm font-bold text-slate-600">{settings.address || ""}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <h2 className="text-xl font-black text-slate-900">ক্লাস রেজাল্ট রিপোর্ট</h2>
+                        <p className="text-sm font-bold text-slate-600 mt-1">ক্লাস: {selectedClass} | পরীক্ষা: {selectedExam}</p>
+                        <p className="text-sm font-bold text-slate-600">বছর: {selectedYear}</p>
+                      </div>
+                    </div>
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b-2 border-slate-100">
@@ -4268,11 +4633,20 @@ function ResultManager({ students, settings, classesList }: { students: any[], s
                                 <button 
                                   onClick={async () => {
                                     setLoading(true);
-                                    const res = await fetch(`/api/students/${r.studentId || r.id}/full-profile`);
-                                    const data = await res.json();
-                                    setFullProfile(data);
-                                    setLoading(false);
-                                    setTimeout(() => window.print(), 100);
+                                    try {
+                                      const res = await fetch(`/api/students/${r.studentId || r.id}/full-profile`);
+                                      const data = await res.json();
+                                      setFullProfile(data);
+                                      // Wait for React to render the hidden div
+                                      setTimeout(() => {
+                                        printElement('marksheet-print');
+                                        setLoading(false);
+                                      }, 500);
+                                    } catch (error) {
+                                      console.error("Print marksheet failed", error);
+                                      addToast("মার্কশিট প্রিন্ট করতে সমস্যা হয়েছে", "error");
+                                      setLoading(false);
+                                    }
                                   }}
                                   title="মার্কশিট প্রিন্ট"
                                   className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
@@ -5647,7 +6021,7 @@ function TransactionHistory({ settings }: { settings: any }) {
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
     
-    fetch(`/api/admin/all-history?${params.toString()}`)
+    fetch(`/api/admin/history?${params.toString()}`)
       .then(res => res.json())
       .then(data => {
         const sortedData = Array.isArray(data) 
@@ -5774,7 +6148,7 @@ function TransactionHistory({ settings }: { settings: any }) {
               className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
             />
           </div>
-          <button onClick={() => window.print()} className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all print:hidden">
+          <button onClick={() => printElement('history-receipt')} className="p-3 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all print:hidden">
             <Printer className="w-6 h-6" />
           </button>
         </div>

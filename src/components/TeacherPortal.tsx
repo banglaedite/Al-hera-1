@@ -324,7 +324,7 @@ export default function TeacherPortal() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
+                "relative flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
                 activeTab === tab.id 
                   ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
                   : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
@@ -332,6 +332,14 @@ export default function TeacherPortal() {
             >
               <tab.icon className="w-5 h-5" />
               {tab.label}
+              {tab.id === "notices" && notices.some(n => {
+                const noticeDate = new Date(n.created_at);
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                return noticeDate >= yesterday;
+              }) && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
+              )}
             </motion.button>
           ))}
         </div>

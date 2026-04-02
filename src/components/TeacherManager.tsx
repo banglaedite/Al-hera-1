@@ -7,9 +7,24 @@ import { cn } from "../lib/utils";
 
 import { printElement } from '../utils/printUtils';
 
-export function TeacherManager({ addToast, settings }: { addToast: (message: string, type?: 'success' | 'error' | 'info') => void, settings?: any }) {
-  const [teachers, setTeachers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export function TeacherManager({ 
+  addToast, 
+  settings, 
+  teachers: initialTeachers = [], 
+  refreshTeachers 
+}: { 
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void, 
+  settings?: any,
+  teachers?: any[],
+  refreshTeachers?: () => Promise<void>
+}) {
+  const [teachers, setTeachers] = useState<any[]>(initialTeachers);
+  
+  useEffect(() => {
+    setTeachers(initialTeachers);
+  }, [initialTeachers]);
+
+  const [loading, setLoading] = useState(!initialTeachers.length);
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
@@ -29,16 +44,22 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
   const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
 
   const fetchTeachers = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/teachers?t=" + Date.now());
-      const data = await res.json();
-      setTeachers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Error fetching teachers:", err);
-      setTeachers([]);
-    } finally {
+    if (refreshTeachers) {
+      setLoading(true);
+      await refreshTeachers();
       setLoading(false);
+    } else {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/admin/teachers?t=" + Date.now());
+        const data = await res.json();
+        setTeachers(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching teachers:", err);
+        setTeachers([]);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -186,8 +207,13 @@ export function TeacherManager({ addToast, settings }: { addToast: (message: str
   };
 
   useEffect(() => {
-    fetchTeachers();
-  }, []);
+    if (initialTeachers.length > 0) {
+      setTeachers(initialTeachers);
+      setLoading(false);
+    } else {
+      fetchTeachers();
+    }
+  }, [initialTeachers]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
 

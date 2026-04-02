@@ -49,14 +49,38 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
     
     let currentY = 50;
 
+    // Summary Section in PDF
+    doc.setFontSize(14);
+    doc.setTextColor(40);
+    doc.text('সারসংক্ষেপ', 14, currentY);
+    
+    const totalIncome: number = (Object.values(groupedByCategory.income) as any[]).reduce((sum: number, cat: any) => sum + cat.total, 0);
+    const totalExpense: number = (Object.values(groupedByCategory.expenses) as any[]).reduce((sum: number, cat: any) => sum + cat.total, 0);
+    const balance: number = totalIncome - totalExpense;
+
+    (doc as any).autoTable({
+      startY: currentY + 5,
+      head: [['মোট আয়', 'মোট ব্যয়', 'অবশিষ্ট']],
+      body: [[`৳${totalIncome}`, `৳${totalExpense}`, `৳${balance}`]],
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 12, cellPadding: 5, halign: 'center' },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+
     // Income Table
     if (printType === 'all' || printType === 'income') {
+      if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
+      }
       doc.setFontSize(14);
       doc.setTextColor(16, 185, 129); // Emerald-500
       doc.text('আয় সমূহ', 14, currentY);
       
       const incomeData = Object.entries(groupedByCategory.income).flatMap(([cat, data]: [string, any]) => 
-        data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || item.student_name || 'N/A', `৳${item.amount}`])
+        data.items.map((item: any) => [new Date(item.paid_date || item.date).toLocaleDateString('bn-BD'), cat, item.description || item.student_name || item.purpose || 'N/A', `৳${item.amount}`])
       );
 
       (doc as any).autoTable({
@@ -107,7 +131,8 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
         acc[cat].total += item.amount || 0;
         acc[cat].items.push(item);
         
-        const month = item.date ? item.date.substring(0, 7) : 'Unknown';
+        const dateStr = item.paid_date || item.date;
+        const month = dateStr ? dateStr.substring(0, 7) : 'Unknown';
         if (!acc[cat].months[month]) acc[cat].months[month] = { total: 0, items: [] };
         acc[cat].months[month].total += item.amount || 0;
         acc[cat].months[month].items.push(item);
@@ -156,11 +181,15 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
               const contentWidth = pdfWidth - (2 * margin);
               const img = new Image();
               img.src = imgData;
-              img.onload = () => {
-                const contentHeight = (img.height * contentWidth) / img.width;
-                pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-                pdf.save(`details-${printId}.pdf`);
-              };
+              await new Promise((resolve, reject) => {
+                img.onload = () => {
+                  const contentHeight = (img.height * contentWidth) / img.width;
+                  pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
+                  pdf.save(`details-${printId}.pdf`);
+                  resolve(null);
+                };
+                img.onerror = reject;
+              });
             } catch (err) {
               console.error("PDF generation failed", err);
             }
@@ -182,7 +211,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
           <tbody>
             {items.map((item: any, idx: number) => (
               <tr key={idx} className="border-b last:border-0 hover:bg-slate-50">
-                <td className="p-3 text-sm">{new Date(item.date).toLocaleDateString('bn-BD')}</td>
+                <td className="p-3 text-sm">{new Date(item.paid_date || item.date).toLocaleDateString('bn-BD')}</td>
                 <td className="p-3 text-sm">{item.description || item.student_name || item.purpose || 'N/A'}</td>
                 <td className="p-3 text-sm text-right font-medium">৳{item.amount}</td>
               </tr>

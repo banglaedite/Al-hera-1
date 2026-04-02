@@ -113,8 +113,69 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
           >
             <History className="w-4 h-4" /> হিস্টোরি
           </button>
+          <button 
+            onClick={() => setActiveSubTab('status')}
+            className={`px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 ${activeSubTab === 'status' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <Clock className="w-4 h-4" /> মেশিন সেটআপ (API)
+          </button>
         </div>
       </div>
+
+      {activeSubTab === 'status' && (
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center">
+              <Fingerprint className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900">বায়োমেট্রিক মেশিন API সেটআপ</h3>
+              <p className="text-slate-500 font-medium">মেশিন থেকে ডাটা পুশ করার জন্য নিচের API ব্যবহার করুন</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h4 className="font-bold text-slate-900 mb-2">API Endpoint URL</h4>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 block bg-slate-900 text-emerald-400 p-4 rounded-xl text-sm font-mono break-all">
+                  {window.location.origin}/api/attendance/push
+                </code>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/api/attendance/push`);
+                    addToast("URL কপি করা হয়েছে", "success");
+                  }}
+                  className="px-4 py-4 bg-emerald-100 text-emerald-700 rounded-xl font-bold hover:bg-emerald-200 transition-all whitespace-nowrap"
+                >
+                  কপি করুন
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h4 className="font-bold text-slate-900 mb-2">HTTP Method</h4>
+              <span className="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-black text-sm">POST</span>
+            </div>
+
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h4 className="font-bold text-slate-900 mb-2">JSON Payload Example</h4>
+              <pre className="bg-slate-900 text-emerald-400 p-4 rounded-xl text-sm font-mono overflow-x-auto">
+{`{
+  "biometric_id": "1001",
+  "timestamp": "2023-10-25T08:30:00Z",
+  "method": "fingerprint"
+}`}
+              </pre>
+              <p className="text-sm text-slate-500 mt-3 font-medium">
+                * <code className="bg-slate-200 px-1 rounded text-slate-700">biometric_id</code>: মেশিনে রেজিস্টার করা আইডি<br/>
+                * <code className="bg-slate-200 px-1 rounded text-slate-700">timestamp</code>: (ঐচ্ছিক) বর্তমান সময় না দিলে সার্ভারের সময় ব্যবহার হবে<br/>
+                * <code className="bg-slate-200 px-1 rounded text-slate-700">method</code>: (ঐচ্ছিক) fingerprint, face, card ইত্যাদি
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeSubTab === 'register' && (
         <div className="space-y-6">
