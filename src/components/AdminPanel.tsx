@@ -471,7 +471,7 @@ export default function AdminPanel() {
     { id: "hifz", label: "হিফজ বিভাগ", icon: GraduationCap, permission: "hifz" },
     { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
     { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "results" },
-    { id: "teachers", label: "শিক্ষক", icon: Users, permission: "teachers" },
+    { id: "teachers", label: "শিক্ষক ও স্টাফ", icon: Users, permission: "teachers" },
     { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "all_teachers" },
     { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
     { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "device_attendance" },
@@ -878,7 +878,16 @@ function ShowcaseManager() {
 
   const executeDeleteShowcaseItem = async () => {
     if (!itemToDelete) return;
-    await fetch(`/api/admin/showcase-items/${itemToDelete}`, { method: "DELETE" });
+    const pwd = prompt("শোকেস আইটেমটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) {
+      setItemToDelete(null);
+      return;
+    }
+    await fetch(`/api/admin/showcase-items/${itemToDelete}`, { 
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pwd })
+    });
     setItemToDelete(null);
     addToast("শোকেস আইটেম ডিলিট করা হয়েছে", "success");
     fetchShowcaseItems();
@@ -989,8 +998,17 @@ function FeatureManager() {
 
   const executeDeleteFeature = async () => {
     if (!featureToDelete) return;
+    const pwd = prompt("বৈশিষ্ট্যটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) {
+      setFeatureToDelete(null);
+      return;
+    }
     try {
-      await fetch(`/api/admin/features/${featureToDelete}`, { method: "DELETE" });
+      await fetch(`/api/admin/features/${featureToDelete}`, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
       setFeatureToDelete(null);
       addToast("বৈশিষ্ট্য ডিলিট করা হয়েছে", "success");
       fetchFeatures();
@@ -1432,12 +1450,19 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
   };
 
   const handleDeleteSubAdmin = async (id: string) => {
-    if (!confirm("আপনি কি নিশ্চিত?")) return;
+    const pwd = prompt("সাব-এডমিন মুছে ফেলতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
     try {
-      const res = await fetch(`/api/admin/sub-admins/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/sub-admins/${id}`, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
       if (res.ok) {
         addToast("সাব-এডমিন মুছে ফেলা হয়েছে", "success");
         fetchSubAdmins();
+      } else {
+        addToast("ভুল পাসওয়ার্ড বা সমস্যা হয়েছে", "error");
       }
     } catch (error) {
       addToast("সমস্যা হয়েছে", "error");
@@ -3987,7 +4012,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [studentSubjects, setStudentSubjects] = useState<{ name: string, marks: string }[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"results" | "subjects">("results");
+  const [activeTab, setActiveTab] = useState<"results" | "subjects" | "result-sheets">("results");
   
   // Subject Management State
   const [classSubjects, setClassSubjects] = useState<any[]>([]);
@@ -4119,6 +4144,8 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   }, [selectedYear, exams]);
 
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [printData, setPrintData] = useState<any>(null);
+  const [printType, setPrintType] = useState<"short" | "detailed">("short");
 
   const handleAddSubject = async () => {
     if (!newSubject.name) return;
@@ -4135,7 +4162,16 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
   const executeDeleteSubject = async () => {
     if (confirmDelete === null) return;
-    await fetch(`/api/subjects/${confirmDelete}`, { method: "DELETE" });
+    const pwd = prompt("বিষয়টি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) {
+      setConfirmDelete(null);
+      return;
+    }
+    await fetch(`/api/subjects/${confirmDelete}`, { 
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pwd })
+    });
     setConfirmDelete(null);
     fetchClassSubjects();
   };
@@ -4144,6 +4180,50 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     setConfirmDelete(id);
   };
   
+  const generateResultSheet = async (className: string, type: "short" | "detailed") => {
+    if (!className) {
+      addToast("অনুগ্রহ করে একটি শ্রেণী নির্বাচন করুন", "error");
+      return;
+    }
+    if (!selectedExam) {
+      addToast("অনুগ্রহ করে একটি পরীক্ষা নির্বাচন করুন", "error");
+      return;
+    }
+    if (!selectedYear) {
+      addToast("অনুগ্রহ করে একটি বছর নির্বাচন করুন", "error");
+      return;
+    }
+    setLoading(true);
+    try {
+      const url = `/api/admin/results/class/${encodeURIComponent(className)}?exam_name=${encodeURIComponent(selectedExam)}&year=${encodeURIComponent(selectedYear)}`;
+      console.log("Fetching result sheet from:", url);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch results");
+      const data = await res.json();
+      
+      // Process data for the result sheet
+      const processedData = data.map((s: any) => ({
+        roll: s.student?.roll || s.roll,
+        name: s.student?.name || s.name,
+        totalMarks: s.totalMarks,
+        grade: s.totalMarks >= 80 ? "A+" : s.totalMarks >= 70 ? "A" : s.totalMarks >= 60 ? "A-" : s.totalMarks >= 50 ? "B" : s.totalMarks >= 40 ? "C" : s.totalMarks >= 33 ? "D" : "F",
+        subjects: s.subjects || []
+      }));
+
+      setPrintData(processedData);
+      setPrintType(type);
+      
+      // Force a re-render and then print
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    } catch (error) {
+      console.error("Error generating result sheet:", error);
+      addToast("রেজাল্ট শীট তৈরি করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleSaveResult = async () => {
     if (!selectedStudent) return;
 
@@ -4430,6 +4510,15 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
               >
                 বিষয় ব্যবস্থাপনা
               </button>
+              <button 
+                onClick={() => setActiveTab("result-sheets")}
+                className={cn(
+                  "px-6 py-3 font-black text-sm transition-all border-b-2",
+                  activeTab === "result-sheets" ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                )}
+              >
+                রেজাল্ট সিট
+              </button>
             </div>
 
             {activeTab === "subjects" && (
@@ -4484,6 +4573,74 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
               </div>
             )}
 
+            {activeTab === "result-sheets" && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                  <h4 className="text-lg font-black text-slate-900 mb-6">পরীক্ষা ও শ্রেণী নির্বাচন করুন</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                      {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                      <option value="">পরীক্ষা নির্বাচন করুন</option>
+                      {filteredExams.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+                    </select>
+                    <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                      <option value="">শ্রেণী নির্বাচন করুন</option>
+                      {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <button 
+                    onClick={fetchClassResults}
+                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all"
+                  >
+                    রেজাল্ট দেখুন
+                  </button>
+                </div>
+
+                {classResults.length > 0 && (
+                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                    <h4 className="text-lg font-black text-slate-900 mb-6">{selectedClass} - {selectedExam} ({selectedYear}) এর রেজাল্ট</h4>
+                    <div className="flex gap-4 mb-6">
+                      <button
+                        onClick={() => generateResultSheet(selectedClass, 'short')}
+                        className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Printer className="w-5 h-5" /> সংক্ষিপ্ত রেজাল্ট প্রিন্ট
+                      </button>
+                      <button
+                        onClick={() => generateResultSheet(selectedClass, 'detailed')}
+                        className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Printer className="w-5 h-5" /> বিস্তারিত রেজাল্ট প্রিন্ট
+                      </button>
+                    </div>
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900">
+                          <th className="p-4 text-left border border-slate-200">রোল</th>
+                          <th className="p-4 text-left border border-slate-200">নাম</th>
+                          <th className="p-4 text-center border border-slate-200">মোট নম্বর</th>
+                          <th className="p-4 text-center border border-slate-200">গ্রেড</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classResults.map((student: any, i: number) => (
+                          <tr key={i} className="border-b border-slate-100">
+                            <td className="p-4 border border-slate-200">{student.roll}</td>
+                            <td className="p-4 font-bold border border-slate-200">{student.name}</td>
+                            <td className="p-4 text-center font-black border border-slate-200">{student.totalMarks}</td>
+                            <td className="p-4 text-center font-black border border-slate-200">{student.grade}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+
             {activeTab === "results" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex justify-between items-center mb-8 print:hidden">
@@ -4496,6 +4653,20 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       onClick={() => setViewMode("short")}
                       className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", viewMode === "short" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400")}
                     >সংক্ষিপ্ত</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => { setViewMode("short"); setTimeout(() => printElement('class-results-report-template'), 500); }}
+                      className="px-4 py-3 bg-emerald-100 text-emerald-700 rounded-2xl hover:bg-emerald-200 transition-all font-bold text-xs"
+                    >
+                      সংক্ষিপ্ত প্রিন্ট
+                    </button>
+                    <button 
+                      onClick={() => { setViewMode("detailed"); setTimeout(() => printElement('class-results-report-template'), 500); }}
+                      className="px-4 py-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all font-bold text-xs"
+                    >
+                      বিস্তারিত প্রিন্ট
+                    </button>
                   </div>
                   <div className="flex gap-4">
                     <div className="relative flex items-center gap-2">
@@ -4540,127 +4711,129 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                         </div>
                       )}
                     </div>
-                    <button 
-                      onClick={() => printElement('class-results-report-template')}
-                      className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl hover:bg-emerald-200 transition-all"
-                      title="পুরো ক্লাসের রেজাল্ট প্রিন্ট করুন"
-                    >
-                      <Printer className="w-6 h-6" />
-                    </button>
                   </div>
                 </div>
 
                 {loading ? (
                   <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
                 ) : (
-                  <div id="class-results-report-template" className="p-8">
-                    <div className="hidden print:flex justify-between items-center mb-8 border-b-2 border-slate-900 pb-4">
-                      <div className="flex items-center gap-4">
-                        {settings.logo && <img src={settings.logo} alt="Logo" className="w-16 h-16 object-contain" />}
-                        <div>
-                          <h1 className="text-2xl font-black text-slate-900">{settings.name || "মাদ্রাসা"}</h1>
-                          <p className="text-sm font-bold text-slate-600">{settings.address || ""}</p>
+                  <div id="class-results-report-template" className="p-8 bg-white border-4 border-emerald-50 rounded-3xl">
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-10 border-b-4 border-emerald-100 pb-8">
+                      {settings.logo && <img src={settings.logo} alt="Logo" className="w-28 h-28 object-contain rounded-2xl shadow-lg" />}
+                      <div className="text-center flex-1 px-4">
+                        <h1 className="text-5xl font-black text-emerald-900 mb-3 tracking-tight">{settings.name || "মাদ্রাসা"}</h1>
+                        <p className="text-xl font-bold text-emerald-700 bg-emerald-50 inline-block px-6 py-2 rounded-full">{settings.address || ""}</p>
+                        <div className="mt-6 px-8 py-3 bg-emerald-600 text-white font-black text-2xl rounded-2xl shadow-xl inline-block">
+                          {selectedExam} ({selectedYear}) - {selectedClass}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <h2 className="text-xl font-black text-slate-900">ক্লাস রেজাল্ট রিপোর্ট</h2>
-                        <p className="text-sm font-bold text-slate-600 mt-1">ক্লাস: {selectedClass} | পরীক্ষা: {selectedExam}</p>
-                        <p className="text-sm font-bold text-slate-600">বছর: {selectedYear}</p>
-                      </div>
+                      {settings.qr_code_url && <img src={settings.qr_code_url} alt="QR Code" className="w-28 h-28 object-contain rounded-2xl shadow-lg" />}
                     </div>
-                    <table className="w-full text-left">
+
+                    {/* Results Table */}
+                    <table className="w-full text-left border-separate border-spacing-y-3">
                       <thead>
-                        <tr className="border-b-2 border-slate-100">
-                          <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest">র‍্যাঙ্ক</th>
-                          <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest">ছাত্রের নাম</th>
-                          <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest">রোল</th>
-                          {viewMode === 'detailed' && <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest">বিষয়সমূহ</th>}
-                          <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest">মোট নম্বর</th>
-                          <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest">গড়</th>
-                          <th className="pb-4 text-xs font-black text-slate-400 uppercase tracking-widest print:hidden">অ্যাকশন</th>
+                        <tr className="bg-emerald-50 text-emerald-900">
+                          <th className="p-5 rounded-l-2xl text-sm font-black uppercase tracking-widest">র‍্যাঙ্ক</th>
+                          <th className="p-5 text-sm font-black uppercase tracking-widest">ছাত্রের নাম</th>
+                          <th className="p-5 text-sm font-black uppercase tracking-widest">রোল</th>
+                          {viewMode === 'detailed' && <th className="p-5 text-sm font-black uppercase tracking-widest">বিষয়ভিত্তিক নম্বর</th>}
+                          <th className="p-5 text-sm font-black uppercase tracking-widest">মোট</th>
+                          <th className="p-5 rounded-r-2xl text-sm font-black uppercase tracking-widest">গড়</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
+                      <tbody className="divide-y divide-emerald-50">
                         {classResults.map((r, index) => (
-                          <tr key={r.id} className="group hover:bg-slate-50 transition-colors">
-                            <td className="py-4">
+                          <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl">
+                            <td className="p-5 rounded-l-2xl">
                               <div className={cn(
-                                "w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm",
-                                index === 0 ? "bg-yellow-100 text-yellow-700" : 
+                                "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl",
+                                index === 0 ? "bg-amber-100 text-amber-700" : 
                                 index === 1 ? "bg-slate-200 text-slate-700" :
-                                index === 2 ? "bg-orange-100 text-orange-700" : "bg-slate-50 text-slate-400"
+                                index === 2 ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-600"
                               )}>
                                 {index + 1}
                               </div>
                             </td>
-                            <td className="py-4">
-                              <p className="font-black text-slate-900">{r.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {r.studentId || r.id}</p>
-                            </td>
-                            <td className="py-4 font-bold text-slate-600">{r.roll}</td>
+                            <td className="p-5 font-black text-slate-900 text-lg">{r.name}</td>
+                            <td className="p-5 font-bold text-slate-600 text-lg">{r.roll}</td>
                             {viewMode === 'detailed' && (
-                              <td className="py-4">
-                                <div className="flex flex-wrap gap-1">
+                              <td className="p-5">
+                                <div className="flex flex-wrap gap-2">
                                   {r.subjects.map((s: any, i: number) => (
-                                    <span key={i} className="text-[10px] bg-white border border-slate-100 px-2 py-0.5 rounded-lg font-bold text-slate-500">
+                                    <span key={i} className="bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg font-bold text-xs border border-emerald-100">
                                       {s.subject}: {s.marks}
                                     </span>
                                   ))}
                                 </div>
                               </td>
                             )}
-                            <td className="py-4 font-black text-emerald-600">{r.totalMarks}</td>
-                            <td className="py-4 font-black text-blue-600">{r.avgMarks.toFixed(2)}</td>
-                            <td className="py-4 print:hidden">
-                              <div className="flex gap-2">
-                                <button 
-                                  onClick={() => {
-                                    setShowAllReports(r);
-                                    fetchAllReports(r.studentId || r.id);
-                                  }}
-                                  title="সকল রিপোর্ট"
-                                  className="p-2 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-all"
-                                >
-                                  <History className="w-4 h-4" />
-                                </button>
-                                <button 
-                                  onClick={() => openResultEntry(r)}
-                                  title="এডিট করুন"
-                                  className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                <button 
-                                  onClick={async () => {
-                                    setLoading(true);
-                                    try {
-                                      const res = await fetch(`/api/students/${r.studentId || r.id}/full-profile`);
-                                      const data = await res.json();
-                                      setFullProfile(data);
-                                      // Wait for React to render the hidden div
-                                      setTimeout(() => {
-                                        printElement('marksheet-print');
-                                        setLoading(false);
-                                      }, 500);
-                                    } catch (error) {
-                                      console.error("Print marksheet failed", error);
-                                      addToast("মার্কশিট প্রিন্ট করতে সমস্যা হয়েছে", "error");
-                                      setLoading(false);
-                                    }
-                                  }}
-                                  title="মার্কশিট প্রিন্ট"
-                                  className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
+                            <td className="p-5 font-black text-emerald-700 text-xl">{r.totalMarks}</td>
+                            <td className="p-5 rounded-r-2xl font-black text-slate-900 text-xl">{r.averageMarks}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+
+                    {/* Footer / Signature */}
+                    <div className="mt-20 flex justify-between items-end border-t-2 border-slate-200 pt-10">
+                      <div className="text-slate-400 font-bold text-sm">
+                        প্রিন্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                      </div>
+                      <div className="text-center">
+                        <div className="w-48 border-t-2 border-slate-900 pt-2 font-black text-slate-900">মুহতামিম</div>
+                      </div>
+                    </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {printData && (
+              <div className="hidden print:block p-12 bg-white w-full">
+                <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
+                  <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
+                  <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                  <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
+                    {printType === 'short' ? 'সংক্ষিপ্ত রেজাল্ট শীট' : 'বিস্তারিত রেজাল্ট শীট'}
+                  </h2>
+                  <p className="text-xl font-bold text-slate-700 mt-2">{selectedExam} - {selectedYear}</p>
+                  <p className="text-lg font-bold text-slate-700">শ্রেণী: {selectedClass}</p>
+                </div>
+                
+                <table className="w-full border-collapse mb-12">
+                  <thead>
+                    <tr className="bg-slate-900 text-white">
+                      <th className="p-4 text-left border border-slate-900">রোল</th>
+                      <th className="p-4 text-left border border-slate-900">নাম</th>
+                      {printType === 'detailed' && <th className="p-4 text-left border border-slate-900">বিষয়সমূহ</th>}
+                      <th className="p-4 text-center border border-slate-900">মোট নম্বর</th>
+                      <th className="p-4 text-center border border-slate-900">গ্রেড</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printData.map((student: any, i: number) => (
+                      <tr key={i} className="border-b border-slate-200">
+                        <td className="p-4 border border-slate-200">{student.roll}</td>
+                        <td className="p-4 font-bold border border-slate-200">{student.name}</td>
+                        {printType === 'detailed' && (
+                          <td className="p-4 border border-slate-200 text-xs">
+                            {student.subjects.map((s: any) => `${s.subject}: ${s.marks}`).join(', ')}
+                          </td>
+                        )}
+                        <td className="p-4 text-center font-black border border-slate-200">{student.totalMarks}</td>
+                        <td className="p-4 text-center font-black border border-slate-200">{student.grade}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="flex justify-end mt-24">
+                  <div className="text-center">
+                    <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">মুহতামিমের স্বাক্ষর</div>
+                  </div>
+                </div>
               </div>
             )}
           </>
@@ -6461,6 +6634,11 @@ function TransactionHistory({ settings }: { settings: any }) {
 };
 
 function DeleteHistory() {
+  const [isVerified, setIsVerified] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -6470,7 +6648,31 @@ function DeleteHistory() {
   const [endDate, setEndDate] = useState("");
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
 
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifying(true);
+    setPasswordError("");
+    try {
+      const res = await fetch("/api/admin/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsVerified(true);
+      } else {
+        setPasswordError("ভুল পাসওয়ার্ড");
+      }
+    } catch (err) {
+      setPasswordError("সমস্যা হয়েছে");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const fetchHistory = async (reset = true) => {
+    if (!isVerified) return;
     if (reset) {
       setLoading(true);
       setPage(0);
@@ -6501,8 +6703,10 @@ function DeleteHistory() {
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, [startDate, endDate]);
+    if (isVerified) {
+      fetchHistory();
+    }
+  }, [startDate, endDate, isVerified]);
 
   const parseDetails = (details: string) => {
     try {
@@ -6511,6 +6715,43 @@ function DeleteHistory() {
       return details;
     }
   };
+
+  if (!isVerified) {
+    return (
+      <div className="min-h-[40vh] flex items-center justify-center animate-in fade-in">
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 w-full max-w-md text-center">
+          <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h3 className="text-2xl font-black text-slate-900 mb-2">ডিলিট হিস্টোরি</h3>
+          <p className="text-slate-500 font-bold mb-6">এই অংশটি দেখতে পাসওয়ার্ড প্রয়োজন</p>
+          <form onSubmit={handleVerify} className="space-y-4">
+            <input
+              type="password"
+              placeholder="অ্যাডমিন পাসওয়ার্ড দিন"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPasswordError("");
+              }}
+              className={cn(
+                "w-full p-4 bg-slate-50 border rounded-2xl font-bold text-center focus:ring-2 outline-none",
+                passwordError ? "border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:ring-rose-500"
+              )}
+            />
+            {passwordError && <p className="text-rose-500 text-xs font-bold">{passwordError}</p>}
+            <button
+              type="submit"
+              disabled={verifying || !password}
+              className="w-full py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all disabled:opacity-50"
+            >
+              {verifying ? "যাচাই করা হচ্ছে..." : "প্রবেশ করুন"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -6799,7 +7040,16 @@ function NoticeManager({ notices, onUpdate }: any) {
 
   const executeDeleteNotice = async () => {
     if (confirmDelete === null) return;
-    await fetch(`/api/admin/notices/${confirmDelete}`, { method: "DELETE" });
+    const pwd = prompt("নোটিশটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) {
+      setConfirmDelete(null);
+      return;
+    }
+    await fetch(`/api/admin/notices/${confirmDelete}`, { 
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pwd })
+    });
     setConfirmDelete(null);
     onUpdate();
   };

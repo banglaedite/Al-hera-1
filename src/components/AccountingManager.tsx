@@ -6,7 +6,9 @@ import {
   Trash2, X as CloseIcon, ArrowRightLeft, History, Loader2, Clock, ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
+
+// ... (keep other imports)
 import { cn } from "../lib/utils";
 import { LoadingButton } from "./LoadingButton";
 import jsPDF from "jspdf";
@@ -15,7 +17,7 @@ import autoTable from "jspdf-autotable";
 import { printElement } from '../utils/printUtils';
 import MonthlyYearlyReport from './MonthlyYearlyReport';
 
-const PrintDownloadMenu = ({ targetId, filename, onPrint }: { targetId: string, filename: string, onPrint?: () => void }) => {
+const PrintDownloadMenu = ({ targetId, filename, onPrint, onDownload }: { targetId: string, filename: string, onPrint?: (type: 'all' | 'income' | 'expense') => void, onDownload?: (type: 'all' | 'income' | 'expense') => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -29,68 +31,47 @@ const PrintDownloadMenu = ({ targetId, filename, onPrint }: { targetId: string, 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handlePrint = () => {
-    setIsOpen(false);
-    if (onPrint) {
-      onPrint();
-    } else {
-      printElement(targetId, 'A4');
-    }
-  };
-
-  const handleDownload = async () => {
-    setIsOpen(false);
-    const element = document.getElementById(targetId);
-    if (!element) return;
-    try {
-      const imgData = await toPng(element, { quality: 1, pixelRatio: 2, backgroundColor: '#ffffff' });
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const margin = 10;
-      const contentWidth = pdfWidth - (2 * margin);
-      const img = new Image();
-      img.src = imgData;
-      await new Promise((resolve, reject) => {
-        img.onload = () => {
-          const contentHeight = (img.height * contentWidth) / img.width;
-          pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-          pdf.save(`${filename}.pdf`);
-          resolve(null);
-        };
-        img.onerror = reject;
-      });
-    } catch (err) {
-      console.error("PDF generation failed", err);
-    }
-  };
-
   return (
-    <div className="relative print:hidden" ref={menuRef}>
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm"
-      >
-        <Download className="w-4 h-4" /> রিপোর্ট <ChevronDown className="w-4 h-4" />
-      </button>
+    <div className="flex items-center gap-2 print:hidden relative" ref={menuRef}>
+      <div className="flex bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <button 
+          onClick={() => onPrint?.('all')}
+          className="flex items-center gap-2 px-4 py-2.5 text-slate-700 font-black hover:bg-slate-50 transition-all text-sm active:scale-95"
+          title="সব প্রিন্ট করুন"
+        >
+          <Printer className="w-4 h-4 text-slate-900" /> প্রিন্ট
+        </button>
+        <button 
+          onClick={() => setIsOpen(!isOpen)}
+          className="px-3 py-2.5 text-slate-400 hover:bg-slate-50 transition-all border-l border-slate-100"
+        >
+          <ChevronDown className={cn("w-4 h-4 transition-transform", isOpen && "rotate-180")} />
+        </button>
+      </div>
+
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50"
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50 overflow-hidden"
           >
+            <div className="px-3 py-2 mb-1">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">আলাদা রিপোর্ট প্রিন্ট</p>
+            </div>
             <button 
-              onClick={handlePrint}
-              className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3 text-sm font-bold text-slate-700 transition-colors"
+              onClick={() => { onPrint?.('income'); setIsOpen(false); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all"
             >
-              <Printer className="w-4 h-4 text-slate-400" /> প্রিন্ট করুন
+              <TrendingUp className="w-4 h-4" /> শুধু আয় প্রিন্ট
             </button>
+            <div className="h-px bg-slate-100 my-1"></div>
             <button 
-              onClick={handleDownload}
-              className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3 text-sm font-bold text-slate-700 transition-colors"
+              onClick={() => { onPrint?.('expense'); setIsOpen(false); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50 rounded-xl transition-all"
             >
-              <Download className="w-4 h-4 text-slate-400" /> পিডিএফ ডাউনলোড
+              <TrendingDown className="w-4 h-4" /> শুধু ব্যয় প্রিন্ট
             </button>
           </motion.div>
         )}
@@ -135,6 +116,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const [hasMoreIncome, setHasMoreIncome] = useState(false);
   const [hasMoreExpenses, setHasMoreExpenses] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
 
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +133,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     setStartDate(firstDay);
     setEndDate(lastDay);
     setSelectedMonth(currentMonth);
+    setSelectedYear(String(year));
   }, []);
 
   const fetchCategoryReport = async () => {
@@ -161,6 +144,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       if (reportCategory) params.append("category", reportCategory);
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
+      if (reportClass) params.append("class_name", reportClass);
       
       const res = await fetch(`/api/admin/accounting/reports/category?${params}`);
       const data = await res.json();
@@ -208,6 +192,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       const params = new URLSearchParams();
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
+      if (reportClass) params.append("class_name", reportClass);
       
       const res = await fetch(`/api/admin/accounting/reports/category?${params}`);
       const data = await res.json();
@@ -245,6 +230,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     const params = new URLSearchParams();
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
+    if (reportClass) params.append("class_name", reportClass);
 
     const summaryRes = await fetch(`/api/admin/accounting/summary?${params}`);
     const summaryData = await summaryRes.json();
@@ -341,15 +327,40 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     fetchData();
   }, [startDate, endDate]);
 
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    if (year) {
+      if (selectedMonth) {
+        // Update month to the new year
+        const monthPart = selectedMonth.split("-")[1];
+        const newMonth = `${year}-${monthPart}`;
+        handleMonthChange(newMonth);
+      } else {
+        // Set to full year
+        setStartDate(`${year}-01-01`);
+        setEndDate(`${year}-12-31`);
+      }
+    } else {
+      setStartDate("");
+      setEndDate("");
+      setSelectedMonth("");
+    }
+  };
+
   const handleMonthChange = (month: string) => {
     setSelectedMonth(month);
     if (month) {
       const [year, m] = month.split("-");
+      setSelectedYear(year);
       const firstDay = `${year}-${m}-01`;
       const lastDayDate = new Date(parseInt(year), parseInt(m), 0);
       const lastDay = `${lastDayDate.getFullYear()}-${String(lastDayDate.getMonth() + 1).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`;
       setStartDate(firstDay);
       setEndDate(lastDay);
+    } else if (selectedYear) {
+      // Revert to full year if month cleared but year exists
+      setStartDate(`${selectedYear}-01-01`);
+      setEndDate(`${selectedYear}-12-31`);
     } else {
       setStartDate("");
       setEndDate("");
@@ -438,502 +449,497 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     }
   };
 
-  const handlePrintReport = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append("start_date", startDate);
-      if (endDate) params.append("end_date", endDate);
-      
-      // Fetch ALL income and expenses for the report (no limit)
-      const [incomeRes, expenseRes] = await Promise.all([
-        fetch(`/api/admin/accounting/income?${params}&limit=10000`),
-        fetch(`/api/admin/accounting/expenses?${params}&limit=10000`)
-      ]);
-      
-      const incomeData = await incomeRes.json();
-      const expenseData = await expenseRes.json();
-      
-      const allIncome = incomeData.data || [];
-      const allExpenses = expenseData.data || [];
-      
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) return;
-
-      const html = generatePrintableHTMLForData(allIncome, allExpenses);
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-    } catch (error) {
-      console.error("Print report failed", error);
-      addToast("রিপোর্ট প্রিন্ট করতে সমস্যা হয়েছে।", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generatePrintableHTMLForData = (reportIncome: any[], reportExpenses: any[]) => {
-    const title = settings?.title || "Madrasa";
-    let reportTitle = "অ্যাকাউন্টিং রিপোর্ট";
-    let dateRange = startDate && endDate ? `তারিখ: ${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : "";
-    
-    let contentHtml = `
-      <div class="section-title">সারসংক্ষেপ</div>
-      <table>
-        <thead>
-          <tr>
-            <th class="summary-th">মোট আয়</th>
-            <th class="summary-th">মোট ব্যয়</th>
-            <th class="summary-th">অবশিষ্ট</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>৳${summary.totalIncome}</td>
-            <td>৳${summary.totalExpense}</td>
-            <td>৳${summary.balance}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="section-title">আয়ের বিস্তারিত</div>
-      <table>
-        <thead>
-          <tr>
-            <th class="income-th">তারিখ</th>
-            <th class="income-th">ক্যাটাগরি/উৎস</th>
-            <th class="income-th">পরিমাণ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${reportIncome.map(i => `
-            <tr>
-              <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
-              <td>${i.student_name || i.category || ''}</td>
-              <td>৳${i.amount}</td>
-            </tr>
-          `).join('')}
-          ${reportIncome.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
-        </tbody>
-      </table>
-
-      <div class="section-title">ব্যয়ের বিস্তারিত</div>
-      <table>
-        <thead>
-          <tr>
-            <th class="expense-th">তারিখ</th>
-            <th class="expense-th">ক্যাটাগরি</th>
-            <th class="expense-th">পরিমাণ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${reportExpenses.map(e => `
-            <tr>
-              <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
-              <td>${e.category || ''}</td>
-              <td>৳${e.amount}</td>
-            </tr>
-          `).join('')}
-          ${reportExpenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
-        </tbody>
-      </table>
-    `;
+  const generateBeautifulReportHTML = (reportTitle: string, contentHtml: string, dateRange: string, classInfo: string = "") => {
+    const title = settings?.title || "আল-হেরা ক্যাডেট মাদ্রাসা";
+    const address = settings?.address || "সাভার, ঢাকা";
+    const logo = settings?.logo || "/logo.png";
 
     return `
       <!DOCTYPE html>
-      <html>
+      <html lang="bn">
         <head>
+          <meta charset="UTF-8">
           <title>${reportTitle}</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;700&display=swap');
-            body { font-family: 'Hind Siliguri', sans-serif; padding: 40px; color: #1e293b; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
-            .madrasa-name { font-size: 28px; font-weight: 800; color: #0f172a; margin-bottom: 5px; }
-            .report-title { font-size: 20px; font-weight: 700; color: #475569; margin-bottom: 5px; }
-            .date-range { font-size: 14px; color: #64748b; }
-            .section-title { font-size: 16px; font-weight: 800; margin: 30px 0 15px 0; padding-left: 10px; border-left: 4px solid #0f172a; text-transform: uppercase; letter-spacing: 1px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-size: 14px; }
-            th { background-color: #f8fafc; font-weight: 700; color: #334155; }
-            .summary-th { background-color: #0f172a; color: white; }
-            .income-th { background-color: #f0fdf4; color: #166534; }
-            .expense-th { background-color: #fef2f2; color: #991b1b; }
-            .footer { margin-top: 60px; display: flex; justify-content: space-between; }
-            .signature { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 10px; font-size: 12px; font-weight: 700; color: #64748b; }
+            @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
+            
+            * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: 'Hind Siliguri', sans-serif; padding: 40px; color: #1e293b; background: white; line-height: 1.5; }
+            
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #0f172a; padding-bottom: 20px; position: relative; }
+            .logo-container { margin-bottom: 15px; }
+            .logo { width: 80px; height: 80px; object-contain: contain; }
+            
+            .madrasa-name { font-size: 32px; font-weight: 800; color: #0f172a; margin-bottom: 4px; letter-spacing: -0.5px; }
+            .madrasa-address { font-size: 16px; font-weight: 600; color: #475569; margin-bottom: 10px; }
+            
+            .report-info { display: inline-block; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 24px; border-radius: 12px; margin-top: 10px; }
+            .report-title { font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 5px; text-decoration: underline; text-underline-offset: 6px; }
+            .report-meta { font-size: 14px; font-weight: 700; color: #64748b; display: flex; justify-content: center; gap: 20px; margin-top: 10px; }
+            
+            .section-title { font-size: 16px; font-weight: 800; margin: 30px 0 12px 0; padding: 8px 16px; background: #f1f5f9; border-left: 5px solid #0f172a; color: #0f172a; border-radius: 0 8px 8px 0; }
+            
+            table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
+            th, td { border: 1.5px solid #cbd5e1; padding: 12px 10px; text-align: center; font-size: 14px; word-wrap: break-word; }
+            
+            th { background-color: #f8fafc; font-weight: 800; color: #334155; text-transform: uppercase; font-size: 13px; }
+            
+            .summary-row td { font-weight: 800; font-size: 16px; background: #f8fafc; }
+            .income-th { background-color: #ecfdf5 !important; color: #065f46 !important; border-color: #a7f3d0 !important; }
+            .expense-th { background-color: #fef2f2 !important; color: #991b1b !important; border-color: #fecaca !important; }
+            .summary-th { background-color: #0f172a !important; color: white !important; border-color: #0f172a !important; }
+            .due-th { background-color: #fff7ed !important; color: #9a3412 !important; border-color: #ffedd5 !important; }
+            
+            .amount { font-family: 'Courier New', Courier, monospace; font-weight: 800; }
+            
+            .footer { margin-top: 80px; display: flex; justify-content: space-between; padding: 0 40px; }
+            .signature { border-top: 2px solid #0f172a; width: 220px; text-align: center; padding-top: 12px; font-size: 14px; font-weight: 800; color: #0f172a; }
+            
+            @media print {
+              body { padding: 20px; }
+              @page { margin: 15mm; size: A4; }
+              .no-print { display: none; }
+            }
           </style>
         </head>
         <body>
           <div class="header">
+            <div class="logo-container">
+              <img src="${logo}" alt="Logo" class="logo" onerror="this.style.display='none'">
+            </div>
             <div class="madrasa-name">${title}</div>
+            <div class="madrasa-address">${address}</div>
             <div class="report-title">${reportTitle}</div>
-            <div class="date-range">${dateRange}</div>
+            <div class="report-meta">
+              <span>তারিখ: ${new Date().toLocaleDateString('bn-BD')}</span>
+              ${dateRange ? `<span>সময়কাল: ${dateRange}</span>` : ''}
+              ${classInfo ? `<span>শ্রেণী: ${classInfo}</span>` : ''}
+            </div>
           </div>
+          
           ${contentHtml}
+          
           <div class="footer">
             <div class="signature">হিসাবরক্ষকের স্বাক্ষর</div>
             <div class="signature">মুহতামিমের স্বাক্ষর</div>
+          </div>
+          
+          <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: bold;">
+            রিপোর্ট জেনারেট করা হয়েছে: ${new Date().toLocaleString('bn-BD')}
           </div>
         </body>
       </html>
     `;
   };
 
-  const generatePrintableHTML = () => {
-    const title = settings?.title || "Madrasa";
-    let reportTitle = "অ্যাকাউন্টিং রিপোর্ট";
-    let dateRange = startDate && endDate ? `তারিখ: ${new Date(startDate).toLocaleDateString('bn-BD')} থেকে ${new Date(endDate).toLocaleDateString('bn-BD')}` : "";
-    
-    if (activeView === "category-report") {
-      reportTitle = `ক্যাটাগরি রিপোর্ট - ${reportCategory || "সব ক্যাটাগরি"}`;
-      if (reportMonth) {
-        const [y, m] = reportMonth.split("-");
-        dateRange = `মাস: ${m}/${y}`;
+  const handleReportAction = async (action: 'print' | 'download', filterType: 'all' | 'income' | 'expense' = 'all') => {
+    setLoading(true);
+    try {
+      let reportTitle = "অ্যাকাউন্টিং রিপোর্ট";
+      let dateRange = startDate && endDate ? `${new Date(startDate).toLocaleDateString('bn-BD')} - ${new Date(endDate).toLocaleDateString('bn-BD')}` : "";
+      let classInfo = reportClass || "";
+      let contentHtml = "";
+
+      if (activeView === "summary") {
+        reportTitle = "সংক্ষিপ্ত আয়-ব্যয় রিপোর্ট";
+        
+        const summaryHtml = `
+          <div class="section-title">আর্থিক সারসংক্ষেপ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="summary-th">মোট আয়</th>
+                <th class="summary-th">মোট ব্যয়</th>
+                <th class="summary-th">অবশিষ্ট</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="summary-row">
+                <td style="color: #059669">৳${summary.totalIncome.toLocaleString('en-IN')}</td>
+                <td style="color: #dc2626">৳${summary.totalExpense.toLocaleString('en-IN')}</td>
+                <td style="color: #2563eb">৳${summary.balance.toLocaleString('en-IN')}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top: -10px; margin-bottom: 20px; font-size: 13px; color: #64748b; font-weight: 800; text-align: right;">
+            * পূর্বের জের সহ মোট স্থিতি: ৳${summary.totalBalance.toLocaleString('en-IN')}
+          </div>
+        `;
+
+        const incomeHtml = `
+          <div class="section-title">আয়সমূহ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="income-th" style="width: 20%">তারিখ</th>
+                <th class="income-th" style="width: 50%">উৎস/বিবরণ</th>
+                <th class="income-th" style="width: 30%">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${income.slice(0, 100).map(i => `
+                <tr>
+                  <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${i.student_name || i.category || ''} ${i.purpose ? `(${i.purpose})` : ''}</td>
+                  <td class="amount">৳${i.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${income.length === 0 ? '<tr><td colspan="3">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        const expenseHtml = `
+          <div class="section-title">ব্যয়সমূহ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="expense-th" style="width: 20%">তারিখ</th>
+                <th class="expense-th" style="width: 50%">খাত/বিবরণ</th>
+                <th class="expense-th" style="width: 30%">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${expenses.slice(0, 100).map(e => `
+                <tr>
+                  <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${e.category || ''} ${e.purpose ? `(${e.purpose})` : ''}</td>
+                  <td class="amount">৳${e.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${expenses.length === 0 ? '<tr><td colspan="3">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        if (filterType === 'all') {
+          contentHtml = summaryHtml + incomeHtml + expenseHtml;
+        } else if (filterType === 'income') {
+          contentHtml = summaryHtml + incomeHtml;
+          reportTitle = "সংক্ষিপ্ত আয় রিপোর্ট";
+        } else {
+          contentHtml = summaryHtml + expenseHtml;
+          reportTitle = "সংক্ষিপ্ত ব্যয় রিপোর্ট";
+        }
+      } else if (activeView === "category-report" && categoryReportData) {
+        reportTitle = `ক্যাটাগরি রিপোর্ট: ${reportCategory || "সব ক্যাটাগরি"}`;
+        const totalInc = categoryReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+        const totalExp = categoryReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+        
+        const summaryHtml = `
+          <div class="section-title">ক্যাটাগরি সারসংক্ষেপ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="summary-th">মোট আয়</th>
+                <th class="summary-th">মোট ব্যয়</th>
+                <th class="summary-th">অবশিষ্ট</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="summary-row">
+                <td style="color: #059669">৳${totalInc.toLocaleString('en-IN')}</td>
+                <td style="color: #dc2626">৳${totalExp.toLocaleString('en-IN')}</td>
+                <td style="color: #2563eb">৳${(totalInc - totalExp).toLocaleString('en-IN')}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+
+        const incomeHtml = `
+          <div class="section-title">আয়সমূহ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="income-th">তারিখ</th>
+                <th class="income-th">বিবরণ</th>
+                <th class="income-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${categoryReportData.income.map((i: any) => `
+                <tr>
+                  <td>${new Date(i.date || i.paid_date).toLocaleDateString('bn-BD')}</td>
+                  <td>${i.purpose || i.description || i.category || i.student_name}</td>
+                  <td class="amount">৳${i.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${categoryReportData.income.length === 0 ? '<tr><td colspan="3">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        const expenseHtml = `
+          <div class="section-title">ব্যয়সমূহ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="expense-th">তারিখ</th>
+                <th class="expense-th">বিবরণ</th>
+                <th class="expense-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${categoryReportData.expenses.map((e: any) => `
+                <tr>
+                  <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${e.purpose || e.description || e.category}</td>
+                  <td class="amount">৳${e.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${categoryReportData.expenses.length === 0 ? '<tr><td colspan="3">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        if (filterType === 'all') {
+          contentHtml = summaryHtml + incomeHtml + expenseHtml;
+        } else if (filterType === 'income') {
+          contentHtml = summaryHtml + incomeHtml;
+        } else {
+          contentHtml = summaryHtml + expenseHtml;
+        }
+      } else if (activeView === "class-report" && classReportData) {
+        reportTitle = `ক্লাস রিপোর্ট: ${reportClass || "সব ক্লাস"}`;
+        const totalInc = classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+        const totalExp = classReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+        const totalDue = classReportData.fees.filter((f: any) => f.status !== 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0);
+        
+        const summaryHtml = `
+          <div class="section-title">ক্লাস সারসংক্ষেপ</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="summary-th">মোট আদায়</th>
+                <th class="summary-th">মোট ব্যয়</th>
+                <th class="summary-th">বকেয়া</th>
+                <th class="summary-th">অবশিষ্ট</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="summary-row">
+                <td style="color: #059669">৳${totalInc.toLocaleString('en-IN')}</td>
+                <td style="color: #dc2626">৳${totalExp.toLocaleString('en-IN')}</td>
+                <td style="color: #f97316">৳${totalDue.toLocaleString('en-IN')}</td>
+                <td style="color: #2563eb">৳${(totalInc - totalExp).toLocaleString('en-IN')}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+
+        const incomeHtml = `
+          <div class="section-title">আদায়কৃত ফিস ও আয়</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="income-th">তারিখ</th>
+                <th class="income-th">ছাত্রের নাম ও বিবরণ</th>
+                <th class="income-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${classReportData.fees.filter((f: any) => f.status === 'paid').map((f: any) => `
+                <tr>
+                  <td>${f.paid_date ? new Date(f.paid_date).toLocaleDateString('bn-BD') : '-'}</td>
+                  <td>${f.student_name} - ${f.category}</td>
+                  <td class="amount">৳${f.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${classReportData.income.map((i: any) => `
+                <tr>
+                  <td>${new Date(i.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${i.purpose || i.description || i.category}</td>
+                  <td class="amount">৳${i.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${classReportData.fees.filter((f: any) => f.status === 'paid').length === 0 && classReportData.income.length === 0 ? '<tr><td colspan="3">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        const expenseHtml = `
+          <div class="section-title">ব্যয়ের তালিকা</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="expense-th">তারিখ</th>
+                <th class="expense-th">বিবরণ</th>
+                <th class="expense-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${classReportData.expenses.map((e: any) => `
+                <tr>
+                  <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${e.category || ''} ${e.purpose ? `(${e.purpose})` : ''}</td>
+                  <td class="amount">৳${e.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${classReportData.expenses.length === 0 ? '<tr><td colspan="3">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        const dueHtml = `
+          <div class="section-title">বকেয়া ফিস তালিকা</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="due-th">মাস</th>
+                <th class="due-th">ছাত্রের নাম ও ক্যাটাগরি</th>
+                <th class="due-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${classReportData.fees.filter((f: any) => f.status !== 'paid').map((f: any) => `
+                <tr>
+                  <td>${f.month || '-'}</td>
+                  <td>${f.student_name} - ${f.category}</td>
+                  <td class="amount" style="color: #ea580c">৳${f.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+              ${classReportData.fees.filter((f: any) => f.status !== 'paid').length === 0 ? '<tr><td colspan="3">কোনো বকেয়া নেই</td></tr>' : ''}
+            </tbody>
+          </table>
+        `;
+
+        if (filterType === 'all') {
+          contentHtml = summaryHtml + incomeHtml + expenseHtml + dueHtml;
+        } else if (filterType === 'income') {
+          contentHtml = summaryHtml + incomeHtml;
+        } else {
+          contentHtml = summaryHtml + expenseHtml;
+        }
       } else {
-        dateRange = "";
+        // Fallback for other views or general print
+        const params = new URLSearchParams();
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+        if (reportClass) params.append("class_name", reportClass);
+        
+        const [incomeRes, expenseRes] = await Promise.all([
+          fetch(`/api/admin/accounting/income?${params}&limit=10000`),
+          fetch(`/api/admin/accounting/expenses?${params}&limit=10000`)
+        ]);
+        
+        const incomeData = await incomeRes.json();
+        const expenseData = await expenseRes.json();
+        const allIncome = incomeData.data || [];
+        const allExpenses = expenseData.data || [];
+
+        const incomeHtml = `
+          <div class="section-title">আয়ের তালিকা</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="income-th">তারিখ</th>
+                <th class="income-th">বিবরণ</th>
+                <th class="income-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allIncome.map((i: any) => `
+                <tr>
+                  <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${i.student_name || i.category || ''} ${i.purpose ? `(${i.purpose})` : ''}</td>
+                  <td class="amount">৳${i.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        const expenseHtml = `
+          <div class="section-title">ব্যয়ের তালিকা</div>
+          <table>
+            <thead>
+              <tr>
+                <th class="expense-th">তারিখ</th>
+                <th class="expense-th">বিবরণ</th>
+                <th class="expense-th">পরিমাণ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allExpenses.map((e: any) => `
+                <tr>
+                  <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${e.category || ''} ${e.purpose ? `(${e.purpose})` : ''}</td>
+                  <td class="amount">৳${e.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        if (filterType === 'all') {
+          contentHtml = incomeHtml + expenseHtml;
+        } else if (filterType === 'income') {
+          contentHtml = incomeHtml;
+        } else {
+          contentHtml = expenseHtml;
+        }
       }
-    } else if (activeView === "class-report") {
-      reportTitle = `ক্লাস রিপোর্ট - ${reportClass || "সব ক্লাস"}`;
-      dateRange = "";
-    } else if (activeView === "income") {
-      reportTitle = "আয়ের বিস্তারিত রিপোর্ট";
-    } else if (activeView === "expense") {
-      reportTitle = "ব্যয়ের বিস্তারিত রিপোর্ট";
+
+      const html = generateBeautifulReportHTML(reportTitle, contentHtml, dateRange, classInfo);
+
+      if (action === 'print') {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 800);
+      } else {
+        // Download logic: Render HTML to a hidden iframe and capture it
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.left = '200vw';
+        iframe.style.top = '0';
+        iframe.style.width = '800px';
+        iframe.style.height = '1200px';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow?.document;
+        if (!iframeDoc) throw new Error("Could not access iframe document");
+
+        iframeDoc.open();
+        iframeDoc.write(html);
+        iframeDoc.close();
+
+        // Wait for images and fonts
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const canvas = await html2canvas(iframeDoc.body, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: 800
+        });
+        
+        const dataUrl = canvas.toDataURL('image/png');
+
+        document.body.removeChild(iframe);
+
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgProps = pdf.getImageProperties(dataUrl);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        
+        pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${reportTitle.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
+        addToast("পিডিএফ সফলভাবে ডাউনলোড হয়েছে।", "success");
+      }
+    } catch (error) {
+      console.error("Report action failed", error);
+      addToast("রিপোর্ট জেনারেট করতে সমস্যা হয়েছে।", "error");
+    } finally {
+      setLoading(false);
     }
-
-    let contentHtml = "";
-
-    if (activeView === "summary") {
-      contentHtml = `
-        <div class="section-title">সারসংক্ষেপ</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="summary-th">মোট আয়</th>
-              <th class="summary-th">মোট ব্যয়</th>
-              <th class="summary-th">অবশিষ্ট</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>৳${summary.totalIncome}</td>
-              <td>৳${summary.totalExpense}</td>
-              <td>৳${summary.balance}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        ${(printType === 'all' || printType === 'income') ? `
-        <div class="section-title">আয়ের বিস্তারিত</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="income-th">তারিখ</th>
-              <th class="income-th">ক্যাটাগরি/উৎস</th>
-              <th class="income-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${income.map(i => `
-              <tr>
-                <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
-                <td>${i.student_name || i.category || ''}</td>
-                <td>৳${i.amount}</td>
-              </tr>
-            `).join('')}
-            ${income.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-        ` : ''}
-
-        ${(printType === 'all' || printType === 'expense') ? `
-        <div class="section-title">ব্যয়ের বিস্তারিত</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="expense-th">তারিখ</th>
-              <th class="expense-th">ক্যাটাগরি</th>
-              <th class="expense-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${expenses.map(e => `
-              <tr>
-                <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
-                <td>${e.category || ''}</td>
-                <td>৳${e.amount}</td>
-              </tr>
-            `).join('')}
-            ${expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-        ` : ''}
-      `;
-    } else if (activeView === "income") {
-      contentHtml = `
-        <table>
-          <thead>
-            <tr>
-              <th class="income-th">তারিখ</th>
-              <th class="income-th">ক্যাটাগরি/উৎস</th>
-              <th class="income-th">বিবরণ</th>
-              <th class="income-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${income.map(i => `
-              <tr>
-                <td>${new Date(i.paid_date || i.date).toLocaleDateString('bn-BD')}</td>
-                <td>${i.student_name || i.category || ''}</td>
-                <td>${i.purpose || i.description || '-'}</td>
-                <td>৳${i.amount}</td>
-              </tr>
-            `).join('')}
-            ${income.length === 0 ? '<tr><td colspan="4" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-      `;
-    } else if (activeView === "expense") {
-      contentHtml = `
-        <table>
-          <thead>
-            <tr>
-              <th class="expense-th">তারিখ</th>
-              <th class="expense-th">ক্যাটাগরি</th>
-              <th class="expense-th">বিবরণ</th>
-              <th class="expense-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${expenses.map(e => `
-              <tr>
-                <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
-                <td>${e.category || ''}</td>
-                <td>${e.purpose || e.description || '-'}</td>
-                <td>৳${e.amount}</td>
-              </tr>
-            `).join('')}
-            ${expenses.length === 0 ? '<tr><td colspan="4" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-      `;
-    } else if (activeView === "category-report" && categoryReportData) {
-      const totalInc = categoryReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
-      const totalExp = categoryReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-      contentHtml = `
-        <div class="section-title">সারসংক্ষেপ</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="summary-th">মোট আয়</th>
-              <th class="summary-th">মোট ব্যয়</th>
-              <th class="summary-th">অবশিষ্ট</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>৳${totalInc}</td>
-              <td>৳${totalExp}</td>
-              <td>৳${totalInc - totalExp}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        ${(printType === 'all' || printType === 'income') ? `
-        <div class="section-title">আয়সমূহ</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="income-th">তারিখ</th>
-              <th class="income-th">বিবরণ</th>
-              <th class="income-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${categoryReportData.income.map((i: any) => `
-              <tr>
-                <td>${new Date(i.date).toLocaleDateString('bn-BD')}</td>
-                <td>${i.purpose || i.description || i.category}</td>
-                <td>৳${i.amount}</td>
-              </tr>
-            `).join('')}
-            ${categoryReportData.income.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-        ` : ''}
-
-        ${(printType === 'all' || printType === 'expense') ? `
-        <div class="section-title">ব্যয়সমূহ</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="expense-th">তারিখ</th>
-              <th class="expense-th">বিবরণ</th>
-              <th class="expense-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${categoryReportData.expenses.map((e: any) => `
-              <tr>
-                <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
-                <td>${e.purpose || e.description || e.category}</td>
-                <td>৳${e.amount}</td>
-              </tr>
-            `).join('')}
-            ${categoryReportData.expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-        ` : ''}
-      `;
-    } else if (activeView === "class-report" && classReportData) {
-      const totalInc = classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
-      const totalExp = classReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-      const totalDue = classReportData.fees.filter((f: any) => f.status !== 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0);
-      
-      contentHtml = `
-        <div class="section-title">সারসংক্ষেপ</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="summary-th">মোট উঠেছে (আয়)</th>
-              <th class="summary-th">মোট গিয়েছে (ব্যয়)</th>
-              <th class="summary-th">ওঠেনি (বকেয়া)</th>
-              <th class="summary-th">অবশিষ্ট</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>৳${totalInc}</td>
-              <td>৳${totalExp}</td>
-              <td>৳${totalDue}</td>
-              <td>৳${totalInc - totalExp}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        ${(printType === 'all' || printType === 'income') ? `
-        <div class="section-title">আদায়কৃত ফিস ও আয়</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="income-th">তারিখ</th>
-              <th class="income-th">বিবরণ</th>
-              <th class="income-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${classReportData.fees.filter((f: any) => f.status === 'paid').map((f: any) => `
-              <tr>
-                <td>${f.paid_date ? new Date(f.paid_date).toLocaleDateString('bn-BD') : '-'}</td>
-                <td>${f.student_name} - ${f.category}</td>
-                <td>৳${f.amount}</td>
-              </tr>
-            `).join('')}
-            ${classReportData.income.map((i: any) => `
-              <tr>
-                <td>${new Date(i.date).toLocaleDateString('bn-BD')}</td>
-                <td>${i.purpose || i.description || i.category}</td>
-                <td>৳${i.amount}</td>
-              </tr>
-            `).join('')}
-            ${classReportData.fees.filter((f: any) => f.status === 'paid').length === 0 && classReportData.income.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো আয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-        ` : ''}
-
-        ${(printType === 'all' || printType === 'expense') ? `
-        <div class="section-title">ব্যয়সমূহ</div>
-        <table>
-          <thead>
-            <tr>
-              <th class="expense-th">তারিখ</th>
-              <th class="expense-th">বিবরণ</th>
-              <th class="expense-th">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${classReportData.expenses.map((e: any) => `
-              <tr>
-                <td>${new Date(e.date).toLocaleDateString('bn-BD')}</td>
-                <td>${e.purpose || e.description || e.category}</td>
-                <td>৳${e.amount}</td>
-              </tr>
-            `).join('')}
-            ${classReportData.expenses.length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো ব্যয়ের রেকর্ড নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-        ` : ''}
-
-        <div class="section-title">বকেয়া ফিস</div>
-        <table>
-          <thead>
-            <tr>
-              <th style="background-color: #f97316; color: white;">মাস</th>
-              <th style="background-color: #f97316; color: white;">ছাত্রের নাম ও ক্যাটাগরি</th>
-              <th style="background-color: #f97316; color: white;">পরিমাণ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${classReportData.fees.filter((f: any) => f.status !== 'paid').map((f: any) => `
-              <tr>
-                <td>${f.month || '-'}</td>
-                <td>${f.student_name} - ${f.category}</td>
-                <td>৳${f.amount}</td>
-              </tr>
-            `).join('')}
-            ${classReportData.fees.filter((f: any) => f.status !== 'paid').length === 0 ? '<tr><td colspan="3" style="text-align:center">কোনো বকেয়া নেই</td></tr>' : ''}
-          </tbody>
-        </table>
-      `;
-    } else {
-      contentHtml = `<p style="text-align:center">রিপোর্ট লোড হচ্ছে...</p>`;
-    }
-    
-    let html = `
-      <html>
-        <head>
-          <title>${reportTitle}</title>
-          <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-          <style>
-            body { font-family: 'Hind Siliguri', sans-serif; padding: 20px; color: #333; background-color: #fff; }
-            h1 { text-align: center; margin-bottom: 5px; font-size: 24px; color: #059669; }
-            h2 { text-align: center; margin-bottom: 20px; font-size: 18px; color: #666; }
-            .date-range { text-align: center; margin-bottom: 30px; font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }
-            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-            th { background-color: #f8f9fa; font-weight: bold; }
-            .summary-th { background-color: #10b981; color: white; }
-            .income-th { background-color: #10b981; color: white; }
-            .expense-th { background-color: #e11d48; color: white; }
-            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; margin-top: 20px; }
-            @media print {
-              body { padding: 0; }
-              button { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <h1>${title}</h1>
-          <h2>${reportTitle}</h2>
-          ${dateRange ? `<div class="date-range">${dateRange}</div>` : ''}
-          
-          ${contentHtml}
-          
-          <script>
-            window.onload = () => { 
-              setTimeout(() => {
-                window.print();
-                window.close();
-              }, 1000);
-            }
-          </script>
-        </body>
-      </html>
-    `;
-    return html;
   };
 
   const calculatePercentage = (part: number, total: number) => {
@@ -944,46 +950,67 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   return (
     <div className="space-y-8">
       {/* Filters */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-4 print:hidden">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-slate-400" />
-          <span className="font-bold text-slate-700">ফিল্টার:</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-1">বছর নির্বাচন</label>
-            <input 
-              type="number" 
-              min="2000"
-              max="2100"
-              placeholder="YYYY"
-              value={startDate && endDate && startDate.startsWith(endDate.substring(0, 4)) && startDate.endsWith('-01-01') && endDate.endsWith('-12-31') ? startDate.substring(0, 4) : ''}
-              onChange={(e) => {
-                const year = e.target.value;
-                if (year && year.length === 4) {
-                  setStartDate(`${year}-01-01`);
-                  setEndDate(`${year}-12-31`);
-                  setSelectedMonth("");
-                } else if (!year) {
-                  setStartDate("");
-                  setEndDate("");
-                }
-              }}
-              className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900 w-24"
-            />
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-wrap items-end gap-6 print:hidden mb-8">
+        <div className="flex items-center gap-3 mb-auto pt-2">
+          <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200">
+            <Filter className="w-6 h-6" />
           </div>
-          <div className="flex flex-col">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-1">মাস নির্বাচন</label>
-            <input 
-              type="month" 
+          <div>
+            <span className="font-black text-slate-900 text-xl block">ফিল্টার</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">রিপোর্ট ফিল্টার করুন</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6 flex-wrap flex-1">
+          <div className="flex flex-col min-w-[160px]">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">শ্রেণী নির্বাচন</label>
+            <select 
+              value={reportClass}
+              onChange={(e) => setReportClass(e.target.value)}
+              className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-slate-900/5 transition-all hover:bg-white hover:border-slate-200"
+            >
+              <option value="">সকল ক্লাস</option>
+              {classesList.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col w-32">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">বছর নির্বাচন</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => handleYearChange(e.target.value)}
+              className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-slate-900/5 transition-all hover:bg-white hover:border-slate-200"
+            >
+              <option value="">বছর</option>
+              {Array.from({ length: 3000 - 2025 + 1 }, (_, i) => 2025 + i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col min-w-[180px]">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">মাস নির্বাচন</label>
+            <select
               value={selectedMonth}
               onChange={(e) => handleMonthChange(e.target.value)}
-              className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
-            />
+              className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-slate-900/5 transition-all hover:bg-white hover:border-slate-200"
+            >
+              <option value="">সকল মাস</option>
+              {selectedYear && [
+                "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"
+              ].map(m => {
+                const monthVal = `${selectedYear}-${m}`;
+                const monthName = new Date(parseInt(selectedYear), parseInt(m) - 1).toLocaleDateString('bn-BD', { month: 'long' });
+                return <option key={monthVal} value={monthVal}>{monthName}</option>;
+              })}
+            </select>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-3">
             <div className="flex flex-col">
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-1">শুরু</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">শুরু</label>
               <input 
                 type="date" 
                 value={startDate}
@@ -991,12 +1018,14 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   setStartDate(e.target.value);
                   if (!endDate || e.target.value > endDate) setEndDate(e.target.value);
                 }}
-                className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
+                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-slate-900/5 transition-all hover:bg-white hover:border-slate-200"
               />
             </div>
-            <span className="text-slate-400 mt-5">থেকে</span>
+            <div className="pt-8">
+              <ArrowRightLeft className="w-4 h-4 text-slate-300" />
+            </div>
             <div className="flex flex-col">
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-1">শেষ</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">শেষ</label>
               <input 
                 type="date" 
                 value={endDate}
@@ -1004,153 +1033,25 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   setEndDate(e.target.value);
                   if (!startDate || e.target.value < startDate) setStartDate(e.target.value);
                 }}
-                className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
+                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-slate-900/5 transition-all hover:bg-white hover:border-slate-200"
               />
             </div>
           </div>
         </div>
+
         <button 
-          onClick={() => { setStartDate(""); setEndDate(""); setSelectedMonth(""); }}
-          className="text-slate-400 hover:text-slate-600 font-bold text-sm ml-auto mt-5"
+          onClick={() => { 
+            setStartDate(""); 
+            setEndDate(""); 
+            setSelectedMonth(""); 
+            setSelectedYear("");
+            setReportClass(""); 
+          }}
+          className="flex items-center gap-2 px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all active:scale-95"
         >
-          রিসেট
+          <History className="w-4 h-4" /> রিসেট
         </button>
       </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div whileHover={{ y: -5 }} className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-[2rem] border border-emerald-100 shadow-sm relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-100/50 rounded-full blur-2xl"></div>
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl shadow-sm"><TrendingUp className="w-6 h-6" /></div>
-            <div className="text-right">
-              <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-full shadow-sm">
-                {calculatePercentage(summary.totalIncome, summary.totalIncome + summary.totalExpense)}% Total
-              </span>
-            </div>
-          </div>
-          <p className="text-emerald-800/70 font-bold text-sm relative z-10">মোট আয়</p>
-          <h3 className="text-3xl font-black text-emerald-950 mt-1 relative z-10">৳{summary.totalIncome.toLocaleString('en-IN')}</h3>
-          <div className="mt-4 flex gap-3 text-[11px] font-bold relative z-10">
-            <span className="bg-white/60 px-2 py-1 rounded-lg text-emerald-700">ফি: ৳{summary.feeIncome.toLocaleString('en-IN')}</span>
-            <span className="bg-white/60 px-2 py-1 rounded-lg text-emerald-700">অন্যান্য: ৳{summary.otherIncome.toLocaleString('en-IN')}</span>
-          </div>
-        </motion.div>
-
-        <motion.div whileHover={{ y: -5 }} className="bg-gradient-to-br from-rose-50 to-white p-6 rounded-[2rem] border border-rose-100 shadow-sm relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-rose-100/50 rounded-full blur-2xl"></div>
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl shadow-sm"><TrendingDown className="w-6 h-6" /></div>
-            <div className="text-right">
-              <span className="text-[10px] font-black uppercase text-rose-600 bg-rose-100 px-3 py-1.5 rounded-full shadow-sm">
-                {calculatePercentage(summary.totalExpense, summary.totalIncome + summary.totalExpense)}% Total
-              </span>
-            </div>
-          </div>
-          <p className="text-rose-800/70 font-bold text-sm relative z-10">মোট খরচ</p>
-          <h3 className="text-3xl font-black text-rose-950 mt-1 relative z-10">৳{summary.totalExpense.toLocaleString('en-IN')}</h3>
-        </motion.div>
-
-        <motion.div whileHover={{ y: -5 }} className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-[2rem] border border-blue-100 shadow-sm relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-blue-100/50 rounded-full blur-2xl"></div>
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl shadow-sm"><History className="w-6 h-6" /></div>
-          </div>
-          <p className="text-blue-800/70 font-bold text-sm relative z-10">পূর্বের জের (Balance)</p>
-          <h3 className="text-3xl font-black text-blue-950 mt-1 relative z-10">৳{(summary.prevBalance || 0).toLocaleString('en-IN')}</h3>
-          <p className="text-[11px] font-bold text-blue-600/70 mt-3 relative z-10 bg-white/60 inline-block px-2 py-1 rounded-lg">গত মাসের শেষ পর্যন্ত</p>
-        </motion.div>
-
-        <motion.div whileHover={{ y: -5 }} className={cn(
-          "p-6 rounded-[2rem] border shadow-lg relative overflow-hidden",
-          (summary.totalBalance || 0) >= 0 ? "bg-gradient-to-br from-emerald-800 to-emerald-950 border-emerald-800 text-white" : "bg-gradient-to-br from-rose-800 to-rose-950 border-rose-800 text-white"
-        )}>
-          <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm"><PieChart className="w-6 h-6 text-white" /></div>
-          </div>
-          <p className="text-white/80 font-bold text-sm relative z-10">বর্তমান স্থিতি (Total)</p>
-          <h3 className="text-4xl font-black mt-1 relative z-10">৳{(summary.totalBalance || 0).toLocaleString('en-IN')}</h3>
-          <p className="text-[11px] font-bold text-white/60 mt-3 relative z-10 bg-black/20 inline-block px-2 py-1 rounded-lg">পূর্বের জের সহ মোট</p>
-        </motion.div>
-      </div>
-
-      {/* Comparison Section */}
-      {selectedMonth && prevSummary && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900 rounded-[2.5rem] p-8 text-white">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white/10 rounded-2xl"><ArrowRightLeft className="w-6 h-6" /></div>
-            <div>
-              <h3 className="text-xl font-black">মাসিক তুলনামূলক চিত্র</h3>
-              <p className="text-white/50 text-xs font-bold uppercase tracking-widest">গত মাস বনাম বর্তমান মাস</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-end">
-                <p className="text-white/50 font-bold text-sm">আয় (Income)</p>
-                <span className={cn(
-                  "text-xs font-black px-2 py-1 rounded-lg",
-                  summary.totalIncome >= prevSummary.totalIncome ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
-                )}>
-                  {summary.totalIncome >= prevSummary.totalIncome ? "+" : "-"}
-                  {Math.abs(summary.totalIncome - prevSummary.totalIncome)}
-                </span>
-              </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500 transition-all duration-1000" 
-                  style={{ width: `${Math.min(100, (summary.totalIncome / (prevSummary.totalIncome || 1)) * 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                <span>গত মাস: ৳{prevSummary.totalIncome}</span>
-                <span>বর্তমান: ৳{summary.totalIncome}</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between items-end">
-                <p className="text-white/50 font-bold text-sm">ব্যয় (Expense)</p>
-                <span className={cn(
-                  "text-xs font-black px-2 py-1 rounded-lg",
-                  summary.totalExpense <= prevSummary.totalExpense ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
-                )}>
-                  {summary.totalExpense <= prevSummary.totalExpense ? "-" : "+"}
-                  {Math.abs(summary.totalExpense - prevSummary.totalExpense)}
-                </span>
-              </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-rose-500 transition-all duration-1000" 
-                  style={{ width: `${Math.min(100, (summary.totalExpense / (prevSummary.totalExpense || 1)) * 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                <span>গত মাস: ৳{prevSummary.totalExpense}</span>
-                <span>বর্তমান: ৳{summary.totalExpense}</span>
-              </div>
-            </div>
-
-            <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
-              <p className="text-white/50 font-bold text-sm mb-2">নিট ফলাফল (Net)</p>
-              <div className="flex items-baseline gap-2">
-                <h4 className="text-3xl font-black">৳{summary.totalIncome - summary.totalExpense}</h4>
-                <span className={cn(
-                  "text-xs font-bold",
-                  (summary.totalIncome - summary.totalExpense) >= 0 ? "text-emerald-400" : "text-rose-400"
-                )}>
-                  {(summary.totalIncome - summary.totalExpense) >= 0 ? "উদ্বৃত্ত" : "ঘাটতি"}
-                </span>
-              </div>
-              <p className="text-[10px] font-bold text-white/30 mt-4 uppercase tracking-widest">
-                পূর্বের জের সহ মোট স্থিতি: ৳{summary.totalBalance}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      )}
 
       {/* Tabs */}
       <div className="flex gap-4 border-b border-slate-100 print:hidden">
@@ -1201,7 +1102,35 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       {/* Content */}
       <div className="grid grid-cols-1 gap-8">
         {activeView === "summary" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-8" id="summary-report-content">
+            <div className="flex justify-between items-center mb-4 print:hidden">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <PieChart className="text-blue-600" /> সংক্ষিপ্ত আয় ব্যয় রিপোর্ট
+              </h3>
+              <PrintDownloadMenu targetId="summary-report-content" filename="summary-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
+            </div>
+            
+            {/* Hidden Header for Print */}
+            <div className="hidden print:block mb-8 text-center border-b-2 border-slate-900 pb-6">
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <img src="/logo.png" alt="School Logo" className="w-20 h-20 object-contain" referrerPolicy="no-referrer" />
+                <div className="text-left">
+                  <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">আল-হেরা ক্যাডেট মাদ্রাসা</h1>
+                  <p className="text-sm font-bold text-slate-600">সাভার, ঢাকা</p>
+                  <p className="text-xs font-bold text-slate-500">স্থাপিত: ২০০৫ | ইআইআইএন: ১২৩৪৫৬</p>
+                </div>
+              </div>
+              <h2 className="text-xl font-black text-slate-900 border-y border-slate-900 py-2 inline-block px-8">সংক্ষিপ্ত আয়-ব্যয় রিপোর্ট</h2>
+              <div className="mt-4 flex justify-between text-sm font-bold px-4">
+                <span>তারিখ: {new Date().toLocaleDateString('bn-BD')}</span>
+                {reportClass && <span>শ্রেণী: {reportClass}</span>}
+                {(reportMonth || (startDate && endDate)) && (
+                  <span>সময়কাল: {reportMonth ? new Date(reportMonth).toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' }) : `${new Date(startDate).toLocaleDateString('bn-BD')} - ${new Date(endDate).toLocaleDateString('bn-BD')}`}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -1254,7 +1183,8 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {activeView === "income" && (
           <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden" id="income-report">
@@ -1262,7 +1192,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <TrendingUp className="text-emerald-600" /> বিস্তারিত আয়
               </h3>
-              <PrintDownloadMenu targetId="income-report" filename="income-report" onPrint={handlePrintReport} />
+              <PrintDownloadMenu targetId="income-report" filename="income-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -1329,7 +1259,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <TrendingDown className="text-rose-600" /> বিস্তারিত ব্যয়
               </h3>
-              <PrintDownloadMenu targetId="expense-report" filename="expense-report" onPrint={handlePrintReport} />
+              <PrintDownloadMenu targetId="expense-report" filename="expense-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -1399,7 +1329,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   className="p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
-              <PrintDownloadMenu targetId="category-report" filename="category-report" onPrint={handlePrintReport} />
+              <PrintDownloadMenu targetId="category-report" filename="category-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
             </div>
             
             {loadingReport ? (
@@ -1474,7 +1404,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   {classesList?.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <PrintDownloadMenu targetId="class-report" filename="class-report" onPrint={handlePrintReport} />
+              <PrintDownloadMenu targetId="class-report" filename="class-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
             </div>
             
             {loadingReport ? (
@@ -1754,82 +1684,14 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                 </div>
               </div>
 
-              <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-5 gap-2 sticky bottom-0 z-20 print:hidden">
+              <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-4 gap-2 sticky bottom-0 z-20 print:hidden">
                 <button onClick={() => printElement('transaction-detail', 'A5')} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
                   <Printer className="w-5 h-5 text-slate-600" />
                   <span className="text-[10px] font-bold">প্রিন্ট</span>
                 </button>
-                <button onClick={async () => {
-                  const element = document.getElementById('transaction-detail');
-                  if (!element) return;
-                  const toastId = addToast("PDF তৈরি হচ্ছে...", "info");
-                  try {
-                    const imgData = await toPng(element, { 
-                      quality: 1,
-                      pixelRatio: 2,
-                      backgroundColor: '#ffffff',
-                      style: {
-                        backgroundColor: '#ffffff'
-                      }
-                    });
-                    const pdf = new jsPDF('p', 'mm', 'a5');
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const margin = 10;
-                    const contentWidth = pdfWidth - (2 * margin);
-                    
-                    const img = new Image();
-                    img.src = imgData;
-                    await new Promise((resolve, reject) => {
-                      img.onload = () => {
-                        const contentHeight = (img.height * contentWidth) / img.width;
-                        pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-                        pdf.save(`receipt-${selectedTransaction.id}.pdf`);
-                        resolve(null);
-                      };
-                      img.onerror = reject;
-                    });
-                    addToast("PDF সফলভাবে ডাউনলোড হয়েছে।", "success");
-                  } catch (err) {
-                    console.error("PDF generation failed", err);
-                    addToast("PDF তৈরি করতে সমস্যা হয়েছে।", "error");
-                  }
-                }} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
-                  <Download className="w-5 h-5 text-slate-600" />
-                  <span className="text-[10px] font-bold">ডাউনলোড</span>
-                </button>
                 <button 
                   onClick={async () => {
-                    const element = document.getElementById('transaction-detail');
-                    if (element) {
-                      try {
-                        const imgData = await toPng(element, { 
-                          quality: 1,
-                          pixelRatio: 2,
-                          backgroundColor: '#ffffff',
-                          style: {
-                            backgroundColor: '#ffffff'
-                          }
-                        });
-                        const pdf = new jsPDF('p', 'mm', 'a5');
-                        const pdfWidth = pdf.internal.pageSize.getWidth();
-                        const margin = 10;
-                        const contentWidth = pdfWidth - (2 * margin);
-                        
-                        const img = new Image();
-                        img.src = imgData;
-                        await new Promise((resolve) => {
-                          img.onload = () => {
-                            const contentHeight = (img.height * contentWidth) / img.width;
-                            pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-                            pdf.save(`receipt-${selectedTransaction.id}.pdf`);
-                            resolve(null);
-                          };
-                        });
-                      } catch (err) {
-                        console.error("PDF generation failed", err);
-                      }
-                    }
-                    const text = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}\n\nরশিদের পিডিএফ ফাইলটি ডাউনলোড হয়েছে, দয়া করে সেটি এখানে সংযুক্ত করুন।`;
+                    const text = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
                     const cleanPhone = selectedTransaction.student_phone ? selectedTransaction.student_phone.replace(/[^0-9]/g, '') : '';
                     let phone = cleanPhone.startsWith('0') ? '88' + cleanPhone : cleanPhone;
                     
@@ -1850,77 +1712,15 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                   <span className="text-[10px] font-bold">WhatsApp</span>
                 </button>
                 <button 
-                  onClick={async () => {
-                    const element = document.getElementById('transaction-detail');
-                    if (!element) return;
-
+                  onClick={() => {
                     let targetEmail = selectedTransaction.student_email || "";
                     if (!targetEmail) {
                       targetEmail = window.prompt("দয়া করে প্রাপকের ইমেইল এড্রেসটি দিন:", "");
                       if (!targetEmail) return;
                     }
-
-                    const toastId = addToast("ইমেইল পাঠানো হচ্ছে...", "info");
-
-                    try {
-                      const imgData = await toPng(element, { 
-                        quality: 1,
-                        pixelRatio: 2,
-                        backgroundColor: '#ffffff',
-                        style: { backgroundColor: '#ffffff' }
-                      });
-                      
-                      const pdf = new jsPDF('p', 'mm', 'a5');
-                      const pdfWidth = pdf.internal.pageSize.getWidth();
-                      const margin = 10;
-                      const contentWidth = pdfWidth - (2 * margin);
-                      
-                      const img = new Image();
-                      img.src = imgData;
-                      
-                      await new Promise((resolve, reject) => {
-                        img.onload = () => {
-                          const contentHeight = (img.height * contentWidth) / img.width;
-                          pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-                          resolve(null);
-                        };
-                        img.onerror = reject;
-                      });
-
-                      const pdfBase64 = pdf.output('datauristring').split(',')[1];
-
-                      const response = await fetch('/api/send-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          to: targetEmail,
-                          subject: `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`,
-                          text: `আসসালামু আলাইকুম,\nআপনার পেমেন্ট সফল হয়েছে। রিসিটটি সংযুক্ত করা হলো।\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nধন্যবাদ।`,
-                          attachments: [
-                            {
-                              filename: `Receipt_${selectedTransaction.id}.pdf`,
-                              content: pdfBase64,
-                              encoding: 'base64'
-                            }
-                          ]
-                        })
-                      });
-
-                      if (response.ok) {
-                        addToast("ইমেইল সফলভাবে পাঠানো হয়েছে।", "success");
-                      } else {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || "ইমেইল পাঠাতে ব্যর্থ হয়েছে।");
-                      }
-                    } catch (err) {
-                      console.error("Email sending failed", err);
-                      addToast("ইমেইল পাঠাতে সমস্যা হয়েছে। দয়া করে সেটিংস চেক করুন।", "error");
-                      
-                      // Fallback to mailto
-                      const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
-                      const body = `লেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
-                      window.open(`mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
-                    }
+                    const subject = `মানি রিসিট - ${settings?.title || "আল হেরা মাদরাসা"}`;
+                    const body = `আসসালামু আলাইকুম।\nআপনার পেমেন্ট সফল হয়েছে।\n\nলেনদেনের বিবরণ:\nরিসিট নং: #${selectedTransaction.id}\nপরিমাণ: ৳${selectedTransaction.amount}\nতারিখ: ${new Date(selectedTransaction.paid_date || selectedTransaction.date).toLocaleDateString('bn-BD')}\nক্যাটাগরি: ${selectedTransaction.category}\nবিবরণ: ${selectedTransaction.purpose || selectedTransaction.description || "-"}`;
+                    window.open(`mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
                   }}
                   className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all"
                 >
@@ -1930,6 +1730,10 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
                 <button onClick={() => setIsDeletingTransaction(true)} className="flex flex-col items-center gap-1 p-2 hover:bg-rose-100 rounded-xl transition-all text-rose-600">
                   <Trash2 className="w-5 h-5" />
                   <span className="text-[10px] font-bold">ডিলিট</span>
+                </button>
+                <button onClick={() => setSelectedTransaction(null)} className="flex flex-col items-center gap-1 p-2 hover:bg-white rounded-xl transition-all">
+                  <CloseIcon className="w-5 h-5 text-rose-600" />
+                  <span className="text-[10px] font-bold">বন্ধ করুন</span>
                 </button>
               </div>
             </motion.div>

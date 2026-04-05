@@ -115,15 +115,23 @@ export function AmalManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("আপনি কি এই আমলটি ডিলিট করতে চান?")) return;
+    const pwd = prompt("আমলটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
     try {
-      const res = await fetch(`/api/admin/amal-tasks/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/amal-tasks/${id}`, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
       if (res.ok) {
         addToast("আমল ডিলিট হয়েছে", "success");
         fetchTasks();
+      } else {
+        addToast("পাসওয়ার্ড ভুল বা সমস্যা হয়েছে", "error");
       }
     } catch (error) {
       console.error(error);
+      addToast("সমস্যা হয়েছে", "error");
     }
   };
 

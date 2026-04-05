@@ -3,6 +3,18 @@ export const printElement = (elementId: string, size: 'A4' | 'A5' | 'auto' = 'au
   if (!element) return;
   
   const clone = element.cloneNode(true) as HTMLElement;
+  
+  // Remove hidden classes to ensure everything is visible in the print window
+  const elementsToUnhide = clone.querySelectorAll('.hidden, .print\\:hidden');
+  elementsToUnhide.forEach(el => {
+    el.classList.remove('hidden', 'print:hidden');
+    (el as HTMLElement).style.display = 'block'; // Ensure it's displayed
+  });
+
+  // Remove action buttons (edit, delete, print icons) from the cloned report
+  const actionButtons = clone.querySelectorAll('button, .action-buttons, .no-print');
+  actionButtons.forEach(el => el.remove());
+  
   clone.classList.remove('hidden', 'absolute', 'top-0', 'left-0', 'print:hidden');
   clone.style.width = '100%';
   clone.style.margin = '0';

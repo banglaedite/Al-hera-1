@@ -4,7 +4,7 @@ import { Printer, Download, ArrowLeft, Calendar, Filter, BarChart2, FileText, Tr
 import { printElement } from '../utils/printUtils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { cn } from '../lib/utils';
 
 interface MonthlyYearlyReportProps {
@@ -27,105 +27,15 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
     printElement('monthly-yearly-report', 'A4');
   };
 
-  const handleDownloadPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(0, 100, 0); // Dark Green
-    doc.text(settings?.title || 'সুন্দর রসিক মাদ্রাসা', 105, 15, { align: 'center' });
-    doc.setFontSize(12);
-    doc.setTextColor(100);
-    doc.text(settings?.address || 'মধুপুর, টাঙ্গাইল', 105, 22, { align: 'center' });
-    
-    doc.setDrawColor(0, 100, 0);
-    doc.line(14, 25, 196, 25);
-
-    doc.setFontSize(16);
-    doc.setTextColor(40);
-    doc.text(type === 'monthly' ? 'মাসিক হিসাব বিবরণী' : 'বাৎসরিক হিসাব বিবরণী', 105, 35, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text(`${startDate ? new Date(startDate).toLocaleDateString('bn-BD') : ''} থেকে ${endDate ? new Date(endDate).toLocaleDateString('bn-BD') : ''}`, 105, 42, { align: 'center' });
-    
-    let currentY = 50;
-
-    // Summary Section in PDF
-    doc.setFontSize(14);
-    doc.setTextColor(40);
-    doc.text('সারসংক্ষেপ', 14, currentY);
-    
-    const totalIncome: number = (Object.values(groupedByCategory.income) as any[]).reduce((sum: number, cat: any) => sum + cat.total, 0);
-    const totalExpense: number = (Object.values(groupedByCategory.expenses) as any[]).reduce((sum: number, cat: any) => sum + cat.total, 0);
-    const balance: number = totalIncome - totalExpense;
-
-    (doc as any).autoTable({
-      startY: currentY + 5,
-      head: [['মোট আয়', 'মোট ব্যয়', 'অবশিষ্ট']],
-      body: [[`৳${totalIncome}`, `৳${totalExpense}`, `৳${balance}`]],
-      theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 12, cellPadding: 5, halign: 'center' },
-    });
-
-    currentY = (doc as any).lastAutoTable.finalY + 15;
-
-    // Income Table
-    if (printType === 'all' || printType === 'income') {
-      if (currentY > 250) {
-        doc.addPage();
-        currentY = 20;
-      }
-      doc.setFontSize(14);
-      doc.setTextColor(16, 185, 129); // Emerald-500
-      doc.text('আয় সমূহ', 14, currentY);
-      
-      const incomeData = Object.entries(groupedByCategory.income).flatMap(([cat, data]: [string, any]) => 
-        data.items.map((item: any) => [new Date(item.paid_date || item.date).toLocaleDateString('bn-BD'), cat, item.description || item.student_name || item.purpose || 'N/A', `৳${item.amount}`])
-      );
-
-      (doc as any).autoTable({
-        startY: currentY + 5,
-        head: [['তারিখ', 'বিভাগ', 'বিবরণ', 'পরিমাণ']],
-        body: incomeData,
-        theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 10, cellPadding: 3 },
-      });
-      currentY = (doc as any).lastAutoTable.finalY + 15;
-    }
-
-    // Expense Table
-    if (printType === 'all' || printType === 'expense') {
-      if (currentY > 250) {
-        doc.addPage();
-        currentY = 20;
-      }
-      doc.setFontSize(14);
-      doc.setTextColor(225, 29, 72); // Rose-600
-      doc.text('ব্যয় সমূহ', 14, currentY);
-      
-      const expenseData = Object.entries(groupedByCategory.expenses).flatMap(([cat, data]: [string, any]) => 
-        data.items.map((item: any) => [new Date(item.date).toLocaleDateString('bn-BD'), cat, item.description || item.purpose || 'N/A', `৳${item.amount}`])
-      );
-
-      (doc as any).autoTable({
-        startY: currentY + 5,
-        head: [['তারিখ', 'বিভাগ', 'বিবরণ', 'পরিমাণ']],
-        body: expenseData,
-        theme: 'grid',
-        headStyles: { fillColor: [225, 29, 72], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 10, cellPadding: 3 },
-      });
-    }
-    
-    doc.save(`Accounting_Report_${type}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
-  };
-
   const groupedByCategory = useMemo(() => {
     if (!data) return { income: {}, expenses: {} };
     
     const group = (items: any[]) => {
-      return items.reduce((acc, item) => {
+      const filtered = selectedCategory 
+        ? items.filter(item => item.category === selectedCategory)
+        : items;
+
+      return filtered.reduce((acc, item) => {
         const cat = item.category || 'Other';
         if (!acc[cat]) acc[cat] = { total: 0, items: [], months: {} };
         acc[cat].total += item.amount || 0;
@@ -145,7 +55,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
       income: group(data.income || []),
       expenses: group(data.expenses || [])
     };
-  }, [data]);
+  }, [data, selectedCategory]);
 
   if (loading) {
     return <div className="p-8 text-center text-slate-500">লোড হচ্ছে...</div>;
@@ -161,42 +71,6 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
           className="flex items-center gap-1 px-3 py-1.5 bg-white border text-slate-600 rounded-lg hover:bg-slate-100 transition-colors text-xs font-bold"
         >
           <Printer className="w-3 h-3" /> প্রিন্ট
-        </button>
-        <button
-          onClick={async (e) => {
-            e.stopPropagation();
-            const element = document.getElementById(printId);
-            if (!element) return;
-            try {
-              const imgData = await toPng(element, { 
-                quality: 1, 
-                pixelRatio: 1, 
-                backgroundColor: '#ffffff',
-                width: element.offsetWidth,
-                height: element.offsetHeight
-              });
-              const pdf = new jsPDF('p', 'mm', 'a4');
-              const pdfWidth = pdf.internal.pageSize.getWidth();
-              const margin = 10;
-              const contentWidth = pdfWidth - (2 * margin);
-              const img = new Image();
-              img.src = imgData;
-              await new Promise((resolve, reject) => {
-                img.onload = () => {
-                  const contentHeight = (img.height * contentWidth) / img.width;
-                  pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, contentHeight);
-                  pdf.save(`details-${printId}.pdf`);
-                  resolve(null);
-                };
-                img.onerror = reject;
-              });
-            } catch (err) {
-              console.error("PDF generation failed", err);
-            }
-          }}
-          className="flex items-center gap-1 px-3 py-1.5 bg-white border text-slate-600 rounded-lg hover:bg-slate-100 transition-colors text-xs font-bold"
-        >
-          <Download className="w-3 h-3" /> পিডিএফ
         </button>
       </div>
       <div id={printId}>
@@ -310,38 +184,44 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-slate-400" />
-            <span className="font-bold text-slate-700">রিপোর্ট ফিল্টার:</span>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 print:hidden bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl mb-8">
+        <div className="flex flex-wrap items-end gap-6 flex-1">
+          <div className="flex items-center gap-3 mb-auto pt-2">
+            <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-100">
+              <Filter className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-black text-slate-900 text-lg block">রিপোর্ট ফিল্টার</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ডাটা ফিল্টার করুন</span>
+            </div>
           </div>
           
           {type === 'yearly' ? (
-            <div className="flex flex-col">
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-1">বছর নির্বাচন</label>
-              <input 
-                type="number" 
-                min="2000"
-                max="2100"
-                placeholder="YYYY"
+            <div className="flex flex-col w-32">
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">বছর নির্বাচন</label>
+              <select 
                 value={startDate && endDate && startDate.startsWith(endDate.substring(0, 4)) && startDate.endsWith('-01-01') && endDate.endsWith('-12-31') ? startDate.substring(0, 4) : ''}
                 onChange={(e) => {
                   const year = e.target.value;
-                  if (year && year.length === 4) {
+                  if (year) {
                     setStartDate(`${year}-01-01`);
                     setEndDate(`${year}-12-31`);
-                  } else if (!year) {
+                  } else {
                     setStartDate("");
                     setEndDate("");
                   }
                 }}
-                className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900 w-24"
-              />
+                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all hover:bg-white hover:border-slate-200"
+              >
+                <option value="">বছর</option>
+                {Array.from({ length: 3000 - 2025 + 1 }, (_, i) => 2025 + i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
             </div>
           ) : (
-            <div className="flex flex-col">
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-1">মাস নির্বাচন</label>
+            <div className="flex flex-col min-w-[180px]">
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">মাস নির্বাচন</label>
               <input 
                 type="month" 
                 value={startDate && endDate && startDate.substring(0, 7) === endDate.substring(0, 7) ? startDate.substring(0, 7) : ''}
@@ -357,39 +237,70 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
                     setEndDate("");
                   }
                 }}
-                className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
+                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all hover:bg-white hover:border-slate-200"
               />
             </div>
           )}
 
-          <div className="flex flex-col">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-1">ধরণ</label>
+          <div className="flex flex-col min-w-[140px]">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">ধরণ</label>
             <select
               value={printType}
               onChange={(e) => setPrintType(e.target.value as any)}
-              className="p-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-slate-900"
+              className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all hover:bg-white hover:border-slate-200"
             >
               <option value="all">সব দেখান</option>
               <option value="income">শুধু আয়</option>
               <option value="expense">শুধু ব্যয়</option>
             </select>
           </div>
+
+          <div className="flex flex-col min-w-[160px]">
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">ক্যাটাগরি</label>
+            <select
+              value={selectedCategory || ""}
+              onChange={(e) => setSelectedCategory(e.target.value || null)}
+              className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all hover:bg-white hover:border-slate-200"
+            >
+              <option value="">সব ক্যাটাগরি</option>
+              {[...new Set([
+                ...(data.income || []).map((i: any) => i.category),
+                ...(data.expenses || []).map((e: any) => e.category)
+              ])].filter(Boolean).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-1">
+            <button 
+              onClick={() => setPrintType("all")}
+              className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-all", printType === "all" ? "bg-slate-900 text-white shadow-lg" : "text-slate-600 hover:bg-slate-50")}
+            >
+              সব
+            </button>
+            <button 
+              onClick={() => setPrintType("income")}
+              className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-all", printType === "income" ? "bg-emerald-600 text-white shadow-lg" : "text-slate-600 hover:bg-slate-50")}
+            >
+              আয়
+            </button>
+            <button 
+              onClick={() => setPrintType("expense")}
+              className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-all", printType === "expense" ? "bg-rose-600 text-white shadow-lg" : "text-slate-600 hover:bg-slate-50")}
+            >
+              ব্যয়
+            </button>
+          </div>
+
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium text-sm"
+            className="flex items-center gap-2 px-6 py-4 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 transition-all font-black text-sm shadow-lg shadow-slate-200 active:scale-95"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-5 h-5" />
             প্রিন্ট
-          </button>
-          <button
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors font-medium text-sm"
-          >
-            <Download className="w-4 h-4" />
-            পিডিএফ
           </button>
         </div>
       </div>

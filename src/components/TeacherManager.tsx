@@ -29,6 +29,7 @@ export function TeacherManager({
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
   const [search, setSearch] = useState("");
+  const [viewType, setViewType] = useState<'teacher' | 'staff'>('teacher');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showSalaryModal, setShowSalaryModal] = useState(false);
@@ -217,7 +218,10 @@ export function TeacherManager({
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
 
-  const filteredTeachers = teachers.filter(t => t && t.name && t.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredTeachers = teachers
+    .filter(t => t && t.name && t.name.toLowerCase().includes(search.toLowerCase()))
+    .filter(t => (t.type || 'teacher') === viewType)
+    .sort((a, b) => new Date(a.join_date || 0).getTime() - new Date(b.join_date || 0).getTime());
 
   const currentMonthSalaries = Array.isArray(salaries) ? salaries.filter(s => s.month === monthNames[selectedMonth] && s.year === selectedYear) : [];
   const paidAmount = currentMonthSalaries.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
@@ -228,14 +232,29 @@ export function TeacherManager({
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-black text-slate-900">শিক্ষক ম্যানেজমেন্ট</h2>
-          <p className="text-slate-500 font-bold">শিক্ষকদের তথ্য এবং বেতন পরিচালনা করুন</p>
+          <h2 className="text-3xl font-black text-slate-900">শিক্ষক ও স্টাফ ম্যানেজমেন্ট</h2>
+          <p className="text-slate-500 font-bold">শিক্ষক ও স্টাফদের তথ্য এবং বেতন পরিচালনা করুন</p>
         </div>
         <button 
           onClick={() => { setIsAdding(true); setIsEditing(false); setSelectedTeacher(null); }}
           className="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
         >
-          <Plus className="w-5 h-5" /> নতুন শিক্ষক
+          <Plus className="w-5 h-5" /> নতুন {viewType === 'teacher' ? 'শিক্ষক' : 'স্টাফ'}
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setViewType('teacher')}
+          className={cn("px-6 py-3 rounded-2xl font-bold transition-all", viewType === 'teacher' ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50")}
+        >
+          শিক্ষক
+        </button>
+        <button 
+          onClick={() => setViewType('staff')}
+          className={cn("px-6 py-3 rounded-2xl font-bold transition-all", viewType === 'staff' ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50")}
+        >
+          স্টাফ
         </button>
       </div>
 
@@ -317,6 +336,13 @@ export function TeacherManager({
             </div>
             <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">ধরন</label>
+                  <select name="type" defaultValue={selectedTeacher?.type || "teacher"} className="w-full p-4 bg-slate-50 border rounded-2xl">
+                    <option value="teacher">শিক্ষক</option>
+                    <option value="staff">স্টাফ</option>
+                  </select>
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">নাম</label>
                   <input name="name" required defaultValue={selectedTeacher?.name} className="w-full p-4 bg-slate-50 border rounded-2xl" />

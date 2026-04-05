@@ -67,14 +67,9 @@
 }
 
 @media print {
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
   @page {
-    margin: 0; /* Remove browser headers/footers */
+    size: A4;
+    margin: 1cm;
   }
   
   /* Hide everything by default */
@@ -82,63 +77,33 @@
     visibility: hidden !important;
   }
   
-  /* Show only specific printable elements and their children */
-  #history-receipt, #history-receipt *,
-  #payment-receipt, #payment-receipt *,
-  #salary-receipt, #salary-receipt *,
-  #transaction-detail, #transaction-detail *,
-  #id-card-template, #id-card-template *,
-  #marksheet-template, #marksheet-template *,
-  #class-results-report-template, #class-results-report-template *,
-  .print-only, .print-only *,
-  .print-header, .print-header * {
+  /* Show only the report template and its contents */
+  #class-results-report-template,
+  #class-results-report-template * {
     visibility: visible !important;
     display: block !important;
   }
-  
-  #class-results-report-template table, #class-results-report-template table * {
+
+  #class-results-report-template table,
+  #class-results-report-template table * {
     display: table !important;
     visibility: visible !important;
   }
   
-  /* Position the printable element at the top left */
-  #history-receipt, #payment-receipt, #salary-receipt, #transaction-detail, #id-card-template, #marksheet-template, #class-results-report-template, .print-only {
+  /* Position and style the report template */
+  #class-results-report-template {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 20mm !important; /* Add padding to compensate for @page margin: 0 */
-    border: none !important;
-    box-shadow: none !important;
-    z-index: 99999 !important;
+    padding: 0 !important;
     background: white !important;
-    height: auto !important;
-    overflow: visible !important;
   }
 
-  /* Ensure parents of printable elements don't hide them */
-  .fixed.inset-0, .absolute.inset-0, .relative {
-    display: block !important;
-    visibility: visible !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    height: auto !important;
-    min-height: auto !important;
-  }
-
-  /* Hide non-printable modal chrome */
-  .fixed.inset-0 > div:not(:has(#history-receipt)):not(:has(#payment-receipt)):not(:has(#salary-receipt)):not(:has(#transaction-detail)):not(:has(#id-card-template)):not(:has(#marksheet-template)):not(:has(#class-results-report-template)):not(:has(.print-only)),
-  .bg-slate-900\/60, .backdrop-blur-sm, .sticky, .border-b, .border-t, button, .no-print, .print\:hidden {
-    display: none !important;
-    visibility: hidden !important;
-  }
-
-  /* Fix for multi-page issue */
-  html, body {
-    height: auto !important;
-    overflow: visible !important;
+  /* Ensure the header and footer are visible */
+  .print\:flex {
+    display: flex !important;
   }
 }
 

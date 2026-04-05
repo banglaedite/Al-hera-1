@@ -771,12 +771,23 @@ const LandingPage = () => {
                   className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-xl transition-all"
                 >
                   {item.type === 'video' ? (
-                    <div className="aspect-video rounded-2xl overflow-hidden bg-black mb-6">
+                    <div className="aspect-video rounded-2xl overflow-hidden bg-slate-900 mb-6 relative group/video">
                       <iframe 
-                        src={item.url.replace('watch?v=', 'embed/')} 
-                        className="w-full h-full"
+                        src={item.url.includes('youtube.com') || item.url.includes('youtu.be') 
+                          ? `https://www.youtube.com/embed/${item.url.split('v=')[1]?.split('&')[0] || item.url.split('/').pop()}` 
+                          : item.url} 
+                        className="w-full h-full relative z-10"
                         allowFullScreen
+                        title={item.title}
                       />
+                      <div className="absolute inset-0 flex items-center justify-center z-0">
+                        <div className="animate-pulse flex flex-col items-center gap-2">
+                          <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                            <Globe className="w-6 h-6 text-white/20" />
+                          </div>
+                          <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">লোডিং ভিডিও...</span>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="aspect-video rounded-2xl overflow-hidden mb-6">

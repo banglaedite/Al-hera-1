@@ -57,10 +57,14 @@ export function FoodMenuManager() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("আপনি কি নিশ্চিত?")) {
-      await fetch(`/api/admin/food-menu/${id}`, { method: "DELETE" });
-      fetchMenu();
-    }
+    const pwd = prompt("খাবারের মেনু ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+    await fetch(`/api/admin/food-menu/${id}`, { 
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pwd })
+    });
+    fetchMenu();
   };
 
   const openEdit = (item: any) => {

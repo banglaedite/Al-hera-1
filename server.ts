@@ -411,6 +411,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/sub-admins/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     const { id } = req.params;
     try {
       const db = getFirestoreInstance();
@@ -727,6 +729,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/features/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const db = getFirestoreInstance();
       await db.collection("features").doc(req.params.id).delete();
@@ -847,6 +851,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/showcase-items/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       const db = getFirestoreInstance();
       await db.collection("showcase_items").doc(req.params.id).delete();
@@ -998,6 +1004,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/food-menu/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore!.collection("food_menu").doc(req.params.id).delete();
       res.json({ success: true });
@@ -1066,6 +1074,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/routines/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore!.collection("routines").doc(req.params.id).delete();
       res.json({ success: true });
@@ -1597,37 +1607,65 @@ async function seedDatabase() {
   });
 
   app.get("/api/admin/accounting/reports/category", async (req, res) => {
-    const { month, category, start_date, end_date } = req.query;
+    const { month, category, start_date, end_date, class_name } = req.query;
     try {
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
+      let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
 
-      if (start_date && end_date) {
-        incomeQuery = incomeQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
-        expenseQuery = expenseQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
-      } else if (month) {
-        const startDate = `${month}-01`;
-        const endDate = `${month}-31T23:59:59.999Z`;
-        incomeQuery = incomeQuery.where("date", ">=", startDate).where("date", "<=", endDate);
-        expenseQuery = expenseQuery.where("date", ">=", startDate).where("date", "<=", endDate);
+      if (class_name) {
+        incomeQuery = incomeQuery.where("class_name", "==", class_name);
+        expenseQuery = expenseQuery.where("class_name", "==", class_name);
+        feesQuery = feesQuery.where("class_name", "==", class_name);
       }
 
-      const [incomeSnapshot, expenseSnapshot] = await Promise.all([
+      if (category) {
+        incomeQuery = incomeQuery.where("category", "==", category);
+        expenseQuery = expenseQuery.where("category", "==", category);
+        feesQuery = feesQuery.where("category", "==", category);
+      }
+
+      const [incomeSnap, expenseSnap] = await Promise.all([
         incomeQuery.get(),
         expenseQuery.get()
       ]);
 
-      console.log("Category report query params:", { month, category, start_date, end_date });
-      console.log("Income snapshot size:", incomeSnapshot.size);
-      console.log("Expense snapshot size:", expenseSnapshot.size);
+      const filterByDate = (data: any, dateField: string) => {
+        if (start_date && end_date) {
+          return data.filter((item: any) => item[dateField] >= start_date && item[dateField] <= end_date + "T23:59:59.999Z");
+        } else if (month) {
+          const startDate = `${month}-01`;
+          const endDate = `${month}-31T23:59:59.999Z`;
+          return data.filter((item: any) => item[dateField] >= startDate && item[dateField] <= endDate);
+        }
+        return data;
+      };
 
-      let incomeData = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      let expenseData = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-
-      if (category) {
-        incomeData = incomeData.filter(item => item.category === category);
-        expenseData = expenseData.filter(item => item.category === category);
+      let incomeData = filterByDate(incomeSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })), "date");
+      let expenseData = filterByDate(expenseSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })), "date");
+      
+      let feesSnapshot: any = { docs: [] };
+      if (class_name) {
+        const studentsSnapshot = await firestore.collection("students").where("class", "==", class_name).get();
+        const studentIds = studentsSnapshot.docs.map(doc => doc.id);
+        if (studentIds.length > 0) {
+          const chunks = [];
+          for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
+          const feePromises = chunks.map(chunk => {
+            let q = firestore.collection("fees").where("status", "==", "paid").where("student_id", "in", chunk);
+            if (category) q = q.where("category", "==", category);
+            return q.get();
+          });
+          const snaps = await Promise.all(feePromises);
+          feesSnapshot = { docs: snaps.flatMap(s => s.docs) };
+        }
+      } else {
+        feesSnapshot = await feesQuery.get();
       }
+
+      let feeData = filterByDate(feesSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })), "paid_date");
+
+      incomeData = [...incomeData, ...feeData];
 
       res.json({ income: incomeData, expenses: expenseData });
     } catch (e) {
@@ -1647,18 +1685,28 @@ async function seedDatabase() {
         expenseQuery = expenseQuery.where("class_name", "==", class_name);
       }
 
-      if (start_date && end_date) {
-        incomeQuery = incomeQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
-        expenseQuery = expenseQuery.where("date", ">=", start_date).where("date", "<=", end_date + "T23:59:59.999Z");
-      }
-
       const [incomeSnapshot, expenseSnapshot] = await Promise.all([
         incomeQuery.get(),
         expenseQuery.get()
       ]);
 
-      const incomeData = incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const expenseData = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const filterByDate = (data: any, dateField: string) => {
+        if (start_date && end_date) {
+          return data.filter((item: any) => item[dateField] >= start_date && item[dateField] <= end_date + "T23:59:59.999Z");
+        }
+        return data;
+      };
+
+      const incomeData = filterByDate(incomeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })), "date");
+      let expenseData = filterByDate(expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })), "date");
+
+      // Exclude teacher salaries from class reports as requested by user
+      if (class_name) {
+        expenseData = expenseData.filter((item: any) => {
+          const category = (item.category || "").toLowerCase();
+          return !category.includes("teacher salary") && !category.includes("শিক্ষক") && !category.includes("বেতন");
+        });
+      }
 
       let feesData: any[] = [];
       if (class_name) {
@@ -1666,18 +1714,11 @@ async function seedDatabase() {
         const studentIds = studentsSnapshot.docs.map(doc => doc.id);
         
         if (studentIds.length > 0) {
-          // Fetch fees in chunks of 30 due to 'in' query limits
           const chunks = [];
-          for (let i = 0; i < studentIds.length; i += 30) {
-            chunks.push(studentIds.slice(i, i + 30));
-          }
+          for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
           
           const feePromises = chunks.map(chunk => {
-            let q: any = firestore.collection("fees").where("student_id", "in", chunk);
-            if (start_date && end_date) {
-              q = q.where("paid_date", ">=", start_date).where("paid_date", "<=", end_date + "T23:59:59.999Z");
-            }
-            return q.get();
+            return firestore.collection("fees").where("student_id", "in", chunk).get();
           });
           
           const feeSnapshots = await Promise.all(feePromises);
@@ -1688,15 +1729,13 @@ async function seedDatabase() {
           });
         }
       } else {
-        let q: any = firestore.collection("fees");
-        if (start_date && end_date) {
-          q = q.where("paid_date", ">=", start_date).where("paid_date", "<=", end_date + "T23:59:59.999Z");
-        }
-        const feesSnapshot = await q.get();
+        const feesSnapshot = await firestore.collection("fees").get();
         feesData = feesSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       }
 
-      res.json({ fees: feesData, income: incomeData, expenses: expenseData });
+      const filteredFees = filterByDate(feesData, "paid_date");
+
+      res.json({ fees: filteredFees, income: incomeData, expenses: expenseData });
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "Failed to fetch class report" });
@@ -1704,50 +1743,87 @@ async function seedDatabase() {
   });
 
   app.get("/api/admin/accounting/summary", async (req, res) => {
-    const { start_date, end_date } = req.query;
+    const { start_date, end_date, class_name } = req.query;
     try {
       let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
       let incomeQuery: any = firestore.collection("income");
       let expenseQuery: any = firestore.collection("expenses");
 
-      if (start_date) {
-        feesQuery = feesQuery.where("paid_date", ">=", start_date);
-        incomeQuery = incomeQuery.where("date", ">=", start_date);
-        expenseQuery = expenseQuery.where("date", ">=", start_date);
-      }
-      if (end_date) {
-        feesQuery = feesQuery.where("paid_date", "<=", end_date + "T23:59:59.999Z");
-        incomeQuery = incomeQuery.where("date", "<=", end_date + "T23:59:59.999Z");
-        expenseQuery = expenseQuery.where("date", "<=", end_date + "T23:59:59.999Z");
+      if (class_name) {
+        incomeQuery = incomeQuery.where("class_name", "==", class_name);
+        expenseQuery = expenseQuery.where("class_name", "==", class_name);
       }
 
-      const [feesSnapshot, incomeSnapshot, expenseSnapshot] = await Promise.all([
-        feesQuery.get(),
+      let feesSnapshot: any = { docs: [] };
+      if (class_name) {
+        const studentsSnapshot = await firestore.collection("students").where("class", "==", class_name).get();
+        const studentIds = studentsSnapshot.docs.map(doc => doc.id);
+        if (studentIds.length > 0) {
+          const chunks = [];
+          for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
+          const feePromises = chunks.map(chunk => {
+            return firestore.collection("fees").where("status", "==", "paid").where("student_id", "in", chunk).get();
+          });
+          const snaps = await Promise.all(feePromises);
+          feesSnapshot = { docs: snaps.flatMap(s => s.docs) };
+        }
+      } else {
+        feesSnapshot = await feesQuery.get();
+      }
+
+      const [incomeSnapshot, expenseSnapshot] = await Promise.all([
         incomeQuery.get(),
         expenseQuery.get()
       ]);
 
-      const feeIncome = feesSnapshot.docs
-        .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
-      const otherIncome = incomeSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+      const filterByDate = (data: any, dateField: string, start: any, end: any) => {
+        return data.filter((item: any) => {
+          const date = item[dateField];
+          if (!date) return false;
+          if (start && date < start) return false;
+          if (end && date > end + "T23:59:59.999Z") return false;
+          return true;
+        });
+      };
+
+      const feeDocs = filterByDate(feesSnapshot.docs.map(doc => doc.data()), "paid_date", start_date, end_date);
+      const incomeDocs = filterByDate(incomeSnapshot.docs.map(doc => doc.data()), "date", start_date, end_date);
+      const expenseDocs = filterByDate(expenseSnapshot.docs.map(doc => doc.data()), "date", start_date, end_date);
+
+      const feeIncome = feeDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
+      const otherIncome = incomeDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
       const totalIncome = feeIncome + otherIncome;
-      const totalExpense = expenseSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+      const totalExpense = expenseDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
 
       // Previous Balance Calculation
       let prevBalance = 0;
       let prevIncome = 0;
       let prevExpense = 0;
       if (start_date) {
+        let prevFeesQuery = firestore.collection("fees").where("status", "==", "paid");
+        let prevIncQuery = firestore.collection("income");
+        let prevExpQuery = firestore.collection("expenses");
+
+        if (class_name) {
+          prevFeesQuery = prevFeesQuery.where("class_name", "==", class_name);
+          prevIncQuery = prevIncQuery.where("class_name", "==", class_name);
+          prevExpQuery = prevExpQuery.where("class_name", "==", class_name);
+        }
+
         const [prevFees, prevInc, prevExp] = await Promise.all([
-          firestore.collection("fees").where("status", "==", "paid").where("paid_date", "<", start_date).get(),
-          firestore.collection("income").where("date", "<", start_date).get(),
-          firestore.collection("expenses").where("date", "<", start_date).get()
+          prevFeesQuery.get(),
+          prevIncQuery.get(),
+          prevExpQuery.get()
         ]);
         
-        const pf = prevFees.docs
-          .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
-        const pi = prevInc.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
-        const pe = prevExp.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+        const pfDocs = filterByDate(prevFees.docs.map(doc => doc.data()), "paid_date", null, start_date ? new Date(new Date(start_date as string).getTime() - 1).toISOString().split('T')[0] : null);
+        const piDocs = filterByDate(prevInc.docs.map(doc => doc.data()), "date", null, start_date ? new Date(new Date(start_date as string).getTime() - 1).toISOString().split('T')[0] : null);
+        const peDocs = filterByDate(prevExp.docs.map(doc => doc.data()), "date", null, start_date ? new Date(new Date(start_date as string).getTime() - 1).toISOString().split('T')[0] : null);
+
+        const pf = pfDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
+        const pi = piDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
+        const pe = peDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
+        
         prevIncome = pf + pi;
         prevExpense = pe;
         prevBalance = prevIncome - prevExpense;
@@ -1771,7 +1847,7 @@ async function seedDatabase() {
   });
 
   app.get("/api/admin/accounting/income", async (req, res) => {
-    const { start_date, end_date, limit = 50, offset = 0, search } = req.query;
+    const { start_date, end_date, limit = 50, offset = 0, search, class_name } = req.query;
     try {
       let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
       let incomeQuery: any = firestore.collection("income");
@@ -1784,11 +1860,31 @@ async function seedDatabase() {
         feesQuery = feesQuery.where("paid_date", "<=", end_date + "T23:59:59.999Z");
         incomeQuery = incomeQuery.where("date", "<=", end_date + "T23:59:59.999Z");
       }
+      if (class_name) {
+        incomeQuery = incomeQuery.where("class_name", "==", class_name);
+      }
 
-      const [feesSnapshot, incomeSnapshot] = await Promise.all([
-        feesQuery.get(),
-        incomeQuery.get()
-      ]);
+      let feesSnapshot: any = { docs: [] };
+      if (class_name) {
+        const studentsSnapshot = await firestore.collection("students").where("class", "==", class_name).get();
+        const studentIds = studentsSnapshot.docs.map(doc => doc.id);
+        if (studentIds.length > 0) {
+          const chunks = [];
+          for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
+          const feePromises = chunks.map(chunk => {
+            let q = firestore.collection("fees").where("status", "==", "paid").where("student_id", "in", chunk);
+            if (start_date) q = q.where("paid_date", ">=", start_date);
+            if (end_date) q = q.where("paid_date", "<=", end_date + "T23:59:59.999Z");
+            return q.get();
+          });
+          const snaps = await Promise.all(feePromises);
+          feesSnapshot = { docs: snaps.flatMap(s => s.docs) };
+        }
+      } else {
+        feesSnapshot = await feesQuery.get();
+      }
+
+      const incomeSnapshot = await incomeQuery.get();
 
       const feeIncome = feesSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data(), type: 'Fee' } as any));
@@ -1862,7 +1958,7 @@ async function seedDatabase() {
   });
 
   app.get("/api/admin/accounting/expenses", async (req, res) => {
-    const { start_date, end_date, limit = 50, offset = 0, search } = req.query;
+    const { start_date, end_date, limit = 50, offset = 0, search, class_name } = req.query;
     try {
       let query: any = firestore.collection("expenses");
       if (start_date) {
@@ -1870,6 +1966,9 @@ async function seedDatabase() {
       }
       if (end_date) {
         query = query.where("date", "<=", end_date + "T23:59:59.999Z");
+      }
+      if (class_name) {
+        query = query.where("class_name", "==", class_name);
       }
       
       const snapshot = await query.orderBy("date", "desc").get();
@@ -2629,6 +2728,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/amal-tasks/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("amal_tasks").doc(req.params.id).delete();
       res.json({ success: true });
@@ -2874,6 +2975,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/syllabus-routines/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("syllabus_routines").doc(req.params.id).delete();
       res.json({ success: true });
@@ -3383,6 +3486,7 @@ async function seedDatabase() {
       const db = getFirestoreInstance();
       const studentsSnapshot = await db.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      console.log(`Found ${students.length} students for class ${className}`);
       
       let resultsQuery = db.collection("results")
         .where("exam_name", "==", exam_name)
@@ -3394,10 +3498,11 @@ async function seedDatabase() {
 
       const resultsSnapshot = await resultsQuery.get();
       const results = resultsSnapshot.docs.map(doc => doc.data() as any);
+      console.log(`Found ${results.length} result documents for exam ${exam_name}, class ${className}, year ${year}`);
       
       const data = students.map((s: any) => {
         const studentResults = results.filter((r: any) => r.student_id === s.id);
-        const totalMarks = studentResults.reduce((sum: number, r: any) => sum + r.marks, 0);
+        const totalMarks = studentResults.reduce((sum: number, r: any) => sum + (Number(r.marks) || 0), 0);
         const avgMarks = studentResults.length > 0 ? totalMarks / studentResults.length : 0;
         return {
           ...s,
@@ -3640,6 +3745,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/admin/notices/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("notices").doc(req.params.id).delete();
       res.json({ success: true });
@@ -3914,6 +4021,8 @@ async function seedDatabase() {
   });
 
   app.delete("/api/subjects/:id", async (req, res) => {
+    const { password } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
       await firestore.collection("subjects").doc(req.params.id).delete();
       res.json({ success: true });

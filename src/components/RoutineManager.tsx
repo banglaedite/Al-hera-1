@@ -57,10 +57,14 @@ export function RoutineManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("আপনি কি নিশ্চিত?")) {
-      await fetch(`/api/admin/routines/${id}`, { method: "DELETE" });
-      fetchRoutines();
-    }
+    const pwd = prompt("রুটিনটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+    await fetch(`/api/admin/routines/${id}`, { 
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pwd })
+    });
+    fetchRoutines();
   };
 
   const openEdit = (item: any) => {

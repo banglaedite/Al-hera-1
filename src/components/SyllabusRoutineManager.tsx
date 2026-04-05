@@ -63,10 +63,13 @@ export default function SyllabusRoutineManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("আপনি কি এটি মুছে ফেলতে চান?")) return;
+    const pwd = prompt("সিলেবাস বা রুটিনটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
     try {
       const res = await fetch(`/api/admin/syllabus-routines/${id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
       });
       if (res.ok) fetchItems();
     } catch (err) {
