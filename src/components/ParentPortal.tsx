@@ -23,8 +23,10 @@ import {
   Calendar
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useToast } from "./ToastContext";
 
 export default function ParentPortal() {
+  const { addToast } = useToast();
   const [identifier, setIdentifier] = useState(() => localStorage.getItem("guardianPhone") || "");
   const [loading, setLoading] = useState(false);
   const [student, setStudent] = useState<any>(null);
@@ -120,6 +122,10 @@ export default function ParentPortal() {
           reference: livePaymentReference
         })
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       
       if (data.success) {
@@ -165,6 +171,10 @@ export default function ParentPortal() {
           method
         })
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       
       if (method === "udyoktapay" && data.payment_url) {
@@ -192,8 +202,20 @@ export default function ParentPortal() {
   };
 
   useEffect(() => {
-    fetch("/api/site-settings").then(res => res.json()).then(setSettings);
-    fetch("/api/admin/settings/hifz").then(res => res.json()).then(setHifzSettings);
+    fetch("/api/site-settings")
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(setSettings)
+      .catch(err => console.error("Failed to load settings:", err));
+    fetch("/api/admin/settings/hifz")
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(setHifzSettings)
+      .catch(err => console.error("Failed to load hifz settings:", err));
     
     // Auto login if identifier exists in localStorage
     const savedIdentifier = localStorage.getItem("guardianPhone");
@@ -558,6 +580,7 @@ export default function ParentPortal() {
       }
     } catch (err: any) {
       setError(err.message);
+      addToast(err.message || "লগইন করতে সমস্যা হয়েছে", "error");
       localStorage.removeItem("guardianPhone");
     } finally {
       setLoading(false);

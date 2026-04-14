@@ -10,8 +10,12 @@ const FloatingContact = () => {
 
   useEffect(() => {
     fetch("/api/site-settings")
-      .then((res) => res.json())
-      .then(setSettings);
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(setSettings)
+      .catch(err => console.error("Failed to load settings:", err));
   }, []);
 
   if (!settings || location.pathname.includes("admin")) return null;

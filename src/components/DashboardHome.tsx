@@ -14,6 +14,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useToast } from "./ToastContext";
 
 const StatCard = ({ icon: Icon, label, value, color }: any) => (
   <motion.div 
@@ -49,10 +50,20 @@ const QuickAction = ({ icon: Icon, title, description, to, color }: any) => (
 );
 
 export default function DashboardHome() {
+  const { addToast } = useToast();
   const [settings, setSettings] = useState<any>({});
 
   useEffect(() => {
-    fetch("/api/site-settings").then(res => res.json()).then(setSettings);
+    fetch("/api/site-settings")
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to load settings");
+        return res.json();
+      })
+      .then(setSettings)
+      .catch(err => {
+        console.error("Failed to load settings:", err);
+        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
+      });
   }, []);
 
   return (

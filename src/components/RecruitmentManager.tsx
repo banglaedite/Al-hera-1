@@ -5,7 +5,13 @@ export function RecruitmentManager() {
   const [applications, setApplications] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/admin/job-applications").then(res => res.json()).then(setApplications);
+    fetch("/api/admin/job-applications")
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(setApplications)
+      .catch(err => console.error("Failed to load job applications:", err));
   }, []);
 
   return (

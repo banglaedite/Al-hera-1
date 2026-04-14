@@ -41,7 +41,13 @@ export default function TeacherPortal() {
   const [amalDate, setAmalDate] = useState(new Date().toLocaleDateString('en-CA'));
 
   useEffect(() => {
-    fetch("/api/site-settings").then(res => res.json()).then(setSettings);
+    fetch("/api/site-settings")
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(setSettings)
+      .catch(err => console.error("Failed to load settings:", err));
     
     const savedIdentifier = localStorage.getItem("teacherPhone");
     if (savedIdentifier) {
@@ -67,14 +73,16 @@ export default function TeacherPortal() {
         fetch("/api/amal-tasks?target=student"),
         fetch(`/api/admin/amal-submission-status?target=student&date=${amalDate}`)
       ]);
-      if (tasksRes.ok && statusRes.ok) {
-        setStudentTasks(await tasksRes.json());
-        let status = await statusRes.json();
-        if (selectedClass !== "সব") {
-          status = status.filter((s: any) => s.class === selectedClass);
-        }
-        setSubmissionStatus(status);
+      
+      if (!tasksRes.ok) throw new Error(`Tasks fetch failed: ${tasksRes.status}`);
+      if (!statusRes.ok) throw new Error(`Status fetch failed: ${statusRes.status}`);
+
+      setStudentTasks(await tasksRes.json());
+      let status = await statusRes.json();
+      if (selectedClass !== "সব") {
+        status = status.filter((s: any) => s.class === selectedClass);
       }
+      setSubmissionStatus(status);
     } catch (err) {
       console.error("Failed to fetch student amal data:", err);
     } finally {
@@ -124,24 +132,26 @@ export default function TeacherPortal() {
         fetch("/api/amal-tasks?target=teacher"),
         fetch(`/api/amal-logs?user_id=${teacher.id}&date=${amalDate}`)
       ]);
-      if (tasksRes.ok && logsRes.ok) {
-        const tasks = await tasksRes.json();
-        const logs = await logsRes.json();
-        setAmalTasks(Array.isArray(tasks) ? tasks : []);
-        const logMap: Record<string, boolean> = {};
-        let submitted = false;
-        if (Array.isArray(logs)) {
-          logs.forEach((log: any) => {
-            if (log.task_id === "submission_record") {
-              submitted = true;
-            } else {
-              logMap[log.task_id] = log.status === "completed";
-            }
-          });
-        }
-        setAmalLogs(logMap);
-        setIsAmalSubmitted(submitted);
+      
+      if (!tasksRes.ok) throw new Error(`Tasks fetch failed: ${tasksRes.status}`);
+      if (!logsRes.ok) throw new Error(`Logs fetch failed: ${logsRes.status}`);
+
+      const tasks = await tasksRes.json();
+      const logs = await logsRes.json();
+      setAmalTasks(Array.isArray(tasks) ? tasks : []);
+      const logMap: Record<string, boolean> = {};
+      let submitted = false;
+      if (Array.isArray(logs)) {
+        logs.forEach((log: any) => {
+          if (log.task_id === "submission_record") {
+            submitted = true;
+          } else {
+            logMap[log.task_id] = log.status === "completed";
+          }
+        });
       }
+      setAmalLogs(logMap);
+      setIsAmalSubmitted(submitted);
     } catch (err) {
       console.error("Failed to fetch amal data:", err);
     }

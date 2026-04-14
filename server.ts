@@ -2104,9 +2104,12 @@ async function seedDatabase() {
       const studentsSnapshot = await studentsQuery.get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      const batch = firestore.batch();
       const setupRef = firestore.collection("fee_setups").doc();
-      batch.set(setupRef, {
+      const batches = [];
+      let currentBatch = firestore.batch();
+      let operationsCount = 0;
+
+      currentBatch.set(setupRef, {
         name,
         type: 'exam',
         className,
@@ -2114,6 +2117,7 @@ async function seedDatabase() {
         month: null,
         created_at: new Date().toISOString()
       });
+      operationsCount++;
 
       for (const student of students as any[]) {
         let feeAmount = amount;
@@ -2123,7 +2127,7 @@ async function seedDatabase() {
 
         const category = name;
         const feeRef = firestore.collection("fees").doc();
-        batch.set(feeRef, {
+        currentBatch.set(feeRef, {
           student_id: student.id,
           category,
           amount: Number(feeAmount),
@@ -2132,9 +2136,20 @@ async function seedDatabase() {
           setup_id: setupRef.id,
           created_at: new Date().toISOString()
         });
+        
+        operationsCount++;
+        if (operationsCount >= 400) {
+          batches.push(currentBatch.commit());
+          currentBatch = firestore.batch();
+          operationsCount = 0;
+        }
       }
       
-      await batch.commit();
+      if (operationsCount > 0) {
+        batches.push(currentBatch.commit());
+      }
+
+      await Promise.all(batches);
       res.json({ success: true, count: students.length });
     } catch (error) {
       console.error("Bulk fee creation error:", error);
@@ -3146,26 +3161,53 @@ async function seedDatabase() {
     const { date, records } = req.body;
     try {
       const db = getFirestoreInstance();
+      
+      // Fetch all existing attendance for this date in one query
+      const existingSnapshot = await db.collection("attendance").where("date", "==", date).get();
+      const existingMap = new Map();
+      existingSnapshot.docs.forEach(doc => {
+        existingMap.set(doc.data().student_id, doc.ref);
+      });
+
       const batch = db.batch();
+      let operationsCount = 0;
+      const batches = [];
+      let currentBatch = db.batch();
+
       for (const record of records) {
-        const attendanceSnapshot = await db.collection("attendance").where("student_id", "==", record.student_id).where("date", "==", date).get();
-        attendanceSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+        const existingRef = existingMap.get(record.student_id);
+        if (existingRef) {
+          currentBatch.delete(existingRef);
+          operationsCount++;
+        }
         
         if (record.status) {
           const newRef = db.collection("attendance").doc();
-          batch.set(newRef, {
+          currentBatch.set(newRef, {
             student_id: record.student_id,
             date,
             status: record.status,
             created_at: new Date().toISOString()
           });
+          operationsCount++;
+        }
+
+        if (operationsCount >= 400) {
+          batches.push(currentBatch.commit());
+          currentBatch = db.batch();
+          operationsCount = 0;
         }
       }
-      await batch.commit();
+      
+      if (operationsCount > 0) {
+        batches.push(currentBatch.commit());
+      }
+
+      await Promise.all(batches);
       res.json({ success: true });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to save attendance" });
+      console.error("Bulk attendance error:", error);
+      res.status(500).json({ error: "Failed to save attendance", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -3529,48 +3571,69 @@ async function seedDatabase() {
     }
     try {
       const db = getFirestoreInstance();
-      const batch = db.batch();
+      // Group results by exam, subject, class, and year to minimize queries
+      const examName = results[0].exam_name;
+      const subject = results[0].subject;
+      const className = results[0].class_name;
+      const resultYear = results[0].year || new Date().getFullYear().toString();
+
+      // Fetch all existing results for this specific group
+      const existingSnapshot = await db.collection("results")
+        .where("exam_name", "==", examName)
+        .where("subject", "==", subject)
+        .where("class_name", "==", className)
+        .where("year", "==", resultYear)
+        .get();
       
+      const existingResultsMap = new Map();
+      existingSnapshot.docs.forEach(doc => {
+        existingResultsMap.set(doc.data().student_id, { id: doc.id, ...doc.data() });
+      });
+
+      const batches = [];
+      let currentBatch = db.batch();
+      let operationsCount = 0;
+
       for (const r of results) {
-        const { student_id, exam_name, subject, marks, grade, date, class_name, year } = r;
-        const resultYear = year || new Date().getFullYear().toString();
+        const { student_id, marks, grade, date } = r;
+        const existing = existingResultsMap.get(student_id);
         
-        // Check for existing result to update or add new
-        const existingSnapshot = await db.collection("results")
-          .where("student_id", "==", student_id)
-          .where("exam_name", "==", exam_name)
-          .where("subject", "==", subject)
-          .where("year", "==", resultYear)
-          .get();
-        
-        if (!existingSnapshot.empty) {
-          const docId = existingSnapshot.docs[0].id;
-          batch.update(db.collection("results").doc(docId), {
+        if (existing) {
+          currentBatch.update(db.collection("results").doc(existing.id), {
             marks: Number(marks),
             grade,
             date,
-            class_name,
-            year: resultYear,
             updated_at: new Date().toISOString()
           });
         } else {
           const newDocRef = db.collection("results").doc();
-          batch.set(newDocRef, {
+          currentBatch.set(newDocRef, {
             student_id,
-            exam_name,
+            exam_name: examName,
             subject,
             marks: Number(marks),
             grade,
             date,
-            class_name,
+            class_name: className,
             year: resultYear,
             created_at: new Date().toISOString()
           });
         }
+        
+        operationsCount++;
+        if (operationsCount >= 400) {
+          batches.push(currentBatch.commit());
+          currentBatch = db.batch();
+          operationsCount = 0;
+        }
       }
       
-      await batch.commit();
-      res.json({ success: true });
+      if (operationsCount > 0) {
+        batches.push(currentBatch.commit());
+      }
+
+      await Promise.all(batches);
+      res.json({ success: true, count: results.length });
     } catch (error) {
       console.error("Bulk save results failed", error);
       res.status(500).json({ error: "Failed to save results" });
@@ -3962,12 +4025,18 @@ async function seedDatabase() {
         return res.status(401).json({ error: "Invalid password" });
       }
       
-      const success = await generateAndSendBackup();
-      if (success) {
-        res.json({ success: true, message: "Backup sent successfully" });
-      } else {
-        res.status(500).json({ error: "Failed to send backup. Check SMTP settings." });
-      }
+      // Run backup in background
+      generateAndSendBackup().then(success => {
+        if (success) {
+          console.log("Manual backup completed successfully");
+        } else {
+          console.error("Manual backup failed");
+        }
+      }).catch(err => {
+        console.error("Manual backup error:", err);
+      });
+
+      res.json({ success: true, message: "ব্যাকআপ প্রক্রিয়া শুরু হয়েছে। কিছুক্ষণের মধ্যে আপনার ইমেইলে ব্যাকআপ ফাইলটি পৌঁছে যাবে।" });
     } catch (error) {
       next(error);
     }
@@ -4678,8 +4747,21 @@ async function seedDatabase() {
 // --- Server Startup ---
 const PORT = 3000;
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", env: process.env.NODE_ENV });
+});
+
+// 404 handler for API routes
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
 
 async function start() {
@@ -4710,17 +4792,22 @@ async function start() {
       console.log(`Server running at http://0.0.0.0:${PORT}`);
     });
   }
-
-  // Global error handler for API routes
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("Unhandled error:", err);
-    if (req.path.startsWith('/api/')) {
-      res.status(500).json({ error: "Internal Server Error", details: err.message });
-    } else {
-      next(err);
-    }
-  });
 }
+
+// Global error handler for API routes - MUST BE AT THE END
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Unhandled error:", err);
+  if (req.path.startsWith('/api/')) {
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      details: err.message,
+      path: req.path,
+      method: req.method
+    });
+  } else {
+    next(err);
+  }
+});
 
 start();
 

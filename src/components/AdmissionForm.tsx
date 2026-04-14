@@ -34,7 +34,10 @@ export default function AdmissionForm() {
 
   useEffect(() => {
     fetch("/api/site-settings")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
       .then(data => setSettings(data))
       .catch(err => console.error("Failed to load settings:", err));
   }, []);
@@ -53,6 +56,10 @@ export default function AdmissionForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         setSubmitted(true);

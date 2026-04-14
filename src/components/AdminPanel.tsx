@@ -141,10 +141,17 @@ function CategoryManager({ type }: { type: "income" | "expense" }) {
   const [editName, setEditName] = useState("");
 
   const fetchCategories = async () => {
-    const res = await fetch(`/api/admin/accounting/${type}-categories`);
-    const data = await res.json();
-    if (Array.isArray(data)) setCategories(data);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/admin/accounting/${type}-categories`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setCategories(data);
+    } catch (err) {
+      console.error("Failed to fetch categories:", err);
+      addToast("ক্যাটাগরি লোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -203,17 +210,22 @@ function CategoryManager({ type }: { type: "income" | "expense" }) {
     const pass = window.prompt("পাসওয়ার্ড দিন:");
     if (!pass) return;
 
-    const res = await fetch(`/api/admin/accounting/${type}-categories/${cat.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...cat, is_hidden: !cat.is_hidden, password: pass })
-    });
-    if (res.ok) {
-      addToast("আপডেট করা হয়েছে", "success");
-      fetchCategories();
-    } else {
-      const data = await res.json();
-      addToast(data.error || "ব্যর্থ হয়েছে", "error");
+    try {
+      const res = await fetch(`/api/admin/accounting/${type}-categories/${cat.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...cat, is_hidden: !cat.is_hidden, password: pass })
+      });
+      if (res.ok) {
+        addToast("আপডেট করা হয়েছে", "success");
+        fetchCategories();
+      } else {
+        const data = await res.json();
+        addToast(data.error || "ব্যর্থ হয়েছে", "error");
+      }
+    } catch (err) {
+      console.error("Toggle hide failed:", err);
+      addToast("নেটওয়ার্ক সমস্যা", "error");
     }
   };
 
@@ -354,6 +366,7 @@ export default function AdminPanel() {
       if (res.ok) setPendingCounts(await res.json());
     } catch (error) {
       console.error(error);
+      addToast("পেন্ডিং কাউন্ট লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -383,13 +396,19 @@ export default function AdminPanel() {
   }, [activeTab]);
 
   const fetchSettings = async () => {
-    const res = await fetch("/api/site-settings");
-    const data = await res.json();
-    if (!data.smtp_user) data.smtp_user = "banglaedite@gmail.com";
-    if (!data.sender_email) data.sender_email = "banglaedite@gmail.com";
-    if (!data.smtp_host) data.smtp_host = "smtp.gmail.com";
-    if (!data.smtp_port) data.smtp_port = 587;
-    setSettings(data);
+    try {
+      const res = await fetch("/api/site-settings");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      if (!data.smtp_user) data.smtp_user = "banglaedite@gmail.com";
+      if (!data.sender_email) data.sender_email = "banglaedite@gmail.com";
+      if (!data.smtp_host) data.smtp_host = "smtp.gmail.com";
+      if (!data.smtp_port) data.smtp_port = 587;
+      setSettings(data);
+    } catch (err) {
+      console.error("Failed to fetch settings:", err);
+      addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
+    }
   };
 
   const fetchClasses = async () => {
@@ -398,6 +417,7 @@ export default function AdminPanel() {
       if (res.ok) setClasses(await res.json());
     } catch (error) {
       console.error(error);
+      addToast("ক্লাস লিস্ট লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -438,12 +458,14 @@ export default function AdminPanel() {
       }
     } catch (error) {
       console.error("Error fetching stats:", error);
+      addToast("পরিসংখ্যান লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
   const fetchTeachers = async () => {
     try {
       const res = await fetch("/api/admin/teachers?t=" + Date.now());
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         const sortedTeachers = data.sort((a, b) => {
@@ -461,6 +483,7 @@ export default function AdminPanel() {
       }
     } catch (err) {
       console.error("Error fetching teachers:", err);
+      addToast("শিক্ষক তালিকা লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -483,6 +506,7 @@ export default function AdminPanel() {
       }
     } catch (error) {
       console.error("Error fetching students:", error);
+      addToast("ছাত্র তালিকা লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -494,6 +518,7 @@ export default function AdminPanel() {
       if (Array.isArray(data)) setNotices(data);
     } catch (error) {
       console.error("Error fetching notices:", error);
+      addToast("নোটিশ লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -874,10 +899,17 @@ function ShowcaseManager() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const fetchShowcaseItems = async () => {
-    const res = await fetch("/api/showcase-items");
-    const data = await res.json();
-    if (Array.isArray(data)) setShowcaseItems(data);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/showcase-items");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setShowcaseItems(data);
+    } catch (err) {
+      console.error("Failed to fetch showcase items:", err);
+      addToast("শোকাস আইটেম লোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -986,10 +1018,17 @@ function FeatureManager() {
   const [featureToDelete, setFeatureToDelete] = useState<string | null>(null);
 
   const fetchFeatures = async () => {
-    const res = await fetch("/api/features");
-    const data = await res.json();
-    if (Array.isArray(data)) setFeatures(data);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/features");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setFeatures(data);
+    } catch (err) {
+      console.error("Failed to fetch features:", err);
+      addToast("ফিচার লোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1154,6 +1193,7 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
   const fetchAdmissions = async () => {
     try {
       const res = await fetch("/api/admin/admissions");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setAdmissions(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -1169,16 +1209,27 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
   }, []);
 
   const handleAction = async (id: number, action: 'approve' | 'reject') => {
-    const res = await fetch("/api/admin/approve-admission", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action })
-    });
-    const data = await res.json();
-    if (data.success) {
-      addToast(action === 'approve' ? "আবেদন অনুমোদিত হয়েছে" : "আবেদন বাতিল করা হয়েছে", "success");
-      fetchAdmissions();
-      if (action === 'approve') onApprove();
+    try {
+      const res = await fetch("/api/admin/approve-admission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.success) {
+        addToast(action === 'approve' ? "আবেদন অনুমোদিত হয়েছে" : "আবেদন বাতিল করা হয়েছে", "success");
+        fetchAdmissions();
+        if (action === 'approve') onApprove();
+      } else {
+        addToast(data.error || "ব্যর্থ হয়েছে", "error");
+      }
+    } catch (err) {
+      console.error("Admission action failed:", err);
+      addToast("নেটওয়ার্ক সমস্যা", "error");
     }
   };
 
@@ -2286,19 +2337,55 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   const [generatingFees, setGeneratingFees] = useState(false);
   const [selectedResultExam, setSelectedResultExam] = useState<string>("");
   const [students, setStudents] = useState<any[]>([]);
+  const [individualPrintData, setIndividualPrintData] = useState<any>(null);
+
+  const handlePrintIndividualResult = () => {
+    if (!selectedResultExam || !fullProfile) return;
+    const [exam, year] = selectedResultExam.split('|');
+    const results = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+    
+    if (results.length === 0) {
+      addToast("এই পরীক্ষার কোনো রেজাল্ট পাওয়া যায়নি", "error");
+      return;
+    }
+
+    const totalMarks = results.reduce((sum: number, r: any) => sum + (Number(r.marks) || 0), 0);
+    
+    const printData = {
+      name: fullProfile.student.name,
+      roll: fullProfile.student.roll,
+      class: fullProfile.student.class,
+      totalMarks,
+      subjects: results.map((r: any) => ({ subject: r.subject, marks: r.marks })),
+      exam_name: exam,
+      year: year
+    };
+
+    setIndividualPrintData(printData);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => setIndividualPrintData(null), 1000);
+    }, 500);
+  };
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchStudents = async (newOffset: number = 0) => {
     setLoading(true);
-    const res = await fetch(`/api/students?limit=50&offset=${newOffset}`);
-    const data = await res.json();
-    if (newOffset === 0) {
-      setStudents(data);
-    } else {
-      setStudents(prev => [...prev, ...data]);
+    try {
+      const res = await fetch(`/api/students?limit=50&offset=${newOffset}`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      if (newOffset === 0) {
+        setStudents(data);
+      } else {
+        setStudents(prev => [...prev, ...data]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch students:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -2321,6 +2408,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
     setLoadingProfile(true);
     try {
       const res = await fetch(`/api/students/${studentId}/full-profile`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       
       // Ensure arrays exist to prevent undefined errors
@@ -3202,6 +3290,13 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         })}
                       </select>
                       <button 
+                        onClick={handlePrintIndividualResult}
+                        className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
+                        title="প্রিন্ট মার্কশিট"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => {
                           const exam = prompt("পরীক্ষার নাম:");
                           const year = prompt("সাল:", new Date().getFullYear().toString());
@@ -3355,6 +3450,58 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                     )}
                   </div>
                 </div>
+
+                {/* Hidden Template for Individual Marksheet Print */}
+                {individualPrintData && (
+                  <div className="hidden print:block p-12 bg-white w-full">
+                    <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
+                      <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
+                      <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                      <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
+                        মার্কশিট
+                      </h2>
+                      <p className="text-xl font-bold text-slate-700 mt-2">{individualPrintData.exam_name} - {individualPrintData.year}</p>
+                    </div>
+                    
+                    <div className="flex justify-between mb-8 text-lg font-bold text-slate-800">
+                      <div>
+                        <p>ছাত্রের নাম: {individualPrintData.name}</p>
+                        <p>শ্রেণী: {individualPrintData.class}</p>
+                      </div>
+                      <div className="text-right">
+                        <p>রোল: {individualPrintData.roll}</p>
+                        <p>মোট নম্বর: {individualPrintData.totalMarks}</p>
+                        <p>গড় নম্বর: {(individualPrintData.totalMarks / (individualPrintData.subjects.length || 1)).toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    <table className="w-full border-collapse mb-12 text-lg">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900">
+                          <th className="p-4 text-left border border-slate-300">বিষয়</th>
+                          <th className="p-4 text-center border border-slate-300">প্রাপ্ত নম্বর</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {individualPrintData.subjects.map((sub: any, i: number) => (
+                          <tr key={i} className="border-b border-slate-200">
+                            <td className="p-4 border border-slate-300 font-bold">{sub.subject}</td>
+                            <td className="p-4 text-center font-black border border-slate-300">{sub.marks}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    <div className="flex justify-between mt-24">
+                      <div className="text-center">
+                        <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">শিক্ষকের স্বাক্ষর</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">অধ্যক্ষের স্বাক্ষর</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Hifz Section in Profile */}
                 {fullProfile.student.is_hifz === 1 && (
@@ -3923,16 +4070,23 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
 
   const fetchAttendance = async () => {
     setLoading(true);
-    const res = await fetch(`/api/admin/teacher-attendance?date=${date}`);
-    const data = await res.json();
-    const teachersData = Array.isArray(data) ? data : [];
-    setTeachers(teachersData);
-    const initialAttendance: Record<string, string> = {};
-    teachersData.forEach((t: any) => {
-      if (t.status) initialAttendance[t.id] = t.status;
-    });
-    setAttendance(initialAttendance);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/admin/teacher-attendance?date=${date}`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      const teachersData = Array.isArray(data) ? data : [];
+      setTeachers(teachersData);
+      const initialAttendance: Record<string, string> = {};
+      teachersData.forEach((t: any) => {
+        if (t.status) initialAttendance[t.id] = t.status;
+      });
+      setAttendance(initialAttendance);
+    } catch (err) {
+      console.error("Failed to fetch teacher attendance:", err);
+      addToast("শিক্ষক উপস্থিতি লোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

@@ -12,8 +12,10 @@ import {
   FileText
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useToast } from "./ToastContext";
 
 export default function SyllabusRoutineManager() {
+  const { addToast } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -32,6 +34,7 @@ export default function SyllabusRoutineManager() {
       }
     } catch (err) {
       console.error("Failed to fetch syllabus/routines:", err);
+      addToast("সিলেবাস বা রুটিন লোড করতে সমস্যা হয়েছে", "error");
     } finally {
       setLoading(false);
     }
@@ -59,6 +62,7 @@ export default function SyllabusRoutineManager() {
       }
     } catch (err) {
       console.error("Failed to save item:", err);
+      addToast("সেভ করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -74,6 +78,7 @@ export default function SyllabusRoutineManager() {
       if (res.ok) fetchItems();
     } catch (err) {
       console.error("Failed to delete item:", err);
+      addToast("ডিলিট করতে সমস্যা হয়েছে", "error");
     }
   };
 

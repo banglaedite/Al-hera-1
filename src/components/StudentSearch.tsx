@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import IDCard from "./IDCard";
 import { cn } from "../lib/utils";
+import { useToast } from "./ToastContext";
 
 export default function StudentSearch() {
+  const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("1");
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,7 @@ export default function StudentSearch() {
       setStudent(data);
     } catch (err: any) {
       setError(err.message);
+      addToast(err.message || "ছাত্র খুঁজে পাওয়া যায়নি", "error");
     } finally {
       setLoading(false);
     }

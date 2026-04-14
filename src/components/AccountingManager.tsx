@@ -147,13 +147,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       if (reportClass) params.append("class_name", reportClass);
       
       const res = await fetch(`/api/admin/accounting/reports/category?${params}`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      if (res.ok) {
-        setCategoryReportData(data);
-      } else {
-        setCategoryReportData({ income: [], expenses: [] });
-        console.error(data.error);
-      }
+      setCategoryReportData(data);
     } catch (e) {
       console.error(e);
       setCategoryReportData({ income: [], expenses: [] });
@@ -171,13 +167,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       if (endDate) params.append("end_date", endDate);
 
       const res = await fetch(`/api/admin/accounting/reports/class?${params}`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      if (res.ok) {
-        setClassReportData(data);
-      } else {
-        setClassReportData({ fees: [], income: [], expenses: [] });
-        console.error(data.error);
-      }
+      setClassReportData(data);
     } catch (e) {
       console.error(e);
       setClassReportData({ fees: [], income: [], expenses: [] });
@@ -195,13 +187,12 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       if (reportClass) params.append("class_name", reportClass);
       
       const res = await fetch(`/api/admin/accounting/reports/category?${params}`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      if (res.ok) {
-        if (activeView === "monthly-report") {
-          setMonthlyReportData(data);
-        } else if (activeView === "yearly-report") {
-          setYearlyReportData(data);
-        }
+      if (activeView === "monthly-report") {
+        setMonthlyReportData(data);
+      } else if (activeView === "yearly-report") {
+        setYearlyReportData(data);
       }
     } catch (e) {
       console.error(e);
@@ -233,12 +224,9 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
     if (reportClass) params.append("class_name", reportClass);
 
     const summaryRes = await fetch(`/api/admin/accounting/summary?${params}`);
+    if (!summaryRes.ok) throw new Error(`HTTP error! status: ${summaryRes.status}`);
     const summaryData = await summaryRes.json();
-    if (summaryData.error) {
-      addToast("হিসাব লোড করতে সমস্যা হয়েছে।", "error");
-    } else {
-      setSummary(summaryData);
-    }
+    setSummary(summaryData);
 
     // Fetch previous month summary if month is selected
     if (selectedMonth) {
@@ -253,6 +241,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
       prevParams.append("end_date", lastDay);
       try {
         const prevRes = await fetch(`/api/admin/accounting/summary?${prevParams}`);
+        if (!prevRes.ok) throw new Error(`HTTP error! status: ${prevRes.status}`);
         const prevData = await prevRes.json();
         setPrevSummary(prevData);
       } catch (err) {

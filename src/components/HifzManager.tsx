@@ -120,12 +120,14 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       }
     } catch (error) {
       console.error("Failed to fetch last report", error);
+      addToast("সর্বশেষ রিপোর্ট লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
   const fetchStudents = async () => {
     try {
       const res = await fetch("/api/students?className=All");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       const hifzStudents = data
         .filter((s: any) => s.is_hifz === 1 || s.class?.includes("হিফজ") || s.class?.includes("হেফজ"))
@@ -133,6 +135,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       setStudents(hifzStudents);
     } catch (error) {
       console.error("Failed to fetch students", error);
+      addToast("ছাত্র তালিকা লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -146,6 +149,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       }
     } catch (error) {
       console.error("Failed to fetch settings", error);
+      addToast("সেটিংস লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -182,6 +186,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       }
     } catch (error) {
       console.error("Failed to fetch reports", error);
+      addToast("রিপোর্ট লোড করতে সমস্যা হয়েছে", "error");
     } finally {
       setLoading(false);
     }
@@ -197,6 +202,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       }
     } catch (error) {
       console.error("Failed to fetch all reports", error);
+      addToast("সকল রিপোর্ট লোড করতে সমস্যা হয়েছে", "error");
     } finally {
       setLoading(false);
     }

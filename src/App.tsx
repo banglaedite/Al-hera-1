@@ -29,7 +29,10 @@ import FloatingContact from "./components/FloatingContact";
 import { ToastProvider } from "./components/ToastContext";
 import { cn } from "./lib/utils";
 
+import { useToast } from "./components/ToastContext";
+
 const NoticeBoard = () => {
+  const { addToast } = useToast();
   const [settings, setSettings] = useState<any>(null);
 
   useEffect(() => {
@@ -42,6 +45,7 @@ const NoticeBoard = () => {
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
+        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
       }
     };
     fetchSettings();
@@ -71,6 +75,7 @@ const NoticeBoard = () => {
 };
 
 const Navbar = () => {
+  const { addToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const location = useLocation();
@@ -85,6 +90,7 @@ const Navbar = () => {
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
+        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
       }
     };
     fetchSettings();
