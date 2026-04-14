@@ -221,7 +221,17 @@ export function TeacherManager({
   const filteredTeachers = teachers
     .filter(t => t && t.name && t.name.toLowerCase().includes(search.toLowerCase()))
     .filter(t => (t.type || 'teacher') === viewType)
-    .sort((a, b) => new Date(a.join_date || 0).getTime() - new Date(b.join_date || 0).getTime());
+    .sort((a, b) => {
+      const dateA = a.join_date ? new Date(a.join_date).getTime() : 0;
+      const dateB = b.join_date ? new Date(b.join_date).getTime() : 0;
+      if (isNaN(dateA) && isNaN(dateB)) return 0;
+      if (isNaN(dateA)) return 1;
+      if (isNaN(dateB)) return -1;
+      if (dateA === 0 && dateB === 0) return 0;
+      if (dateA === 0) return 1;
+      if (dateB === 0) return -1;
+      return dateA - dateB;
+    });
 
   const currentMonthSalaries = Array.isArray(salaries) ? salaries.filter(s => s.month === monthNames[selectedMonth] && s.year === selectedYear) : [];
   const paidAmount = currentMonthSalaries.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);

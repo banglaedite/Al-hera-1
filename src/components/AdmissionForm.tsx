@@ -2,20 +2,13 @@ import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { 
   User, 
-  Users, 
-  Calendar, 
-  Droplet, 
   MapPin, 
   Phone, 
-  Camera, 
   FileText, 
-  CreditCard,
   CheckCircle2,
   ArrowRight,
   Loader2,
-  ArrowLeft,
-  Plus,
-  X
+  ArrowLeft
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { LoadingButton } from "./LoadingButton";
@@ -24,45 +17,19 @@ import { useNavigate } from "react-router-dom";
 
 export default function AdmissionForm() {
   const { addToast } = useToast();
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
-    name_en: "",
     father_name: "",
-    father_name_en: "",
-    mother_name: "",
-    mother_name_en: "",
-    dob: "",
-    blood_group: "",
-    birth_cert_no: "",
-    previous_school: "",
-    present_address: "",
-    permanent_address: "",
+    village: "",
+    thana: "",
+    district: "",
     phone: "",
-    whatsapp: "",
-    email: "",
+    previous_school: "",
     className: "১ম",
-    gender: "বালক",
-    nationality: "বাংলাদেশী",
-    religion: "ইসলাম",
-    father_occupation: "",
-    father_nid: "",
-    mother_occupation: "",
-    mother_nid: "",
-    studentId: "",
-    photo_url: "",
-    is_hifz: false,
-    birth_cert_url: "",
-    parent_nid_url: "",
-    guardian_name: "",
-    guardian_relation: "",
-    guardian_nid: "",
-    guardian_mobile: "",
-    interview_permissions: [{ name: "", phone: "", relation: "", nid: "" }]
   });
 
   useEffect(() => {
@@ -72,401 +39,161 @@ export default function AdmissionForm() {
       .catch(err => console.error("Failed to load settings:", err));
   }, []);
 
-  const handleInterviewPermissionChange = (index: number, field: string, value: string) => {
-    const newList = [...formData.interview_permissions];
-    newList[index] = { ...newList[index], [field]: value };
-    setFormData({ ...formData, interview_permissions: newList });
-  };
-
-  const addInterviewPermission = () => {
-    setFormData({
-      ...formData,
-      interview_permissions: [...formData.interview_permissions, { name: "", phone: "", relation: "", nid: "" }]
-    });
-  };
-
-  const removeInterviewPermission = (index: number) => {
-    if (formData.interview_permissions.length === 1) return;
-    const newList = formData.interview_permissions.filter((_, i) => i !== index);
-    setFormData({ ...formData, interview_permissions: newList });
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+    const value = e.target.value;
     setFormData({ ...formData, [e.target.name]: value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
     try {
-      const submissionData = { ...formData, status: 'pending', applied_date: new Date().toISOString() };
-
-      // Save to local SQLite backend
       const res = await fetch("/api/admission", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(submissionData)
+        body: JSON.stringify(formData)
       });
-
-      if (res.ok) {
-        setSubmitted({ success: true });
-        setStep(4);
+      const data = await res.json();
+      if (data.success) {
+        setSubmitted(true);
+        addToast("আবেদন সফলভাবে জমা হয়েছে!", "success");
       } else {
-        throw new Error("Failed to submit");
+        addToast("আবেদন জমা দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।", "error");
       }
     } catch (error) {
-      console.error("Admission failed", error);
-      addToast("আবেদন জমা দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।", "error");
+      addToast("নেটওয়ার্ক সমস্যা। আবার চেষ্টা করুন।", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  if (step === 4 && submitted) {
+  if (submitted) {
     return (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-2xl mx-auto bg-white p-12 rounded-[2.5rem] shadow-xl border border-emerald-100 text-center"
-      >
-        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8">
-          <CheckCircle2 className="w-10 h-10" />
+      <div className="min-h-screen bg-slate-50 py-24 px-4">
+        <div className="max-w-md mx-auto bg-white rounded-[2.5rem] p-12 text-center shadow-xl border border-slate-100">
+          <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8">
+            <CheckCircle2 className="w-12 h-12" />
+          </div>
+          <h2 className="text-3xl font-black text-slate-900 mb-4">আবেদন সফল!</h2>
+          <p className="text-slate-600 mb-8 leading-relaxed">আপনার আবেদনটি সফলভাবে জমা হয়েছে। মাদ্রাসা কর্তৃপক্ষ শীঘ্রই আপনার সাথে যোগাযোগ করবে।</p>
+          <button 
+            onClick={() => navigate("/")}
+            className="w-full px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all"
+          >
+            হোমপেজে ফিরে যান
+          </button>
         </div>
-        <h2 className="text-3xl font-bold text-slate-900 mb-4">আবেদন জমা হয়েছে!</h2>
-        <p className="text-slate-500 mb-8">আল হেরা মাদ্রাসায় ভর্তির জন্য আপনার আবেদনটি সফলভাবে গৃহীত হয়েছে। মাদ্রাসা কর্তৃপক্ষ আপনার সাথে শীঘ্রই যোগাযোগ করবে ইনশাআল্লাহ।</p>
-        
-        <div className="bg-slate-50 p-8 rounded-3xl mb-8 text-center">
-          <p className="text-sm text-slate-600 font-bold">আপনার আবেদনের বর্তমান অবস্থা: <span className="text-emerald-600">পেন্ডিং</span></p>
-        </div>
-
-        <button 
-          onClick={() => window.location.href = "/"}
-          className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors flex items-center justify-center gap-2"
-        >
-          হোম পেজে ফিরে যান <ArrowRight className="w-5 h-5" />
-        </button>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4">
-      <div className="flex justify-between items-center mb-8">
-        <button 
-          onClick={() => navigate(-1)}
-          className="p-3 bg-white text-slate-600 rounded-2xl shadow-sm border border-slate-100 hover:bg-slate-50 transition-all flex items-center gap-2 font-bold"
-        >
-          <ArrowLeft className="w-5 h-5" /> ফিরে যান
-        </button>
-        <div className="text-right">
-          <h1 className="text-3xl font-black text-slate-900">ভর্তি আবেদন ফরম</h1>
-          <p className="text-slate-500 font-bold">নতুন ছাত্র ভর্তির জন্য আবেদন</p>
+    <div className="min-h-screen bg-slate-50 py-24 px-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-black text-slate-900 mb-4">অনলাইন ভর্তি আবেদন</h1>
+          <p className="text-slate-600">নিচের তথ্যগুলো সঠিকভাবে পূরণ করুন</p>
         </div>
-      </div>
 
-      <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-[2rem] mb-8">
-        <h3 className="text-lg font-black text-emerald-900 mb-4 flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5" /> ভর্তির নিয়মাবলী
-        </h3>
-        <ul className="list-disc list-inside text-sm text-emerald-800 space-y-2 font-bold">
-          {settings?.admission_rules ? (
-            settings.admission_rules.split('\n').map((rule: string, i: number) => (
-              <li key={i}>{rule}</li>
-            ))
-          ) : (
-            <>
-              <li>আবেদন ফর্মে প্রদত্ত সকল তথ্য অবশ্যই সঠিক হতে হবে।</li>
-              <li>ছাত্রের পাসপোর্ট সাইজের ছবি আপলোড করতে হবে (সর্বোচ্চ সাইজ ৫ মেগাবাইট)।</li>
-              <li>জন্ম নিবন্ধন এবং অভিভাবকের এনআইডি কার্ডের স্পষ্ট ছবি/লিংক প্রদান করতে হবে।</li>
-              <li>ভর্তি ফি (৫০০ টাকা) বিকাশ, নগদ বা রকেটের মাধ্যমে পরিশোধ করতে হবে।</li>
-              <li>ভর্তি বাতিল বা ফি রিফান্ডের কোনো সুযোগ নেই।</li>
-            </>
+        <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-xl border border-slate-100">
+          {settings?.admission_rules && (
+            <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl">
+              <h4 className="font-bold text-amber-900 mb-2">ভর্তির নিয়মাবলী:</h4>
+              <p className="text-amber-800 text-sm whitespace-pre-wrap">{settings.admission_rules}</p>
+            </div>
           )}
-        </ul>
-      </div>
 
-      {/* Progress Bar */}
-      <div className="flex items-center justify-between mb-12 px-4">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center flex-1 last:flex-none">
-            <div className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors",
-              step >= s ? "bg-emerald-900 text-white" : "bg-slate-200 text-slate-500"
-            )}>
-              {s}
-            </div>
-            {s < 3 && (
-              <div className={cn(
-                "h-1 flex-1 mx-4 rounded-full",
-                step > s ? "bg-emerald-900" : "bg-slate-200"
-              )} />
-            )}
-          </div>
-        ))}
-      </div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">ছাত্রের নাম *</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="ছাত্রের পূর্ণ নাম" />
+                </div>
+              </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-xl border border-slate-100">
-        {step === 1 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <User className="text-emerald-600" /> ব্যক্তিগত তথ্য
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">শিক্ষার্থীর নাম</label>
-                <input required name="name" value={formData.name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="পূর্ণ নাম লিখুন" />
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">পিতার নাম *</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input required type="text" name="father_name" value={formData.father_name} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="পিতার নাম" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Student Name (English)</label>
-                <input required name="name_en" value={formData.name_en} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="Full Name in English" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">পিতার নাম (বাংলায়)</label>
-                <input required name="father_name" value={formData.father_name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="পিতার নাম লিখুন" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Father's Name (English)</label>
-                <input required name="father_name_en" value={formData.father_name_en} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="Father's Name in English" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">পিতার পেশা</label>
-                <input name="father_occupation" value={formData.father_occupation} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">পিতার এনআইডি নম্বর</label>
-                <input name="father_nid" value={formData.father_nid} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">মাতার নাম (বাংলায়)</label>
-                <input required name="mother_name" value={formData.mother_name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="মাতার নাম লিখুন" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Mother's Name (English)</label>
-                <input required name="mother_name_en" value={formData.mother_name_en} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="Mother's Name in English" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">মাতার পেশা</label>
-                <input name="mother_occupation" value={formData.mother_occupation} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">মাতার এনআইডি নম্বর</label>
-                <input name="mother_nid" value={formData.mother_nid} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">জন্ম তারিখ</label>
-                <input required type="date" name="dob" value={formData.dob} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">রক্তের গ্রুপ</label>
-                <select name="blood_group" value={formData.blood_group} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
-                  <option value="">নির্বাচন করুন</option>
-                  <option value="A+">A+</option>
-                  <option value="A-">A-</option>
-                  <option value="B+">B+</option>
-                  <option value="B-">B-</option>
-                  <option value="O+">O+</option>
-                  <option value="O-">O-</option>
-                  <option value="AB+">AB+</option>
-                  <option value="AB-">AB-</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">জন্ম নিবন্ধন নম্বর</label>
-                <input name="birth_cert_no" value={formData.birth_cert_no} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="জন্ম নিবন্ধন নম্বর" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">পূর্ববর্তী শিক্ষা প্রতিষ্ঠান</label>
-                <input name="previous_school" value={formData.previous_school} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="প্রতিষ্ঠানের নাম" />
-              </div>
-            </div>
-            <button type="button" onClick={() => setStep(2)} className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors">পরবর্তী ধাপ</button>
-          </motion.div>
-        )}
 
-        {step === 2 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <MapPin className="text-emerald-600" /> যোগাযোগ ও ঠিকানা
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-semibold text-slate-700">বর্তমান ঠিকানা</label>
-                <textarea required name="present_address" value={formData.present_address} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all h-24" placeholder="গ্রাম, ডাকঘর, উপজেলা, জেলা" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">গ্রাম *</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input required type="text" name="village" value={formData.village} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="গ্রাম" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">থানা *</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input required type="text" name="thana" value={formData.thana} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="থানা" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">জেলা *</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input required type="text" name="district" value={formData.district} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="জেলা" />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-semibold text-slate-700">স্থায়ী ঠিকানা</label>
-                <textarea required name="permanent_address" value={formData.permanent_address} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all h-24" placeholder="গ্রাম, ডাকঘর, উপজেলা, জেলা" />
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">মোবাইল নাম্বার *</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input required type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="মোবাইল নাম্বার" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">মোবাইল নম্বর (অভিভাবক)</label>
-                <input required type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="017XXXXXXXX" />
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">পূর্বের মাদ্রাসা (যদি থাকে)</label>
+                <div className="relative">
+                  <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input type="text" name="previous_school" value={formData.previous_school} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="পূর্বের মাদ্রাসার নাম" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">হোয়াটসঅ্যাপ নম্বর</label>
-                <input required type="tel" name="whatsapp" value={formData.whatsapp} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="017XXXXXXXX" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">ইমেইল এড্রেস (ঐচ্ছিক)</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="example@email.com" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">ভর্তির শ্রেণী</label>
-                <select name="className" value={formData.className} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">কোন ক্লাসে ভর্তি হতে ইচ্ছুক *</label>
+                <select name="className" value={formData.className} onChange={handleChange} className="w-full px-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500">
+                  <option value="প্লে">প্লে</option>
+                  <option value="নার্সারি">নার্সারি</option>
                   <option value="১ম">১ম শ্রেণী</option>
                   <option value="২য়">২য় শ্রেণী</option>
                   <option value="৩য়">৩য় শ্রেণী</option>
                   <option value="৪র্থ">৪র্থ শ্রেণী</option>
                   <option value="৫ম">৫ম শ্রেণী</option>
-                  <option value="হিফজ">হিফজ বিভাগ</option>
+                  <option value="৬ষ্ঠ">৬ষ্ঠ শ্রেণী</option>
+                  <option value="৭ম">৭ম শ্রেণী</option>
+                  <option value="৮ম">৮ম শ্রেণী</option>
+                  <option value="৯ম">৯ম শ্রেণী</option>
+                  <option value="১০ম">১০ম শ্রেণী</option>
+                  <option value="হিফজ">হিফজ</option>
+                  <option value="মক্তব">মক্তব</option>
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">লিঙ্গ</label>
-                <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
-                  <option value="বালক">বালক</option>
-                  <option value="বালিকা">বালিকা</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">জাতীয়তা</label>
-                <input name="nationality" value={formData.nationality} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">ধর্ম</label>
-                <input name="religion" value={formData.religion} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-              </div>
-
-              <div className="md:col-span-2 pt-4 border-t border-slate-100">
-                <h4 className="text-lg font-bold text-slate-800 mb-4">অভিভাবকের তথ্য (পিতা/মাতা ব্যতীত অন্য কেউ হলে)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">অভিভাবকের নাম</label>
-                    <input name="guardian_name" value={formData.guardian_name} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">সম্পর্ক</label>
-                    <input name="guardian_relation" value={formData.guardian_relation} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">এনআইডি নম্বর</label>
-                    <input name="guardian_nid" value={formData.guardian_nid} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">মোবাইল নম্বর</label>
-                    <input name="guardian_mobile" value={formData.guardian_mobile} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="md:col-span-2 pt-4 border-t border-slate-100">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-lg font-bold text-slate-800">সাক্ষাৎকারের অনুমতি ব্যক্তিবর্গ</h4>
-                  <button 
-                    type="button" 
-                    onClick={addInterviewPermission}
-                    className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm hover:bg-emerald-200 transition-all flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> আরও যোগ করুন
-                  </button>
-                </div>
-                <div className="space-y-6">
-                  {formData.interview_permissions.map((person, index) => (
-                    <div key={index} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 relative">
-                      {formData.interview_permissions.length > 1 && (
-                        <button 
-                          type="button" 
-                          onClick={() => removeInterviewPermission(index)}
-                          className="absolute top-4 right-4 text-rose-500 hover:text-rose-700"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      )}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase">নাম</label>
-                          <input 
-                            required 
-                            value={person.name} 
-                            onChange={(e) => handleInterviewPermissionChange(index, 'name', e.target.value)} 
-                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase">মোবাইল নম্বর</label>
-                          <input 
-                            required 
-                            value={person.phone} 
-                            onChange={(e) => handleInterviewPermissionChange(index, 'phone', e.target.value)} 
-                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase">সম্পর্ক</label>
-                          <input 
-                            required 
-                            value={person.relation} 
-                            onChange={(e) => handleInterviewPermissionChange(index, 'relation', e.target.value)} 
-                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase">এনআইডি নম্বর</label>
-                          <input 
-                            required 
-                            value={person.nid} 
-                            onChange={(e) => handleInterviewPermissionChange(index, 'nid', e.target.value)} 
-                            className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
-            <div className="flex gap-4">
-              <button type="button" onClick={() => setStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-colors">পূর্ববর্তী</button>
-              <button type="button" onClick={() => setStep(3)} className="flex-1 py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors">পরবর্তী ধাপ</button>
-            </div>
-          </motion.div>
-        )}
 
-        {step === 3 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <FileText className="text-emerald-600" /> ডকুমেন্ট আপলোড (লিঙ্ক)
-            </h3>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Camera className="w-4 h-4" /> ছাত্রের ছবি (URL)
-                </label>
-                <input name="photo_url" value={formData.photo_url} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="ছবির লিঙ্ক দিন" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> জন্ম নিবন্ধন (URL)
-                </label>
-                <input name="birth_cert_url" value={formData.birth_cert_url} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="জন্ম নিবন্ধনের লিঙ্ক দিন" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Users className="w-4 h-4" /> অভিভাবকের এনআইডি (URL)
-                </label>
-                <input name="parent_nid_url" value={formData.parent_nid_url} onChange={handleChange} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="এনআইডি লিঙ্ক দিন" />
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <button type="button" onClick={() => setStep(2)} className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-colors">পূর্ববর্তী</button>
-              <LoadingButton loading={loading} type="submit" className="flex-1 py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors">
-                আবেদন জমা দিন
+            <div className="flex justify-end pt-6 border-t border-slate-100">
+              <LoadingButton
+                loading={loading}
+                type="submit"
+                className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2"
+              >
+                আবেদন জমা দিন <ArrowRight className="w-5 h-5" />
               </LoadingButton>
             </div>
-          </motion.div>
-        )}
-      </form>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

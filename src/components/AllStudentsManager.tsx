@@ -15,10 +15,16 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
 
   const fetchStudents = async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/archive/students");
-    const data = await res.json();
-    setStudents(data);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/archive/students");
+      if (!res.ok) throw new Error("Failed to fetch students");
+      const data = await res.json();
+      setStudents(data);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -29,6 +35,10 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = selectedClass === "All" || s.class === selectedClass;
     return matchesSearch && matchesClass;
+  }).sort((a, b) => {
+    const rollA = Number(a.roll) || Infinity;
+    const rollB = Number(b.roll) || Infinity;
+    return rollA - rollB;
   });
 
   const fetchFullProfile = async (id: string) => {

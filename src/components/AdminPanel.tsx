@@ -445,22 +445,56 @@ export default function AdminPanel() {
     try {
       const res = await fetch("/api/admin/teachers?t=" + Date.now());
       const data = await res.json();
-      if (Array.isArray(data)) setTeachers(data);
+      if (Array.isArray(data)) {
+        const sortedTeachers = data.sort((a, b) => {
+          const dateA = a.join_date ? new Date(a.join_date).getTime() : 0;
+          const dateB = b.join_date ? new Date(b.join_date).getTime() : 0;
+          if (isNaN(dateA) && isNaN(dateB)) return 0;
+          if (isNaN(dateA)) return 1;
+          if (isNaN(dateB)) return -1;
+          if (dateA === 0 && dateB === 0) return 0;
+          if (dateA === 0) return 1;
+          if (dateB === 0) return -1;
+          return dateA - dateB;
+        });
+        setTeachers(sortedTeachers);
+      }
     } catch (err) {
       console.error("Error fetching teachers:", err);
     }
   };
 
   const fetchStudents = async () => {
-    const res = await fetch("/api/students");
-    const data = await res.json();
-    if (Array.isArray(data)) setStudents(data);
+    try {
+      const res = await fetch("/api/students");
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to fetch students. Status:", res.status, "Response:", text);
+        throw new Error("Failed to fetch students");
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const sortedStudents = data.sort((a, b) => {
+          const rollA = Number(a.roll) || Infinity;
+          const rollB = Number(b.roll) || Infinity;
+          return rollA - rollB;
+        });
+        setStudents(sortedStudents);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    }
   };
 
   const fetchNotices = async () => {
-    const res = await fetch("/api/notices");
-    const data = await res.json();
-    if (Array.isArray(data)) setNotices(data);
+    try {
+      const res = await fetch("/api/notices");
+      if (!res.ok) throw new Error("Failed to fetch notices");
+      const data = await res.json();
+      if (Array.isArray(data)) setNotices(data);
+    } catch (error) {
+      console.error("Error fetching notices:", error);
+    }
   };
 
   const allTabs = [
@@ -1157,9 +1191,10 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
         {admissions.length > 0 ? admissions.map((a) => (
           <div key={a.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col md:flex-row justify-between gap-4">
             <div>
-              <p className="text-lg font-bold text-slate-900">{a.name} {a.name_en && <span className="text-slate-400 font-normal ml-2">({a.name_en})</span>}</p>
+              <p className="text-lg font-bold text-slate-900">{a.name}</p>
               <p className="text-sm text-slate-500">{a.class} শ্রেণী | ফোন: {a.phone}</p>
-              <p className="text-xs text-slate-400 mt-1">পিতা: {a.father_name} {a.father_name_en && `(${a.father_name_en})`} | মাতা: {a.mother_name} {a.mother_name_en && `(${a.mother_name_en})`}</p>
+              <p className="text-xs text-slate-400 mt-1">পিতা: {a.father_name} | গ্রাম: {a.village || ''}, থানা: {a.thana || ''}, জেলা: {a.district || ''}</p>
+              {a.previous_school && <p className="text-xs text-slate-400 mt-1">পূর্বের মাদ্রাসা: {a.previous_school}</p>}
             </div>
             <div className="flex gap-2">
               <button 
@@ -2276,6 +2311,10 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = selectedClass === "All" || s.class === selectedClass;
     return matchesSearch && matchesClass;
+  }).sort((a, b) => {
+    const rollA = Number(a.roll) || Infinity;
+    const rollB = Number(b.roll) || Infinity;
+    return rollA - rollB;
   });
 
   const fetchFullProfile = async (studentId: string) => {
@@ -3698,6 +3737,10 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
   const filteredStudents = students.filter(s => {
     if (filter === "all") return true;
     return (attendance as any)[s.id]?.status === filter;
+  }).sort((a, b) => {
+    const rollA = Number(a.roll) || Infinity;
+    const rollB = Number(b.roll) || Infinity;
+    return rollA - rollB;
   });
 
   return (
@@ -4006,6 +4049,8 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedExam, setSelectedExam] = useState("");
   const [classResults, setClassResults] = useState<any[]>([]);
+  const [editedMarks, setEditedMarks] = useState<Record<string, Record<string, string>>>({});
+  const [savingStudentId, setSavingStudentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [viewMode, setViewMode] = useState<"detailed" | "short">("detailed");
@@ -4106,6 +4151,56 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     }
   };
 
+  const handleSaveSingleStudentResult = async (student: any) => {
+    const studentMarks = editedMarks[student.id];
+    if (!studentMarks || Object.keys(studentMarks).length === 0) {
+      addToast("কোনো পরিবর্তন করা হয়নি", "info");
+      return;
+    }
+
+    setSavingStudentId(student.id);
+    try {
+      const resultsToSave = Object.entries(studentMarks).map(([subjectName, marksStr]) => {
+        const marks = Number(marksStr);
+        const grade = marks >= 80 ? "A+" : marks >= 70 ? "A" : marks >= 60 ? "A-" : marks >= 50 ? "B" : marks >= 40 ? "C" : marks >= 33 ? "D" : "F";
+        return {
+          student_id: student.id,
+          exam_name: selectedExam,
+          subject: subjectName,
+          marks,
+          grade,
+          year: selectedYear,
+          date: new Date().toISOString(),
+          class_name: selectedClass
+        };
+      });
+
+      if (resultsToSave.length === 0) return;
+
+      const res = await fetch("/api/results/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ results: resultsToSave })
+      });
+
+      if (!res.ok) throw new Error("Failed to save");
+      addToast(`${student.name} এর রেজাল্ট সেভ হয়েছে`, "success");
+      
+      setEditedMarks(prev => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      
+      fetchClassResults();
+    } catch (error) {
+      console.error(error);
+      addToast("সেভ করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setSavingStudentId(null);
+    }
+  };
+
   const fetchClassSubjects = async () => {
     if (!selectedClass) return;
     try {
@@ -4146,6 +4241,15 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [printData, setPrintData] = useState<any>(null);
   const [printType, setPrintType] = useState<"short" | "detailed">("short");
+  const [individualPrintData, setIndividualPrintData] = useState<any>(null);
+
+  const handlePrintIndividualResult = (studentResult: any) => {
+    setIndividualPrintData(studentResult);
+    setTimeout(() => {
+      printElement('individual-result-template');
+      setTimeout(() => setIndividualPrintData(null), 1000);
+    }, 500);
+  };
 
   const handleAddSubject = async () => {
     if (!newSubject.name) return;
@@ -4511,13 +4615,13 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 বিষয় ব্যবস্থাপনা
               </button>
               <button 
-                onClick={() => setActiveTab("result-sheets")}
+                onClick={() => setActiveTab("result-entry")}
                 className={cn(
                   "px-6 py-3 font-black text-sm transition-all border-b-2",
-                  activeTab === "result-sheets" ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                  activeTab === "result-entry" ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
                 )}
               >
-                রেজাল্ট সিট
+                রেজাল্ট তৈরি করুন
               </button>
             </div>
 
@@ -4573,7 +4677,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
               </div>
             )}
 
-            {activeTab === "result-sheets" && (
+            {activeTab === "result-entry" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                   <h4 className="text-lg font-black text-slate-900 mb-6">পরীক্ষা ও শ্রেণী নির্বাচন করুন</h4>
@@ -4600,39 +4704,33 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
                 {classResults.length > 0 && (
                   <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                    <h4 className="text-lg font-black text-slate-900 mb-6">{selectedClass} - {selectedExam} ({selectedYear}) এর রেজাল্ট</h4>
-                    <div className="flex gap-4 mb-6">
-                      <button
-                        onClick={() => generateResultSheet(selectedClass, 'short')}
-                        className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Printer className="w-5 h-5" /> সংক্ষিপ্ত রেজাল্ট প্রিন্ট
-                      </button>
-                      <button
-                        onClick={() => generateResultSheet(selectedClass, 'detailed')}
-                        className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Printer className="w-5 h-5" /> বিস্তারিত রেজাল্ট প্রিন্ট
-                      </button>
-                    </div>
+                    <h4 className="text-lg font-black text-slate-900 mb-6">{selectedClass} - {selectedExam} ({selectedYear}) এর রেজাল্ট এন্ট্রি</h4>
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-slate-100 text-slate-900">
                           <th className="p-4 text-left border border-slate-200">রোল</th>
                           <th className="p-4 text-left border border-slate-200">নাম</th>
                           <th className="p-4 text-center border border-slate-200">মোট নম্বর</th>
-                          <th className="p-4 text-center border border-slate-200">গ্রেড</th>
+                          <th className="p-4 text-center border border-slate-200">অ্যাকশন</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {classResults.map((student: any, i: number) => (
-                          <tr key={i} className="border-b border-slate-100">
+                        {[...classResults].sort((a, b) => (Number(a.roll) || Infinity) - (Number(b.roll) || Infinity)).map((student: any, i: number) => {
+                          return (
+                          <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                             <td className="p-4 border border-slate-200">{student.roll}</td>
-                            <td className="p-4 font-bold border border-slate-200">{student.name}</td>
+                            <td className="p-4 font-bold border border-slate-200 cursor-pointer text-emerald-600 hover:underline" onClick={() => openResultEntry(student)}>{student.name}</td>
                             <td className="p-4 text-center font-black border border-slate-200">{student.totalMarks}</td>
-                            <td className="p-4 text-center font-black border border-slate-200">{student.grade}</td>
+                            <td className="p-4 text-center border border-slate-200">
+                              <button
+                                onClick={() => openResultEntry(student)}
+                                className="px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-xl font-bold text-sm transition-all"
+                              >
+                                রেজাল্ট সেট করুন
+                              </button>
+                            </td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>
@@ -4738,9 +4836,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                           <th className="p-5 rounded-l-2xl text-sm font-black uppercase tracking-widest">র‍্যাঙ্ক</th>
                           <th className="p-5 text-sm font-black uppercase tracking-widest">ছাত্রের নাম</th>
                           <th className="p-5 text-sm font-black uppercase tracking-widest">রোল</th>
-                          {viewMode === 'detailed' && <th className="p-5 text-sm font-black uppercase tracking-widest">বিষয়ভিত্তিক নম্বর</th>}
-                          <th className="p-5 text-sm font-black uppercase tracking-widest">মোট</th>
-                          <th className="p-5 rounded-r-2xl text-sm font-black uppercase tracking-widest">গড়</th>
+                          {viewMode === 'detailed' && classSubjects.map(sub => (
+                            <th key={sub.id} className="p-5 text-sm font-black uppercase tracking-widest text-center">{sub.name}</th>
+                          ))}
+                          <th className="p-5 text-sm font-black uppercase tracking-widest text-center">মোট</th>
+                          <th className="p-5 text-sm font-black uppercase tracking-widest text-center">গড়</th>
+                          <th className="p-5 rounded-r-2xl text-sm font-black uppercase tracking-widest text-center print:hidden">অ্যাকশন</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-emerald-50">
@@ -4758,19 +4859,22 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             </td>
                             <td className="p-5 font-black text-slate-900 text-lg">{r.name}</td>
                             <td className="p-5 font-bold text-slate-600 text-lg">{r.roll}</td>
-                            {viewMode === 'detailed' && (
-                              <td className="p-5">
-                                <div className="flex flex-wrap gap-2">
-                                  {r.subjects.map((s: any, i: number) => (
-                                    <span key={i} className="bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg font-bold text-xs border border-emerald-100">
-                                      {s.subject}: {s.marks}
-                                    </span>
-                                  ))}
-                                </div>
+                            {viewMode === 'detailed' && classSubjects.map(sub => (
+                              <td key={sub.id} className="p-5 text-center font-bold text-slate-700 text-lg">
+                                {r.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-"}
                               </td>
-                            )}
-                            <td className="p-5 font-black text-emerald-700 text-xl">{r.totalMarks}</td>
-                            <td className="p-5 rounded-r-2xl font-black text-slate-900 text-xl">{r.averageMarks}</td>
+                            ))}
+                            <td className="p-5 font-black text-emerald-700 text-xl text-center">{r.totalMarks}</td>
+                            <td className="p-5 font-black text-slate-900 text-xl text-center">{r.averageMarks || (r.totalMarks / (classSubjects.length || 1)).toFixed(2)}</td>
+                            <td className="p-5 rounded-r-2xl text-center print:hidden">
+                              <button 
+                                onClick={() => handlePrintIndividualResult(r)}
+                                className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all"
+                                title="মার্কশিট প্রিন্ট করুন"
+                              >
+                                <Printer className="w-5 h-5" />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -4832,6 +4936,60 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 <div className="flex justify-end mt-24">
                   <div className="text-center">
                     <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">মুহতামিমের স্বাক্ষর</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {individualPrintData && (
+              <div id="individual-result-template" className="hidden print:block p-12 bg-white w-full">
+                <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
+                  <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
+                  <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                  <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
+                    মার্কশিট
+                  </h2>
+                  <p className="text-xl font-bold text-slate-700 mt-2">{selectedExam} - {selectedYear}</p>
+                </div>
+                
+                <div className="flex justify-between mb-8 text-lg font-bold text-slate-800">
+                  <div>
+                    <p>ছাত্রের নাম: {individualPrintData.name}</p>
+                    <p>শ্রেণী: {selectedClass}</p>
+                  </div>
+                  <div className="text-right">
+                    <p>রোল: {individualPrintData.roll}</p>
+                    <p>মোট নম্বর: {individualPrintData.totalMarks}</p>
+                    <p>গড় নম্বর: {individualPrintData.averageMarks || (individualPrintData.totalMarks / (classSubjects.length || 1)).toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <table className="w-full border-collapse mb-12 text-lg">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-900">
+                      <th className="p-4 text-left border border-slate-300">বিষয়</th>
+                      <th className="p-4 text-center border border-slate-300">প্রাপ্ত নম্বর</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classSubjects.map((sub, i) => {
+                      const subjectMark = individualPrintData.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
+                      return (
+                        <tr key={i} className="border-b border-slate-200">
+                          <td className="p-4 border border-slate-300 font-bold">{sub.name}</td>
+                          <td className="p-4 text-center font-black border border-slate-300">{subjectMark}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="flex justify-between mt-24">
+                  <div className="text-center">
+                    <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">শিক্ষকের স্বাক্ষর</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">অধ্যক্ষের স্বাক্ষর</div>
                   </div>
                 </div>
               </div>
@@ -5057,14 +5215,20 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
 
   const fetchStudentFees = async (studentId: string) => {
     setLoading(true);
-    const res = await fetch(`/api/students/${studentId}/full-profile`);
-    const data = await res.json();
-    setStudentFees(data.fees);
-    setLoading(false);
-    setSelectedFeeIds([]);
-    setFeeAmountAdjust({});
-    setSelectedMonths([]);
-    setMonthlyFeeAmountAdjust(null);
+    try {
+      const res = await fetch(`/api/students/${studentId}/full-profile`);
+      if (!res.ok) throw new Error("Failed to fetch student fees");
+      const data = await res.json();
+      setStudentFees(data.fees);
+    } catch (error) {
+      console.error("Error fetching student fees:", error);
+    } finally {
+      setLoading(false);
+      setSelectedFeeIds([]);
+      setFeeAmountAdjust({});
+      setSelectedMonths([]);
+      setMonthlyFeeAmountAdjust(null);
+    }
   };
 
   const fetchFeeSetupStatus = async (setupId: string) => {
@@ -5396,6 +5560,10 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                           s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           s.roll.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch && s.class === selectedClass;
+  }).sort((a, b) => {
+    const rollA = Number(a.roll) || Infinity;
+    const rollB = Number(b.roll) || Infinity;
+    return rollA - rollB;
   });
 
   return (

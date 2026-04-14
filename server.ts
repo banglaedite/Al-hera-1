@@ -128,12 +128,16 @@ async function verifyAdminOrSubAdmin(passwordOrEmail: string, requiredPermission
   return false;
 }
 
-app.post("/api/admin/verify-password", async (req, res) => {
-  const { password } = req.body;
-  if (await verifyAdminOrSubAdmin(password, "all")) {
-    res.json({ success: true });
-  } else {
-    res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
+app.post("/api/admin/verify-password", async (req, res, next) => {
+  try {
+    const { password } = req.body;
+    if (await verifyAdminOrSubAdmin(password, "all")) {
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" });
+    }
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -1313,6 +1317,7 @@ async function seedDatabase() {
     try {
       const docRef = await firestore!.collection("teachers").add({ 
         name: data.name || "",
+        type: data.type || "teacher",
         address: data.address || "",
         qualification: data.qualification || "",
         photo_url: data.photo_url || "",
@@ -1343,6 +1348,7 @@ async function seedDatabase() {
     try {
       await firestore.collection("teachers").doc(req.params.id).update({ 
         name: data.name || "",
+        type: data.type || "teacher",
         address: data.address || "",
         qualification: data.qualification || "",
         photo_url: data.photo_url || "",
@@ -2329,7 +2335,8 @@ async function seedDatabase() {
 
       res.json(students);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch students" });
+      console.error("Error in /api/students:", error);
+      res.status(500).json({ error: "Failed to fetch students", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -2590,32 +2597,27 @@ async function seedDatabase() {
     }
   });
 
-  app.post("/api/admission", async (req, res) => {
-    const { 
-      name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
-      dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
-      phone, whatsapp, email, className, is_hifz, photo_url, birth_cert_url, parent_nid_url,
-      guardian_name, guardian_relation, guardian_nid, guardian_mobile,
-      interview_permissions,
-      father_occupation, father_nid, mother_occupation, mother_nid,
-      nationality, religion, gender
-    } = req.body;
+  app.post("/api/admission", async (req, res, next) => {
     try {
+      const { 
+        name, father_name, village, thana, district, phone, previous_school, className
+      } = req.body;
+      
       await firestore.collection("admissions").add({
-        name, name_en, father_name, father_name_en, mother_name, mother_name_en, 
-        father_occupation, father_nid, mother_occupation, mother_nid,
-        nationality, religion, gender,
-        dob, blood_group, birth_cert_no, previous_school, present_address, permanent_address,
-        phone, whatsapp, email, class: className, 
-        is_hifz: is_hifz ? 1 : 0, photo_url, birth_cert_url, parent_nid_url,
-        guardian_name, guardian_relation, guardian_nid, guardian_mobile,
-        interview_permissions: interview_permissions || [],
+        name: name || "", 
+        father_name: father_name || "", 
+        village: village || "",
+        thana: thana || "",
+        district: district || "",
+        phone: phone || "", 
+        previous_school: previous_school || "",
+        class: className || "১ম", 
         status: 'pending',
         created_at: new Date().toISOString()
       });
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Admission application failed" });
+      next(error);
     }
   });
 
@@ -3953,17 +3955,21 @@ async function seedDatabase() {
     }
   };
 
-  app.post("/api/admin/trigger-backup", async (req, res) => {
-    const { password } = req.body;
-    if (!(await verifyAdminOrSubAdmin(password, "all"))) {
-      return res.status(401).json({ error: "Invalid password" });
-    }
-    
-    const success = await generateAndSendBackup();
-    if (success) {
-      res.json({ success: true, message: "Backup sent successfully" });
-    } else {
-      res.status(500).json({ error: "Failed to send backup. Check SMTP settings." });
+  app.post("/api/admin/trigger-backup", async (req, res, next) => {
+    try {
+      const { password } = req.body;
+      if (!(await verifyAdminOrSubAdmin(password, "all"))) {
+        return res.status(401).json({ error: "Invalid password" });
+      }
+      
+      const success = await generateAndSendBackup();
+      if (success) {
+        res.json({ success: true, message: "Backup sent successfully" });
+      } else {
+        res.status(500).json({ error: "Failed to send backup. Check SMTP settings." });
+      }
+    } catch (error) {
+      next(error);
     }
   });
 
