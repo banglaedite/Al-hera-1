@@ -26,53 +26,11 @@ import DashboardHome from "./components/DashboardHome";
 import AdminPanel from "./components/AdminPanel";
 import LandingPage from "./components/LandingPage";
 import FloatingContact from "./components/FloatingContact";
+import { NoticeBoard } from "./components/NoticeBoard";
 import { ToastProvider } from "./components/ToastContext";
 import { cn } from "./lib/utils";
 
 import { useToast } from "./components/ToastContext";
-
-const NoticeBoard = () => {
-  const { addToast } = useToast();
-  const [settings, setSettings] = useState<any>(null);
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await fetch("/api/site-settings");
-        if (res.ok) {
-          const data = await res.json();
-          setSettings(data);
-        }
-      } catch (err) {
-        console.error("Failed to load settings:", err);
-        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
-      }
-    };
-    fetchSettings();
-  }, []);
-
-  if (!settings?.announcement) return null;
-
-  return (
-    <div className="bg-emerald-50 border-b border-emerald-100 py-2 overflow-hidden whitespace-nowrap">
-      <div className="flex animate-marquee">
-        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
-          <Bell className="w-4 h-4" /> {settings.announcement}
-        </span>
-        {/* Duplicate for seamless loop */}
-        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
-          <Bell className="w-4 h-4" /> {settings.announcement}
-        </span>
-        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
-          <Bell className="w-4 h-4" /> {settings.announcement}
-        </span>
-        <span className="mx-8 text-sm font-bold text-emerald-900 flex items-center gap-2">
-          <Bell className="w-4 h-4" /> {settings.announcement}
-        </span>
-      </div>
-    </div>
-  );
-};
 
 const Navbar = () => {
   const { addToast } = useToast();
@@ -106,7 +64,6 @@ const Navbar = () => {
 
   return (
     <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
-      <NoticeBoard />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           <div className="flex items-center gap-3">
@@ -187,6 +144,7 @@ export default function App() {
     <Router>
       <ToastProvider>
         <div className="min-h-screen bg-[#fdfcf8] font-sans text-slate-900">
+          <NoticeBoard />
           <Navbar />
           <main>
             <Routes>

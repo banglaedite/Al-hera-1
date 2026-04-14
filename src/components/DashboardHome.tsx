@@ -52,6 +52,15 @@ const QuickAction = ({ icon: Icon, title, description, to, color }: any) => (
 export default function DashboardHome() {
   const { addToast } = useToast();
   const [settings, setSettings] = useState<any>({});
+  const [rankingCriteria, setRankingCriteria] = useState<"amal" | "result" | "attendance">("amal");
+  const [topStudents, setTopStudents] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/top-students?type=${rankingCriteria}`)
+      .then(res => res.json())
+      .then(setTopStudents)
+      .catch(console.error);
+  }, [rankingCriteria]);
 
   useEffect(() => {
     fetch("/api/site-settings")
@@ -139,6 +148,35 @@ export default function DashboardHome() {
               <QuickAction key={action.id} {...action} />
             ));
           })()}
+        </div>
+      </section>
+
+      {/* Student Ranking */}
+      <section>
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-bold text-slate-900">সেরা ছাত্ররা</h2>
+          <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
+            {(["amal", "result", "attendance"] as const).map(c => (
+              <button 
+                key={c}
+                onClick={() => setRankingCriteria(c)}
+                className={`px-6 py-3 rounded-xl font-bold capitalize transition-all ${rankingCriteria === c ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                {c === "amal" ? "আমল" : c === "result" ? "রেজাল্ট" : "হাজিরা"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {topStudents.map((student, index) => (
+            <div key={student.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center">
+              <div className="w-20 h-20 mx-auto rounded-full bg-slate-100 mb-4 overflow-hidden">
+                <img src={student.photo_url || `https://picsum.photos/seed/${student.id}/100`} className="w-full h-full object-cover" />
+              </div>
+              <h3 className="font-black text-slate-900">{student.name}</h3>
+              <p className="text-emerald-600 font-bold text-sm mt-1">র‍্যাংক: {index + 1}</p>
+            </div>
+          ))}
         </div>
       </section>
     </div>

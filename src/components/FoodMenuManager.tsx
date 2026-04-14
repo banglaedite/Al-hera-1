@@ -98,7 +98,7 @@ export function FoodMenuManager() {
       <AnimatePresence>
         {isAdding && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[90vh]">
               <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <h3 className="text-2xl font-black text-slate-900 flex items-center gap-2">
                   <Utensils className="text-emerald-600" /> {editingItem ? "খাবার এডিট করুন" : "নতুন খাবার যোগ"}
@@ -141,6 +141,10 @@ export function FoodMenuManager() {
                   )}
                 </AnimatePresence>
                 <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">সিরিয়াল (ক্রম)</label>
+                  <input type="number" name="serial" defaultValue={editingItem?.serial || 0} placeholder="0" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">খাবারের ছবির লিংক (URL)</label>
                   <input name="image_url" defaultValue={editingItem?.image_url || ""} placeholder="https://..." className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
@@ -168,7 +172,7 @@ export function FoodMenuManager() {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
-        {menu.map(item => (
+        {menu.sort((a, b) => (a.serial || 0) - (b.serial || 0)).map(item => (
           <motion.div whileHover={{ y: -5 }} key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative group">
             <div className="absolute top-4 right-4 z-30 flex gap-2 opacity-100 transition-all">
               <button 
