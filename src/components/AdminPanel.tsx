@@ -1257,7 +1257,7 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
             <div>
               <p className="text-lg font-bold text-slate-900">{a.name}</p>
               <p className="text-sm text-slate-500">{a.class} শ্রেণী | ফোন: {a.phone}</p>
-              <p className="text-xs text-slate-400 mt-1">পিতা: {a.father_name} | গ্রাম: {a.village || ''}, থানা: {a.thana || ''}, জেলা: {a.district || ''}</p>
+              <p className="text-xs text-slate-400 mt-1">পিতা: {a.father_name} | ঠিকানা: {a.address || ''}</p>
               {a.previous_school && <p className="text-xs text-slate-400 mt-1">পূর্বের মাদ্রাসা: {a.previous_school}</p>}
             </div>
             <div className="flex gap-2">

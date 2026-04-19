@@ -24,9 +24,7 @@ export default function AdmissionForm() {
   const [formData, setFormData] = useState({
     name: "",
     father_name: "",
-    village: "",
-    thana: "",
-    district: "",
+    address: "",
     phone: "",
     previous_school: "",
     className: "১ম",
@@ -128,27 +126,11 @@ export default function AdmissionForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">গ্রাম *</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input required type="text" name="village" value={formData.village} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="গ্রাম" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">থানা *</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input required type="text" name="thana" value={formData.thana} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="থানা" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">জেলা *</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input required type="text" name="district" value={formData.district} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500" placeholder="জেলা" />
-                  </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">ঠিকানা *</label>
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
+                  <textarea required name="address" value={formData.address} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 min-h-[100px]" placeholder="ছাত্রের পূর্ণ ঠিকানা" />
                 </div>
               </div>
 

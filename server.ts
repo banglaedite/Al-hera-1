@@ -2636,15 +2636,13 @@ try {
   app.post("/api/admission", async (req, res, next) => {
     try {
       const { 
-        name, father_name, village, thana, district, phone, previous_school, className
+        name, father_name, address, phone, previous_school, className
       } = req.body;
       
       await firestore.collection("admissions").add({
         name: name || "", 
         father_name: father_name || "", 
-        village: village || "",
-        thana: thana || "",
-        district: district || "",
+        address: address || "",
         phone: phone || "", 
         previous_school: previous_school || "",
         class: className || "১ম", 
@@ -2701,13 +2699,13 @@ try {
         nationality: application.nationality || "বাংলাদেশী",
         religion: application.religion || "ইসলাম",
         gender: application.gender || "বালক",
-        dob: application.dob,
-        blood_group: application.blood_group,
+        dob: application.dob || "",
+        blood_group: application.blood_group || "",
         birth_cert_no: application.birth_cert_no || "",
         previous_school: application.previous_school || "",
-        present_address: application.present_address || "",
-        permanent_address: application.permanent_address || "",
-        phone: application.phone,
+        present_address: application.address || application.present_address || "",
+        permanent_address: application.address || application.permanent_address || "",
+        phone: application.phone || "",
         whatsapp: application.whatsapp,
         email: application.email,
         class: className,

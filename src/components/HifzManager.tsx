@@ -27,9 +27,15 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
   // Add Form State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [satSabok, setSatSabok] = useState(false);
-  const [amukhta, setAmukhta] = useState({ from_para: "", to_para: "", total_pages: "", part: "full" as "full" | "first" | "second" });
+  const [sabokHalf, setSabokHalf] = useState<"none" | "first" | "last">("none");
+  const [amukhta, setAmukhta] = useState({ 
+    from_para: "", 
+    to_para: "", 
+    total_pages: "", 
+    part: "full" as "full" | "first" | "second" | "q1" | "q2" | "q3" | "q4" 
+  });
   const [tilawat, setTilawat] = useState({ from_para: "", to_para: "", total_paras: "" });
-  const [sabina, setSabina] = useState({ paras: "", total_paras: "" });
+  const [sabina, setSabina] = useState({ paras: [] as string[], total_paras: "0" });
 
   // Reports State
   const [reports, setReports] = useState<any[]>([]);
@@ -253,7 +259,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
           total_paras: Number(tilawat.total_paras) || 0
         },
         sabina: {
-          paras: sabina.paras,
+          paras: sabina.paras.join(", "),
           total_paras: Number(sabina.total_paras) || 0
         }
       };
@@ -273,10 +279,11 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
         fetchAllReports();
         // Reset form but keep selectedPara
         setSabokPages("");
+        setSabokHalf("none");
         setSatSabok(false);
-        setAmukhta({ from_para: "", to_para: "", total_pages: "" });
+        setAmukhta({ from_para: "", to_para: "", total_pages: "", part: "full" });
         setTilawat({ from_para: "", to_para: "", total_paras: "" });
-        setSabina({ paras: "", total_paras: "" });
+        setSabina({ paras: [], total_paras: "0" });
       } else {
         const err = await res.json();
         addToast(err.error || "ব্যর্থ হয়েছে", "error");
@@ -391,7 +398,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
             <tbody>
               ${reports.map(r => `
                 <tr>
-                  <td>${new Date(r.date).toLocaleDateString('bn-BD')}</td>
+                  <td>${formatDateBn(r.date)}</td>
                   <td>${r.sabok?.map((s: any) => `${s.reading} (${s.page})`).join(', ') || '-'}</td>
                   <td>${r.sat_sabok ? 'হ্যাঁ' : 'না'}</td>
                   <td>${r.amukhta?.from_para ? `পারা ${r.amukhta.from_para}-${r.amukhta.to_para} (${r.amukhta.total_pages} পৃ)` : '-'}</td>
@@ -444,7 +451,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
             <h1>হিফজ দৈনিক রিপোর্ট লিস্ট</h1>
             <p>আল-হেরা মাদরাসা ও এতিমখানা</p>
           </div>
-          <div class="date-info">তারিখ: ${new Date(selectedDate).toLocaleDateString('bn-BD')}</div>
+          <div class="date-info">তারিখ: ${formatDateBn(selectedDate)}</div>
           <table>
             <thead>
               <tr>
@@ -550,7 +557,15 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
     if (para === "30") return 25;
     return 20;
   };
-  const toBn = (n: number) => n.toString().replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d] as any);
+  const toBn = (n: number | string) => n.toString().replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d as any] as any);
+  
+  const formatDateBn = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const day = toBn(d.getDate().toString().padStart(2, '0'));
+    const month = toBn((d.getMonth() + 1).toString().padStart(2, '0'));
+    const year = toBn(d.getFullYear().toString());
+    return `${day}-${month}-${year}`;
+  };
 
   const handleTilawatChange = (field: 'from_para' | 'to_para', value: string) => {
     const newTilawat = { ...tilawat, [field]: value };
@@ -646,8 +661,11 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
 
       {(activeTab === "add" || activeTab === "reports") && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Student List Sidebar */}
-          <div className="lg:col-span-1 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden flex flex-col h-[800px]">
+          {/* Student List Sidebar - Hide on mobile if student selected to avoid scrolling */}
+          <div className={cn(
+            "lg:col-span-1 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden flex flex-col h-[800px]",
+            selectedStudent && "hidden lg:flex" 
+          )}>
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -734,7 +752,15 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                     )}
                   </div>
                   <div className="flex-1 text-center md:text-left">
-                    <h2 className="text-3xl font-black text-slate-900">{selectedStudent.name}</h2>
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                      <h2 className="text-3xl font-black text-slate-900">{selectedStudent.name}</h2>
+                      <button 
+                        onClick={() => setSelectedStudent(null)}
+                        className="lg:hidden px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all w-fit mx-auto md:mx-0"
+                      >
+                        ← ছাত্র লিস্টে ফিরুন
+                      </button>
+                    </div>
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-3">
                       <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2">
                         <User className="w-4 h-4" /> রোল: {selectedStudent.roll}
@@ -828,17 +854,53 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                           </div>
                         </div>
                         
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {Array.from({ length: getSabokMaxPages(selectedPara) }, (_, i) => i + 1).map(p => (
+                        <div className="flex flex-col gap-4">
+                          <div className="flex flex-wrap gap-3 items-center p-4 bg-white border-2 border-slate-100 rounded-2xl">
+                            <span className="text-sm font-bold text-slate-500 mr-2">পৃষ্ঠার ধরণ:</span>
                             <button 
-                              key={p}
                               type="button"
-                              onClick={() => setSabokPages(prev => prev ? `${prev}, ${toBn(p)}` : toBn(p))}
-                              className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-all"
+                              onClick={() => setSabokHalf("none")}
+                              className={cn("px-4 py-2 rounded-xl font-bold text-xs transition-all", sabokHalf === "none" ? "bg-emerald-600 text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
                             >
-                              {toBn(p)}
+                              পুরো পৃষ্ঠা
                             </button>
-                          ))}
+                            <button 
+                              type="button"
+                              onClick={() => setSabokHalf("first")}
+                              className={cn("px-4 py-2 rounded-xl font-bold text-xs transition-all", sabokHalf === "first" ? "bg-amber-500 text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+                            >
+                              রুকুর আগের অর্ধেক
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setSabokHalf("last")}
+                              className={cn("px-4 py-2 rounded-xl font-bold text-xs transition-all", sabokHalf === "last" ? "bg-orange-500 text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+                            >
+                              রুকুর পরের অর্ধেক
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {Array.from({ length: getSabokMaxPages(selectedPara) }, (_, i) => i + 1).map(p => {
+                              const pageStr = toBn(p);
+                              return (
+                                <button 
+                                  key={p}
+                                  type="button"
+                                  onClick={() => {
+                                    let suffix = "";
+                                    if (sabokHalf === "first") suffix = " (শুরুর অর্ধেক)";
+                                    else if (sabokHalf === "last") suffix = " (শেষের অর্ধেক)";
+                                    const entry = `${pageStr}${suffix}`;
+                                    setSabokPages(prev => prev ? `${prev}, ${entry}` : entry);
+                                  }}
+                                  className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-all"
+                                >
+                                  {pageStr}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
 
@@ -903,17 +965,25 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                                 value={amukhta.part}
                                 onChange={e => {
                                   const val = e.target.value as any;
+                                  let pages = "20";
+                                  if (val === "first" || val === "second") pages = "10";
+                                  else if (val.startsWith("q")) pages = "5";
+                                  
                                   setAmukhta({
                                     ...amukhta, 
                                     part: val,
-                                    total_pages: val === "full" ? "20" : "10"
+                                    total_pages: pages
                                   });
                                 }}
-                                className="w-full p-3 border rounded-xl bg-white"
+                                className="w-full p-3 border rounded-xl bg-white focus:ring-2 focus:ring-purple-500"
                               >
                                 <option value="full">পুরো পারা (২০ পৃষ্ঠা)</option>
-                                <option value="first">প্রথম অংশ (১০ পৃষ্ঠা)</option>
-                                <option value="second">শেষ অংশ (১০ পৃষ্ঠা)</option>
+                                <option value="first">শুরুর অংশ (১০ পৃষ্ঠা)</option>
+                                <option value="second">শেষের অংশ (১০ পৃষ্ঠা)</option>
+                                <option value="q1">৫ পৃষ্ঠা (১-৫)</option>
+                                <option value="q2">৫ পৃষ্ঠা (৬-১০)</option>
+                                <option value="q3">৫ পৃষ্ঠা (১১-১৫)</option>
+                                <option value="q4">৫ পৃষ্ঠা (১৬-২০)</option>
                               </select>
                             </div>
                           ) : (
@@ -1001,18 +1071,41 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
 
                       {/* Sabina */}
                       <div className="space-y-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                        <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                          <Award className="w-5 h-5 text-indigo-600" /> সাপ্তাহিক সবিনা
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">কোন কোন পারা</label>
-                            <input placeholder="যেমন: ১, ২, ৩" value={sabina.paras} onChange={e => setSabina({...sabina, paras: e.target.value})} className="w-full p-3 border rounded-xl bg-white" />
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                            <Award className="w-5 h-5 text-indigo-600" /> সাপ্তাহিক সবিনা
+                          </h4>
+                          <div className="bg-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full text-xs font-black">
+                            মোট: {toBn(sabina.total_paras)} পারা
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">মোট কত পারা</label>
-                            <input type="number" placeholder="পারা সংখ্যা" value={sabina.total_paras} onChange={e => setSabina({...sabina, total_paras: e.target.value})} className="w-full p-3 border rounded-xl bg-white" />
-                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from({ length: 30 }, (_, i) => String(i + 1)).map(p => {
+                            const isSelected = sabina.paras.includes(p);
+                            return (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => {
+                                  const newParas = isSelected 
+                                    ? sabina.paras.filter(x => x !== p)
+                                    : [...sabina.paras, p].sort((a, b) => Number(a) - Number(b));
+                                  setSabina({
+                                    paras: newParas,
+                                    total_paras: String(newParas.length)
+                                  });
+                                }}
+                                className={cn(
+                                  "w-12 h-12 flex items-center justify-center rounded-xl font-bold transition-all border-2",
+                                  isSelected 
+                                    ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
+                                    : "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:bg-indigo-50"
+                                )}
+                              >
+                                {toBn(p)}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -1107,7 +1200,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                                 {reports.map((report) => (
                                   <tr key={report.id} className="hover:bg-slate-50">
                                     <td className="p-4 font-bold text-slate-900 whitespace-nowrap">
-                                      {new Date(report.date).toLocaleDateString('bn-BD')}
+                                      {formatDateBn(report.date)}
                                     </td>
                                     <td className="p-4 text-sm">
                                       {report.sabok?.map((s: any, i: number) => (
@@ -1386,7 +1479,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                 </div>
                 <div>
                   <h3 className="text-2xl font-black text-slate-900">{showDetails.student.name}</h3>
-                  <p className="text-slate-500 font-bold">{new Date(selectedDate).toLocaleDateString('bn-BD')} এর রিপোর্ট</p>
+                  <p className="text-slate-500 font-bold">{formatDateBn(selectedDate)} এর রিপোর্ট</p>
                 </div>
               </div>
               <button onClick={() => setShowDetails(null)} className="p-3 bg-white text-slate-400 rounded-2xl hover:text-rose-500 shadow-sm transition-colors">
