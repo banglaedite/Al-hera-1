@@ -108,6 +108,18 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const parseRoll = (val: any) => {
+  if (val === undefined || val === null || val === "") return Infinity;
+  let s = String(val).trim();
+  const banglaDigits: Record<string, string> = {
+    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+  };
+  s = s.replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+  const n = parseInt(s.replace(/[^0-9]/g, ''));
+  return isNaN(n) ? Infinity : n;
+};
+
 async function verifyAdminOrSubAdmin(passwordOrEmail: string, requiredPermission?: string) {
   const adminPassword = process.env.VITE_ADMIN_PASSWORD || "1234";
   if (passwordOrEmail === adminPassword || passwordOrEmail === "১২৩৪") return true;
@@ -222,7 +234,7 @@ app.get("/api/health", async (req, res) => {
 process.env.SMTP_HOST = "smtp.gmail.com";
 process.env.SMTP_PORT = "587";
 process.env.SMTP_USER = "newdrshahidul@gmail.com";
-process.env.SMTP_PASS = "mogt vhhm jtme rjzg";
+process.env.SMTP_PASS = "dwaxlbdksrgckucr";
 process.env.SENDER_EMAIL = "newdrshahidul@gmail.com";
 
 // --- Database Seeding ---
@@ -314,11 +326,11 @@ async function seedDatabase() {
     }
   }
 
-  try {
-    await seedDatabase();
-  } catch (e) {
-    console.error("Critical error during database seeding:", e);
-  }
+try {
+  await seedDatabase();
+} catch (e) {
+  console.error("Critical error during database seeding:", e);
+}
 
   // --- Sequential Serial Number Helper ---
   async function getNextSerial(prefix: string = "AHM") {
@@ -978,11 +990,12 @@ async function seedDatabase() {
   app.get("/api/food-menu", async (req, res) => {
     try {
       const db = getFirestoreInstance();
+      if (!db) return res.status(500).json({ error: "Firestore not initialized" });
       const foodMenuSnapshot = await db.collection("food_menu").get();
       const foodMenu = foodMenuSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() as any }))
         .filter(item => item.is_active === 1)
-        .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        .sort((a, b) => parseRoll(a.serial) - parseRoll(b.serial));
       res.json(foodMenu);
     } catch (error) {
       console.error(error);
@@ -991,12 +1004,15 @@ async function seedDatabase() {
   });
 
   app.post("/api/admin/food-menu", async (req, res) => {
-    const { title, description, image_url, is_active } = req.body;
+    const { title, description, image_url, is_active, serial } = req.body;
     try {
-      await firestore!.collection("food_menu").add({ 
+      const db = getFirestoreInstance();
+      if (!db) return res.status(500).json({ error: "Firestore not initialized" });
+      await db.collection("food_menu").add({ 
         title, 
         description, 
         image_url, 
+        serial: serial || null,
         date: new Date().toISOString(),
         is_active: is_active !== undefined ? Number(is_active) : 1
       });
@@ -1020,12 +1036,13 @@ async function seedDatabase() {
   });
 
   app.put("/api/admin/food-menu/:id", async (req, res) => {
-    const { title, description, image_url, is_active } = req.body;
+    const { title, description, image_url, is_active, serial } = req.body;
     try {
       await firestore.collection("food_menu").doc(req.params.id).update({ 
         title, 
         description, 
         image_url,
+        serial: serial !== undefined ? Number(serial) : 0,
         is_active: is_active !== undefined ? Number(is_active) : 1
       });
       res.json({ success: true });
@@ -2255,7 +2272,9 @@ async function seedDatabase() {
 
       results.sort((a, b) => {
         if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
-        if (a.roll !== b.roll) return (Number(a.roll) || 0) - (Number(b.roll) || 0);
+        if (a.roll !== b.roll) {
+          return parseRoll(a.roll) - parseRoll(b.roll);
+        }
         return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
       });
 
@@ -2289,12 +2308,14 @@ async function seedDatabase() {
   app.post("/api/admin/fees/pay", async (req, res) => {
     const { fee_ids, paid_amounts, discount, total_paid, payment_method } = req.body;
     try {
-      const batch = firestore.batch();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const batch = db.batch();
       const transactionId = await getNextSerial("AHM");
       
       for (const id of fee_ids) {
         const amount = paid_amounts[id];
-        const feeRef = firestore.collection("fees").doc(id);
+        const feeRef = db.collection("fees").doc(id);
         const updateData: any = {
           status: 'paid',
           paid_date: new Date().toISOString(),
@@ -2339,7 +2360,7 @@ async function seedDatabase() {
 
       students.sort((a, b) => {
         if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
-        return (Number(a.roll) || 0) - (Number(b.roll) || 0);
+        return parseRoll(a.roll) - parseRoll(b.roll);
       });
 
       if (limit) {
@@ -3140,10 +3161,19 @@ async function seedDatabase() {
     const { className } = req.params;
     const { date } = req.query;
     try {
-      const studentsSnapshot = await firestore.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
-      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
+      let studentsQuery = db.collection("students").where("deleted_at", "==", null);
+      if (className !== "All") {
+        studentsQuery = studentsQuery.where("class", "==", className);
+      }
+      const studentsSnapshot = await studentsQuery.get();
+      const students = studentsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
       
-      const attendanceSnapshot = await firestore.collection("attendance").where("date", "==", date).get();
+      const attendanceSnapshot = await db.collection("attendance").where("date", "==", date).get();
       const attendance = attendanceSnapshot.docs.map(doc => doc.data() as any);
       
       const result = {
@@ -3153,6 +3183,7 @@ async function seedDatabase() {
       
       res.json(result);
     } catch (error) {
+      console.error("Fetch attendance error:", error);
       res.status(500).json({ error: "Failed to fetch attendance" });
     }
   });
@@ -3260,19 +3291,29 @@ async function seedDatabase() {
 
   // --- ZKTeco ADMS (Cloud) Direct Integration ---
   app.get("/iclock/cdata", (req, res) => {
+    console.log(`ADMS GET /iclock/cdata - Query:`, req.query);
+    // Standard ZKTeco response for initial connection
     res.send("OK");
   });
 
   app.get("/iclock/getrequest", (req, res) => {
+    console.log(`ADMS GET /iclock/getrequest - Query:`, req.query);
     res.send("OK");
   });
 
   app.post("/iclock/cdata", express.text({ type: '*/*' }), async (req, res) => {
+    const sn = req.query.SN || "unknown";
+    const table = req.query.table || "unknown";
+    console.log(`ADMS POST /iclock/cdata [SN:${sn}, Table:${table}] - Body received.`);
+    
     try {
       const rawData = req.body;
       if (!rawData || typeof rawData !== 'string') {
+        console.log("ADMS: Empty or invalid body received.");
         return res.send("OK");
       }
+
+      console.log("ADMS Raw Data Snippet:", rawData.substring(0, 100));
 
       const lines = rawData.split('\n');
       for (const line of lines) {
@@ -3284,19 +3325,52 @@ async function seedDatabase() {
           const timestamp = parts[1].trim(); // Format: "YYYY-MM-DD HH:MM:SS"
           
           const dateObj = new Date(timestamp);
-          if (isNaN(dateObj.getTime())) continue;
+          if (isNaN(dateObj.getTime())) {
+            console.log(`ADMS: Invalid timestamp found: ${timestamp}`);
+            continue;
+          }
 
           const date = dateObj.toISOString().split('T')[0];
           const time = dateObj.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 
-          // Assuming student for direct ADMS push. For a real app, you'd check if ID belongs to student or teacher.
-          const docId = `${userId}_${date}`;
-          const docRef = firestore.collection('attendance').doc(docId);
+          const db = getFirestoreInstance();
+          if (!db) continue;
+
+          // For ADMS, we need to map the biometric ID back to a user
+          // First search for the student with this biometric_id
+          const studentSnapshot = await db.collection("students").where("biometric_id", "==", userId).get();
+          const teacherSnapshot = await db.collection("teachers").where("biometric_id", "==", userId).get();
+
+          let targetId = userId;
+          let targetType: 'student' | 'teacher' = 'student';
+          let found = false;
+
+          if (!studentSnapshot.empty) {
+            targetId = studentSnapshot.docs[0].id;
+            targetType = 'student';
+            found = true;
+          } else if (!teacherSnapshot.empty) {
+            targetId = teacherSnapshot.docs[0].id;
+            targetType = 'teacher';
+            found = true;
+          }
+
+          if (!found) {
+            console.log(`ADMS: Biometric ID ${userId} not mapped to any student or teacher.`);
+            // We'll still save it under userId if not found, or maybe just skip it for now
+            // For now, let's just skip it to keep the database clean
+            continue;
+          }
+
+          const collectionName = targetType === 'teacher' ? 'teacher_attendance' : 'attendance';
+          const idField = targetType === 'teacher' ? 'teacher_id' : 'student_id';
+          const docId = `${targetId}_${date}`;
+          const docRef = db.collection(collectionName).doc(docId);
           const doc = await docRef.get();
 
           if (!doc.exists) {
             await docRef.set({
-              student_id: userId,
+              [idField]: targetId,
               date,
               status: 'present',
               check_in: time,
@@ -3304,18 +3378,20 @@ async function seedDatabase() {
               method: 'device',
               updated_at: new Date().toISOString()
             });
+            console.log(`ADMS: Recorded Check-in for ${targetType} ${targetId}`);
           } else {
             await docRef.update({
               check_out: time,
               updated_at: new Date().toISOString()
             });
+            console.log(`ADMS: Recorded Check-out for ${targetType} ${targetId}`);
           }
         }
       }
       res.send("OK");
     } catch (error) {
-      console.error("ADMS Error:", error);
-      res.send("OK"); // Always return OK so device clears its buffer
+      console.error("ADMS Processing Error:", error);
+      res.send("OK"); 
     }
   });
 
@@ -3528,12 +3604,14 @@ async function seedDatabase() {
     console.log(`Fetching results for class: ${className}, exam: ${exam_name}, year: ${year}`);
     try {
       const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
       const studentsSnapshot = await db.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       console.log(`Found ${students.length} students for class ${className}`);
       
       let resultsQuery = db.collection("results")
-        .where("exam_name", "==", exam_name)
+        .where("exam_name", "==", exam_name || "")
         .where("class_name", "==", className);
       
       if (year) {
@@ -3542,12 +3620,23 @@ async function seedDatabase() {
 
       const resultsSnapshot = await resultsQuery.get();
       const results = resultsSnapshot.docs.map(doc => doc.data() as any);
-      console.log(`Found ${results.length} result documents for exam ${exam_name}, class ${className}, year ${year}`);
+      
+      // Fetch current active subjects for this class
+      const subjectsSnapshot = await db.collection("subjects").where("class", "==", className).get();
+      const validSubjectNames = new Set(subjectsSnapshot.docs.map(doc => doc.data().name));
       
       const data = students.map((s: any) => {
-        const studentResults = results.filter((r: any) => r.student_id === s.id);
+        const rawStudentResults = results.filter((r: any) => r.student_id === s.id);
+        const uniqueSubjectsMap = new Map();
+        rawStudentResults.forEach((r: any) => {
+          if (validSubjectNames.has(r.subject)) {
+            uniqueSubjectsMap.set(r.subject, r);
+          }
+        });
+        
+        const studentResults = Array.from(uniqueSubjectsMap.values());
         const totalMarks = studentResults.reduce((sum: number, r: any) => sum + (Number(r.marks) || 0), 0);
-        const avgMarks = studentResults.length > 0 ? totalMarks / studentResults.length : 0;
+        const avgMarks = validSubjectNames.size > 0 ? totalMarks / validSubjectNames.size : (studentResults.length > 0 ? totalMarks / studentResults.length : 0);
         return {
           ...s,
           subjects: studentResults,
@@ -3556,38 +3645,36 @@ async function seedDatabase() {
         };
       });
 
-      data.sort((a, b) => b.totalMarks - a.totalMarks);
+      data.sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
       res.json(data);
     } catch (error) {
       console.error("Fetch class results error:", error);
-      res.status(500).json({ error: "Failed to fetch results", details: error instanceof Error ? error.message : String(error) });
+      res.status(500).json({ error: "Failed to fetch results", details: String(error) });
     }
   });
 
   app.post("/api/results/bulk", async (req, res) => {
     const { results } = req.body;
-    if (!Array.isArray(results)) {
-      return res.status(400).json({ error: "Results must be an array" });
+    if (!Array.isArray(results) || results.length === 0) {
+      return res.status(400).json({ error: "Results must be a non-empty array" });
     }
     try {
       const db = getFirestoreInstance();
-      // Group results by exam, subject, class, and year to minimize queries
       const examName = results[0].exam_name;
-      const subject = results[0].subject;
       const className = results[0].class_name;
       const resultYear = results[0].year || new Date().getFullYear().toString();
 
-      // Fetch all existing results for this specific group
+      // Fetch ALL results for this exam, class, and year across ALL subjects in this batch
       const existingSnapshot = await db.collection("results")
         .where("exam_name", "==", examName)
-        .where("subject", "==", subject)
         .where("class_name", "==", className)
         .where("year", "==", resultYear)
         .get();
       
       const existingResultsMap = new Map();
       existingSnapshot.docs.forEach(doc => {
-        existingResultsMap.set(doc.data().student_id, { id: doc.id, ...doc.data() });
+        const data = doc.data();
+        existingResultsMap.set(`${data.student_id}_${data.subject}`, { id: doc.id, ...data });
       });
 
       const batches = [];
@@ -3595,8 +3682,9 @@ async function seedDatabase() {
       let operationsCount = 0;
 
       for (const r of results) {
-        const { student_id, marks, grade, date } = r;
-        const existing = existingResultsMap.get(student_id);
+        const { student_id, subject, marks, grade, date } = r;
+        const lookupKey = `${student_id}_${subject}`;
+        const existing = existingResultsMap.get(lookupKey);
         
         if (existing) {
           currentBatch.update(db.collection("results").doc(existing.id), {
@@ -3608,14 +3696,8 @@ async function seedDatabase() {
         } else {
           const newDocRef = db.collection("results").doc();
           currentBatch.set(newDocRef, {
-            student_id,
-            exam_name: examName,
-            subject,
+            ...r,
             marks: Number(marks),
-            grade,
-            date,
-            class_name: className,
-            year: resultYear,
             created_at: new Date().toISOString()
           });
         }
@@ -3643,7 +3725,9 @@ async function seedDatabase() {
   app.post("/api/results", async (req, res) => {
     const { student_id, exam_name, subject, marks, grade, date } = req.body;
     try {
-      await firestore.collection("results").add({
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("results").add({
         student_id,
         exam_name,
         subject,
@@ -3660,7 +3744,9 @@ async function seedDatabase() {
 
   app.get("/api/results/:studentId", async (req, res) => {
     try {
-      const snapshot = await firestore.collection("results").where("student_id", "==", req.params.studentId).get();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const snapshot = await db.collection("results").where("student_id", "==", req.params.studentId).get();
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       res.json(results);
     } catch (error) {
@@ -4081,16 +4167,19 @@ async function seedDatabase() {
   });
 
   app.post("/api/subjects", async (req, res) => {
-    const { className, name, full_marks } = req.body;
+    const { class_name: className, name, full_marks } = req.body;
     try {
-      await firestore.collection("subjects").add({
-        class: className,
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("subjects").add({
+        class: className || "Unknown",
         name,
         full_marks: full_marks || 100,
         created_at: new Date().toISOString()
       });
       res.json({ success: true });
     } catch (error) {
+      console.error("Add subject error:", error);
       res.status(500).json({ error: "Failed to add subject" });
     }
   });

@@ -59,6 +59,7 @@ const Navbar = () => {
   const navItems = [
     { name: "হোম", path: "/", icon: Home },
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
+    { name: "রেজাল্ট", path: "/parent?tab=results", icon: BookOpen },
     { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
   ];
 

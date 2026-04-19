@@ -26,6 +26,7 @@ import {
   Loader2,
   GraduationCap,
   Calendar,
+  CheckSquare,
   Save,
   UserCheck,
   FileText,
@@ -68,6 +69,18 @@ import { cn } from "../lib/utils";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { toPng } from 'html-to-image';
+
+const parseRoll = (val: any) => {
+  if (val === undefined || val === null || val === "") return Infinity;
+  let s = String(val).trim();
+  const banglaDigits: Record<string, string> = {
+    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+  };
+  s = s.replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+  const n = parseInt(s.replace(/[^0-9]/g, ''));
+  return isNaN(n) ? Infinity : n;
+};
 
 import { LoadingButton } from "./LoadingButton";
 
@@ -2135,13 +2148,17 @@ const downloadPDF = async (elementId: string, fileName: string, addToast: any, s
   element.style.width = '800px';
   element.style.position = 'relative';
   element.style.backgroundColor = '#ffffff';
-  element.style.padding = '40px';
+  element.style.padding = '20px';
+  element.style.overflow = 'visible';
   
   try {
     const data = await toPng(element, { 
       pixelRatio: 2, 
       backgroundColor: '#ffffff',
-      width: 800
+      width: 800,
+      style: {
+        overflow: 'visible'
+      }
     });
     
     const pdf = new jsPDF('p', 'mm', size);
@@ -2150,18 +2167,31 @@ const downloadPDF = async (elementId: string, fileName: string, addToast: any, s
     
     // Add margins (10mm)
     const margin = 10;
-    const contentWidth = pdfWidth - (margin * 2);
+    const availableWidth = pdfWidth - (margin * 2);
+    const availableHeight = pdfHeight - (margin * 2);
     
-    // Get image dimensions to calculate height
+    // Get image dimensions
     const img = new Image();
     img.src = data;
     await new Promise((resolve) => {
       img.onload = resolve;
     });
     
-    const imgHeight = (img.height * contentWidth) / img.width;
+    // For A4, we want 190mm width (210 - 20)
+    const targetWidth = availableWidth;
+    let finalWidth = targetWidth;
+    let finalHeight = (img.height * finalWidth) / img.width;
     
-    pdf.addImage(data, 'PNG', margin, margin, contentWidth, imgHeight);
+    // Scale down if height exceeds page available height
+    if (finalHeight > availableHeight) {
+      finalHeight = availableHeight;
+      finalWidth = (img.width * finalHeight) / img.height;
+    }
+    
+    // Center horizontally if scaled by height
+    const xOffset = margin + (availableWidth - finalWidth) / 2;
+    
+    pdf.addImage(data, 'PNG', xOffset, margin, finalWidth, finalHeight);
     pdf.save(fileName);
   } catch (error) {
     console.error("PDF generation error:", error);
@@ -2296,7 +2326,7 @@ const printElement = (elementId: string) => {
 function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullProfile, setFullProfile }: { settings: any, onUpdate: () => void, classesList: string[], setActiveTab: (tab: string) => void, fullProfile: any, setFullProfile: (profile: any) => void }) {
   const { addToast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedClass, setSelectedClass] = useState("All");
+  const [selectedClass, setSelectedClass] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -2371,9 +2401,10 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   const [loading, setLoading] = useState(false);
 
   const fetchStudents = async (newOffset: number = 0) => {
+    if (!selectedClass) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/students?limit=50&offset=${newOffset}`);
+      const res = await fetch(`/api/students?className=${encodeURIComponent(selectedClass)}&limit=50&offset=${newOffset}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (newOffset === 0) {
@@ -2389,20 +2420,20 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   };
 
   useEffect(() => {
-    fetchStudents();
-  }, []);
+    if (selectedClass) {
+      fetchStudents(0);
+    } else {
+      setStudents([]);
+    }
+  }, [selectedClass]);
 
   const classes = ["All", ...classesList];
 
   const filteredStudents = students.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || (s.studentId || s.id).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = selectedClass === "All" || s.class === selectedClass;
     return matchesSearch && matchesClass;
-  }).sort((a, b) => {
-    const rollA = Number(a.roll) || Infinity;
-    const rollB = Number(b.roll) || Infinity;
-    return rollA - rollB;
-  });
+  }).sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
 
   const fetchFullProfile = async (studentId: string) => {
     setLoadingProfile(true);
@@ -3727,57 +3758,54 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredStudents.map((s) => (
-              <motion.div 
-                key={s.id}
-                layoutId={s.id}
-                onClick={() => handleViewProfile(s)}
-                className="group bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:border-emerald-200 hover:bg-white hover:shadow-xl transition-all cursor-pointer relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ChevronRight className="w-6 h-6 text-emerald-400" />
-                </div>
-                <div className="flex items-center gap-6">
-                  <img src={s.photo_url || `https://picsum.photos/seed/${s.id}/100`} className="w-16 h-16 rounded-2xl object-cover shadow-md" referrerPolicy="no-referrer" />
-                  <div>
-                    <h4 className="font-black text-slate-900 text-lg group-hover:text-emerald-700 transition-colors">{s.name}</h4>
-                    <p className="text-emerald-600 font-bold text-sm">{s.class} শ্রেণী | রোল: {s.roll}</p>
-                    <p className="text-[10px] text-slate-400 font-black mt-1 uppercase tracking-widest">ID: {s.studentId || s.id}</p>
-                  </div>
-                </div>
-                {s.whatsapp && (
-                  <div className="absolute bottom-4 right-4 z-10 flex gap-2">
-                    <a 
-                      href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '').startsWith('0') ? '88' + s.whatsapp.replace(/[^0-9]/g, '') : s.whatsapp.replace(/[^0-9]/g, '')}?text=আসসালামু%20আলাইকুম,%20${s.name}%20এর%20অভিভাবক,%20`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-2 bg-emerald-100 text-emerald-600 rounded-full hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center justify-center"
-                      title="WhatsApp"
-                    >
-                      <MessageCircle className="w-5 h-5" />
-                    </a>
-                    {s.email && (
-                      <a 
-                        href={`mailto:${s.email}?subject=মাদরাসা যোগাযোগ - ${s.name}&body=আসসালামু আলাইকুম, ${s.name} এর অভিভাবক, `}
-                        onClick={(e) => e.stopPropagation()}
-                        className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-500 hover:text-white transition-all shadow-sm flex items-center justify-center"
-                        title="Gmail"
-                      >
-                        <Mail className="w-5 h-5" />
-                      </a>
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            ))}
-            {filteredStudents.length === 0 && (
-              <div className="col-span-full text-center py-20">
-                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-10 h-10 text-slate-300" />
-                </div>
-                <p className="text-slate-400 font-bold">কোন ছাত্র পাওয়া যায়নি</p>
+            {!selectedClass ? (
+              <div className="col-span-full py-20 text-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                <Filter className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                <h4 className="text-xl font-black text-slate-900 mb-2">শ্রেণী নির্বাচন করুন</h4>
+                <p className="text-slate-500 font-bold">ছাত্র তালিকা দেখতে উপরে থেকে একটি শ্রেণী সিলেক্ট করুন</p>
               </div>
+            ) : filteredStudents.length === 0 ? (
+              <div className="col-span-full text-center py-20 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                <div className="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mx-auto mb-4">
+                  <Users className="w-10 h-10 text-slate-200" />
+                </div>
+                <p className="text-slate-400 font-bold">এই শ্রেণীতে কোনো ছাত্র পাওয়া যায়নি</p>
+              </div>
+            ) : (
+              filteredStudents.map((s) => (
+                <motion.div 
+                  key={s.id}
+                  layoutId={s.id}
+                  onClick={() => handleViewProfile(s)}
+                  className="group bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:border-emerald-200 hover:bg-white hover:shadow-xl transition-all cursor-pointer relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ChevronRight className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <img src={s.photo_url || `https://picsum.photos/seed/${s.id}/100`} className="w-16 h-16 rounded-2xl object-cover shadow-md" referrerPolicy="no-referrer" />
+                    <div>
+                      <h4 className="font-black text-slate-900 text-lg group-hover:text-emerald-700 transition-colors">{s.name}</h4>
+                      <p className="text-emerald-600 font-bold text-sm">{s.class} শ্রেণী | রোল: {s.roll}</p>
+                      <p className="text-[10px] text-slate-400 font-black mt-1 uppercase tracking-widest">ID: {s.studentId || s.id}</p>
+                    </div>
+                  </div>
+                  {s.whatsapp && (
+                    <div className="absolute bottom-4 right-4 z-10 flex gap-2">
+                      <a 
+                        href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '').startsWith('0') ? '88' + s.whatsapp.replace(/[^0-9]/g, '') : s.whatsapp.replace(/[^0-9]/g, '')}?text=আসসালামু%20আলাইকুম,%20${s.name}%20এর%20অভিভাবক,%20`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 bg-emerald-100 text-emerald-600 rounded-full hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center justify-center"
+                        title="WhatsApp"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                      </a>
+                    </div>
+                  )}
+                </motion.div>
+              ))
             )}
           </div>
           <div className="mt-8 text-center">
@@ -3811,7 +3839,18 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
   const [hasSaved, setHasSaved] = useState(false);
   const [filter, setFilter] = useState<'all' | 'present' | 'absent'>('all');
 
-  const classes = classesList;
+  const classes = ["All", ...classesList];
+
+  const setAllStatus = (status: 'present' | 'absent') => {
+    const newAttendance = { ...attendance };
+    students.forEach(s => {
+      newAttendance[s.id] = {
+        ...newAttendance[s.id],
+        status
+      };
+    });
+    setAttendance(newAttendance);
+  };
 
   const fetchAttendance = async () => {
     if (!selectedClass) return;
@@ -3884,11 +3923,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
   const filteredStudents = students.filter(s => {
     if (filter === "all") return true;
     return (attendance as any)[s.id]?.status === filter;
-  }).sort((a, b) => {
-    const rollA = Number(a.roll) || Infinity;
-    const rollB = Number(b.roll) || Infinity;
-    return rollA - rollB;
-  });
+  }).sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
 
   return (
     <div className="space-y-6">
@@ -3926,6 +3961,28 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
               ))}
             </div>
           </div>
+          {selectedClass && (
+            <div className="flex flex-wrap gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 items-center">
+              <span className="text-emerald-800 font-black text-sm flex items-center gap-2">
+                <CheckSquare className="w-5 h-5" /> বাল্ক হাজিরা:
+              </span>
+              <button
+                onClick={() => setAllStatus('present')}
+                className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-sm hover:bg-emerald-700 shadow-sm shadow-emerald-100 transition-all flex items-center gap-2"
+              >
+                সবাই উপস্থিত
+              </button>
+              <button
+                onClick={() => setAllStatus('absent')}
+                className="px-6 py-2 bg-rose-600 text-white rounded-xl font-black text-sm hover:bg-rose-700 shadow-sm shadow-rose-100 transition-all flex items-center gap-2"
+              >
+                সবাই অনুপস্থিত
+              </button>
+              <p className="ml-auto text-emerald-700 font-black text-xs hidden md:block">
+                * সবার হাজিরা এক ক্লিকের পর ম্যানুয়ালি পরিবর্তন করতে পারবেন
+              </p>
+            </div>
+          )}
         </div>
 
         {selectedClass ? (
@@ -4211,7 +4268,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [studentSubjects, setStudentSubjects] = useState<{ name: string, marks: string }[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"results" | "subjects" | "result-sheets">("results");
+  const [activeTab, setActiveTab] = useState<"results" | "subjects" | "result-entry">("results");
+  const [printData, setPrintData] = useState<any[] | null>(null);
+  const [printType, setPrintType] = useState<"detailed" | "short">("detailed");
+  const [individualPrintData, setIndividualPrintData] = useState<any | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [includeTopScorersInPrint, setIncludeTopScorersInPrint] = useState(false);
   
   // Subject Management State
   const [classSubjects, setClassSubjects] = useState<any[]>([]);
@@ -4231,6 +4293,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     try {
       const res = await fetch("/api/exams");
       if (!res.ok) throw new Error("Failed to fetch exams");
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const errorText = await res.text();
+        console.error("Non-JSON or error response:", errorText);
+        throw new Error(`Failed to fetch JSON exams: ${res.status} ${res.statusText}`);
+      }
       const data = await res.json();
       const examsData = Array.isArray(data) ? data : [];
       setExams(examsData);
@@ -4283,6 +4351,23 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     fetchExams();
   };
 
+  const topScorersPerSubject = React.useMemo(() => {
+    const top: Record<string, { students: string[], marks: number }> = {};
+    classResults.forEach(student => {
+      (student.subjects || []).forEach((subj: any) => {
+        const marks = Number(subj.marks) || 0;
+        if (!top[subj.subject] || marks > top[subj.subject].marks) {
+          top[subj.subject] = { students: [student.name], marks };
+        } else if (marks === top[subj.subject].marks && marks > 0) {
+          if (!top[subj.subject].students.includes(student.name)) {
+            top[subj.subject].students.push(student.name);
+          }
+        }
+      });
+    });
+    return top;
+  }, [classResults]);
+
   const fetchClassResults = async () => {
     if (!selectedClass || !selectedExam) return;
     setLoading(true);
@@ -4290,11 +4375,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
       const url = `/api/admin/results/class/${encodeURIComponent(selectedClass)}?exam_name=${encodeURIComponent(selectedExam)}&year=${encodeURIComponent(selectedYear)}`;
       console.log("Fetching results from:", url);
       const res = await fetch(url);
-      if (!res.ok) {
+      
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
         const errorText = await res.text();
-        console.error("Server error response:", errorText);
-        throw new Error(`Failed to fetch results: ${res.status} ${res.statusText}`);
+        console.error("Non-JSON or error response:", errorText);
+        throw new Error(`Failed to fetch JSON results: ${res.status} ${res.statusText}`);
       }
+      
       const data = await res.json();
       setClassResults(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -4360,12 +4448,69 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     try {
       const res = await fetch(`/api/subjects/${encodeURIComponent(selectedClass)}`);
       if (!res.ok) throw new Error("Failed to fetch subjects");
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Invalid content type from server: expected JSON");
+      }
+      
       const data = await res.json();
       setClassSubjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching subjects:", error);
       addToast("বিষয় লোড করতে সমস্যা হয়েছে", "error");
     }
+  };
+
+  const handleAddSubject = async () => {
+    if (!newSubject.name || !selectedClass) return;
+    setAddingSubject(true);
+    try {
+      const res = await fetch("/api/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newSubject, class_name: selectedClass })
+      });
+      if (!res.ok) throw new Error("Failed to add subject");
+      setNewSubject({ name: "", total_marks: 100 });
+      fetchClassSubjects();
+      addToast("বিষয় যুক্ত করা হয়েছে", "success");
+    } catch (error) {
+      console.error(error);
+      addToast("বিষয় যুক্ত করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setAddingSubject(false);
+    }
+  };
+
+  const handleDeleteSubject = (id: string) => {
+    setConfirmDelete(id);
+  };
+
+  const executeDeleteSubject = async () => {
+    if (!confirmDelete) return;
+    try {
+      const res = await fetch(`/api/subjects/${confirmDelete}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete subject");
+      fetchClassSubjects();
+      addToast("বিষয় ডিলিট করা হয়েছে", "success");
+    } catch (error) {
+      console.error(error);
+      addToast("ডিলিট করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setConfirmDelete(null);
+    }
+  };
+
+  const handlePrintClassReport = (type: 'detailed' | 'short') => {
+    setPrintType(type);
+    setPrintData(classResults);
+    setTimeout(() => window.print(), 500);
+  };
+
+  const handlePrintIndividualResult = (student: any) => {
+    setIndividualPrintData(student);
+    setTimeout(() => window.print(), 500);
   };
 
   useEffect(() => {
@@ -4392,96 +4537,6 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     }
   }, [selectedYear, exams]);
 
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-  const [printData, setPrintData] = useState<any>(null);
-  const [printType, setPrintType] = useState<"short" | "detailed">("short");
-  const [individualPrintData, setIndividualPrintData] = useState<any>(null);
-
-  const handlePrintIndividualResult = (studentResult: any) => {
-    setIndividualPrintData(studentResult);
-    setTimeout(() => {
-      printElement('individual-result-template');
-      setTimeout(() => setIndividualPrintData(null), 1000);
-    }, 500);
-  };
-
-  const handleAddSubject = async () => {
-    if (!newSubject.name) return;
-    setAddingSubject(true);
-    await fetch("/api/subjects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newSubject, className: selectedClass })
-    });
-    setNewSubject({ name: "", total_marks: 100 });
-    setAddingSubject(false);
-    fetchClassSubjects();
-  };
-
-  const executeDeleteSubject = async () => {
-    if (confirmDelete === null) return;
-    const pwd = prompt("বিষয়টি ডিলিট করতে পাসওয়ার্ড দিন:");
-    if (!pwd) {
-      setConfirmDelete(null);
-      return;
-    }
-    await fetch(`/api/subjects/${confirmDelete}`, { 
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pwd })
-    });
-    setConfirmDelete(null);
-    fetchClassSubjects();
-  };
-
-  const handleDeleteSubject = (id: number) => {
-    setConfirmDelete(id);
-  };
-  
-  const generateResultSheet = async (className: string, type: "short" | "detailed") => {
-    if (!className) {
-      addToast("অনুগ্রহ করে একটি শ্রেণী নির্বাচন করুন", "error");
-      return;
-    }
-    if (!selectedExam) {
-      addToast("অনুগ্রহ করে একটি পরীক্ষা নির্বাচন করুন", "error");
-      return;
-    }
-    if (!selectedYear) {
-      addToast("অনুগ্রহ করে একটি বছর নির্বাচন করুন", "error");
-      return;
-    }
-    setLoading(true);
-    try {
-      const url = `/api/admin/results/class/${encodeURIComponent(className)}?exam_name=${encodeURIComponent(selectedExam)}&year=${encodeURIComponent(selectedYear)}`;
-      console.log("Fetching result sheet from:", url);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch results");
-      const data = await res.json();
-      
-      // Process data for the result sheet
-      const processedData = data.map((s: any) => ({
-        roll: s.student?.roll || s.roll,
-        name: s.student?.name || s.name,
-        totalMarks: s.totalMarks,
-        grade: s.totalMarks >= 80 ? "A+" : s.totalMarks >= 70 ? "A" : s.totalMarks >= 60 ? "A-" : s.totalMarks >= 50 ? "B" : s.totalMarks >= 40 ? "C" : s.totalMarks >= 33 ? "D" : "F",
-        subjects: s.subjects || []
-      }));
-
-      setPrintData(processedData);
-      setPrintType(type);
-      
-      // Force a re-render and then print
-      setTimeout(() => {
-        window.print();
-      }, 500);
-    } catch (error) {
-      console.error("Error generating result sheet:", error);
-      addToast("রেজাল্ট শীট তৈরি করতে সমস্যা হয়েছে", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
   const handleSaveResult = async () => {
     if (!selectedStudent) return;
 
@@ -4493,7 +4548,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
           const marks = Number(sub.marks);
           const grade = marks >= 80 ? "A+" : marks >= 70 ? "A" : marks >= 60 ? "A-" : marks >= 50 ? "B" : marks >= 40 ? "C" : marks >= 33 ? "D" : "F";
           return {
-            student_id: selectedStudent.studentId || selectedStudent.id,
+            student_id: selectedStudent.id,
             exam_name: selectedExam,
             subject: sub.name,
             marks,
@@ -4782,7 +4837,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
             {activeTab === "subjects" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100">
-                  <h4 className="text-lg font-black text-slate-900 mb-6">নতুন বিষয় যুক্ত করুন</h4>
+                  <h4 className="text-lg font-black text-slate-900 mb-6 font-display">নতুন বিষয় যুক্ত করুন</h4>
                   <div className="flex gap-4">
                     <input 
                       value={newSubject.name}
@@ -4800,7 +4855,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                     <LoadingButton 
                       loading={addingSubject}
                       onClick={handleAddSubject}
-                      className="px-8 bg-emerald-900 text-white rounded-2xl font-black"
+                      className="px-8 bg-emerald-900 text-white rounded-2xl font-black font-display"
                     >
                       যুক্ত করুন
                     </LoadingButton>
@@ -4834,14 +4889,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
             {activeTab === "result-entry" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                  <h4 className="text-lg font-black text-slate-900 mb-6">পরীক্ষা ও শ্রেণী নির্বাচন করুন</h4>
+                  <h4 className="text-lg font-black text-slate-900 mb-6 font-display">পরীক্ষা ও শ্রেণী নির্বাচন করুন</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
                       {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
                       <option value="">পরীক্ষা নির্বাচন করুন</option>
-                      {filteredExams.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+                      {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
                     </select>
                     <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
                       <option value="">শ্রেণী নির্বাচন করুন</option>
@@ -4850,48 +4905,54 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                   </div>
                   <button 
                     onClick={fetchClassResults}
-                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all"
+                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all font-display"
                   >
-                    রেজাল্ট দেখুন
+                    রেজাল্ট লোড করুন
                   </button>
                 </div>
 
                 {classResults.length > 0 && (
-                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                    <h4 className="text-lg font-black text-slate-900 mb-6">{selectedClass} - {selectedExam} ({selectedYear}) এর রেজাল্ট এন্ট্রি</h4>
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-900">
-                          <th className="p-4 text-left border border-slate-200">রোল</th>
-                          <th className="p-4 text-left border border-slate-200">নাম</th>
-                          <th className="p-4 text-center border border-slate-200">মোট নম্বর</th>
-                          <th className="p-4 text-center border border-slate-200">অ্যাকশন</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...classResults].sort((a, b) => (Number(a.roll) || Infinity) - (Number(b.roll) || Infinity)).map((student: any, i: number) => {
-                          return (
-                          <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                            <td className="p-4 border border-slate-200">{student.roll}</td>
-                            <td className="p-4 font-bold border border-slate-200 cursor-pointer text-emerald-600 hover:underline" onClick={() => openResultEntry(student)}>{student.name}</td>
-                            <td className="p-4 text-center font-black border border-slate-200">{student.totalMarks}</td>
-                            <td className="p-4 text-center border border-slate-200">
-                              <button
-                                onClick={() => openResultEntry(student)}
-                                className="px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-xl font-bold text-sm transition-all"
-                              >
-                                রেজাল্ট সেট করুন
-                              </button>
-                            </td>
+                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <h4 className="text-xl font-black text-emerald-900 mb-6 font-display px-2 border-l-4 border-emerald-500 pl-4">{selectedClass} - {selectedExam} ({selectedYear}) রেজাল্ট এন্ট্রি</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-slate-600 uppercase text-xs tracking-widest">
+                            <th className="p-4 text-left border-b font-black">রোল</th>
+                            <th className="p-4 text-left border-b font-black">নাম</th>
+                            <th className="p-4 text-center border-b font-black">মোট নম্বর</th>
+                            <th className="p-4 text-center border-b font-black">অ্যাকশন</th>
                           </tr>
-                        )})}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {[...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll)).map((student: any, i: number) => {
+                            return (
+                            <tr key={student.id || i} className="border-b border-slate-50 hover:bg-emerald-50/30 transition-colors group">
+                              <td className="p-4 text-slate-500 font-bold">{student.roll}</td>
+                              <td className="p-4">
+                                <span className="font-bold text-slate-800 block">{student.name}</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase">{student.class_name}</span>
+                              </td>
+                              <td className="p-4 text-center">
+                                <span className="px-3 py-1 bg-slate-100 rounded-lg font-black text-slate-700">{student.totalMarks}</span>
+                              </td>
+                              <td className="p-4 text-center">
+                                <button
+                                  onClick={() => openResultEntry(student)}
+                                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all transform group-hover:scale-105"
+                                >
+                                  নম্বর আপডেট করুন
+                                </button>
+                              </td>
+                            </tr>
+                          )})}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
             )}
-
 
             {activeTab === "results" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -4966,255 +5027,359 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                   </div>
                 </div>
 
-                {loading ? (
-                  <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
-                ) : (
-                  <div id="class-results-report-template" className="p-8 bg-white border-4 border-emerald-50 rounded-3xl">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-10 border-b-4 border-emerald-100 pb-8">
-                      {settings.logo && <img src={settings.logo} alt="Logo" className="w-28 h-28 object-contain rounded-2xl shadow-lg" />}
-                      <div className="text-center flex-1 px-4">
-                        <h1 className="text-5xl font-black text-emerald-900 mb-3 tracking-tight">{settings.name || "মাদ্রাসা"}</h1>
-                        <p className="text-xl font-bold text-emerald-700 bg-emerald-50 inline-block px-6 py-2 rounded-full">{settings.address || ""}</p>
-                        <div className="mt-6 px-8 py-3 bg-emerald-600 text-white font-black text-2xl rounded-2xl shadow-xl inline-block">
-                          {selectedExam} ({selectedYear}) - {selectedClass}
-                        </div>
-                      </div>
-                      {settings.qr_code_url && <img src={settings.qr_code_url} alt="QR Code" className="w-28 h-28 object-contain rounded-2xl shadow-lg" />}
+                {selectedClass && Object.keys(topScorersPerSubject).length > 0 && (
+                  <div className="mb-8 bg-amber-50 rounded-3xl p-6 border border-amber-100 overflow-x-auto no-scrollbar print:hidden">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-amber-800 font-black flex items-center gap-2">
+                        <Star className="w-5 h-5 fill-amber-400 text-amber-400" /> সর্বোচ্চ নাম্বার (বিষয়ভিত্তিক)
+                      </h3>
+                      <button 
+                        onClick={() => setIncludeTopScorersInPrint(!includeTopScorersInPrint)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2",
+                          includeTopScorersInPrint ? "bg-amber-600 text-white shadow-lg" : "bg-white text-amber-600 border border-amber-200"
+                        )}
+                      >
+                        {includeTopScorersInPrint ? <CheckCircle2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        প্রিন্টে যোগ করুন
+                      </button>
                     </div>
-
-                    {/* Results Table */}
-                    <table className="w-full text-left border-separate border-spacing-y-3">
-                      <thead>
-                        <tr className="bg-emerald-50 text-emerald-900">
-                          <th className="p-5 rounded-l-2xl text-sm font-black uppercase tracking-widest">র‍্যাঙ্ক</th>
-                          <th className="p-5 text-sm font-black uppercase tracking-widest">ছাত্রের নাম</th>
-                          <th className="p-5 text-sm font-black uppercase tracking-widest">রোল</th>
-                          {viewMode === 'detailed' && classSubjects.map(sub => (
-                            <th key={sub.id} className="p-5 text-sm font-black uppercase tracking-widest text-center">{sub.name}</th>
-                          ))}
-                          <th className="p-5 text-sm font-black uppercase tracking-widest text-center">মোট</th>
-                          <th className="p-5 text-sm font-black uppercase tracking-widest text-center">গড়</th>
-                          <th className="p-5 rounded-r-2xl text-sm font-black uppercase tracking-widest text-center print:hidden">অ্যাকশন</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-emerald-50">
-                        {classResults.map((r, index) => (
-                          <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl">
-                            <td className="p-5 rounded-l-2xl">
-                              <div className={cn(
-                                "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl",
-                                index === 0 ? "bg-amber-100 text-amber-700" : 
-                                index === 1 ? "bg-slate-200 text-slate-700" :
-                                index === 2 ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-600"
-                              )}>
-                                {index + 1}
-                              </div>
-                            </td>
-                            <td className="p-5 font-black text-slate-900 text-lg">{r.name}</td>
-                            <td className="p-5 font-bold text-slate-600 text-lg">{r.roll}</td>
-                            {viewMode === 'detailed' && classSubjects.map(sub => (
-                              <td key={sub.id} className="p-5 text-center font-bold text-slate-700 text-lg">
-                                {r.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-"}
-                              </td>
-                            ))}
-                            <td className="p-5 font-black text-emerald-700 text-xl text-center">{r.totalMarks}</td>
-                            <td className="p-5 font-black text-slate-900 text-xl text-center">{r.averageMarks || (r.totalMarks / (classSubjects.length || 1)).toFixed(2)}</td>
-                            <td className="p-5 rounded-r-2xl text-center print:hidden">
-                              <button 
-                                onClick={() => handlePrintIndividualResult(r)}
-                                className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all"
-                                title="মার্কশিট প্রিন্ট করুন"
-                              >
-                                <Printer className="w-5 h-5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {/* Footer / Signature */}
-                    <div className="mt-20 flex justify-between items-end border-t-2 border-slate-200 pt-10">
-                      <div className="text-slate-400 font-bold text-sm">
-                        প্রিন্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
-                      </div>
-                      <div className="text-center">
-                        <div className="w-48 border-t-2 border-slate-900 pt-2 font-black text-slate-900">মুহতামিম</div>
-                      </div>
+                    <div className="flex gap-4 min-w-max">
+                      {Object.entries(topScorersPerSubject).map(([subj, data]: [string, any]) => (
+                        <div key={subj} className="bg-white p-4 rounded-2xl shadow-sm border border-amber-100 min-w-[200px]">
+                          <p className="text-xs font-bold text-slate-400 mb-1 uppercase tracking-widest">{subj}</p>
+                          <p className="text-lg font-black text-amber-600 mb-1">{data.marks}</p>
+                          <div className="text-sm font-bold text-slate-700 truncate" title={data.students.join(", ")}>
+                            {data.students.join(", ")}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
-              </div>
-            )}
 
-            {printData && (
-              <div className="hidden print:block p-12 bg-white w-full">
-                <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
-                  <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
-                  <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
-                  <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
-                    {printType === 'short' ? 'সংক্ষিপ্ত রেজাল্ট শীট' : 'বিস্তারিত রেজাল্ট শীট'}
-                  </h2>
-                  <p className="text-xl font-bold text-slate-700 mt-2">{selectedExam} - {selectedYear}</p>
-                  <p className="text-lg font-bold text-slate-700">শ্রেণী: {selectedClass}</p>
-                </div>
-                
-                <table className="w-full border-collapse mb-12">
-                  <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="p-4 text-left border border-slate-900">রোল</th>
-                      <th className="p-4 text-left border border-slate-900">নাম</th>
-                      {printType === 'detailed' && <th className="p-4 text-left border border-slate-900">বিষয়সমূহ</th>}
-                      <th className="p-4 text-center border border-slate-900">মোট নম্বর</th>
-                      <th className="p-4 text-center border border-slate-900">গ্রেড</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {printData.map((student: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-200">
-                        <td className="p-4 border border-slate-200">{student.roll}</td>
-                        <td className="p-4 font-bold border border-slate-200">{student.name}</td>
-                        {printType === 'detailed' && (
-                          <td className="p-4 border border-slate-200 text-xs">
-                            {student.subjects.map((s: any) => `${s.subject}: ${s.marks}`).join(', ')}
+                {loading ? (
+                  <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
+                ) : (
+                  <div id="class-results-report-template" className={cn(
+                    "p-12 bg-white border-4 border-emerald-50 rounded-3xl print:p-0 print:border-0 print:m-0 print:w-full print:max-w-none mx-auto print:shadow-none overflow-visible",
+                    viewMode === "detailed" ? "is-detailed" : "is-short"
+                  )}>
+                    {/* Header */}
+                    <div className="text-center mb-10 border-b-4 border-emerald-100 pb-8 print:border-b-2 print:pb-4 flex flex-col items-center">
+                      <div className="flex justify-between items-center w-full mb-6">
+                        {settings.logo && <img src={settings.logo} alt="Logo" className="w-24 h-24 object-contain rounded-2xl shadow-lg" />}
+                        <div className="text-center flex-1">
+                          <h1 className="text-4xl font-black text-emerald-900 mb-2 tracking-tight">{settings.name || "মাদ্রাসা"}</h1>
+                          <p className="text-lg font-bold text-emerald-700">{settings.address || ""}</p>
+                        </div>
+                        {settings.qr_code_url && <img src={settings.qr_code_url} alt="QR Code" className="w-24 h-24 object-contain rounded-2xl shadow-lg" />}
+                      </div>
+                      <div className="px-8 py-3 bg-emerald-600 text-white font-black text-xl rounded-2xl shadow-xl inline-block">
+                        {selectedExam} ({selectedYear}) - {selectedClass}
+                      </div>
+                    </div>
+
+                    {/* Top Scorers for Print */}
+                    {includeTopScorersInPrint && Object.keys(topScorersPerSubject).length > 0 && (
+                      <div className="mb-8 bg-amber-50 p-6 rounded-2xl border-2 border-amber-100 hidden print:block">
+                        <h3 className="text-amber-800 font-black mb-4 text-center text-lg">সর্বোচ্চ নাম্বার (বিষয়ভিত্তিক)</h3>
+                        <div className="grid grid-cols-4 gap-4">
+                          {Object.entries(topScorersPerSubject).map(([subj, data]: [string, any]) => (
+                            <div key={subj} className="bg-white p-3 rounded-xl border border-amber-100 text-center">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1 leading-none">{subj}</p>
+                              <p className="text-lg font-black text-amber-600 leading-tight">{data.marks}</p>
+                              <p className="text-[10px] font-bold text-slate-700 truncate leading-tight">{data.students[0]}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Results Table Scroll Wrapper */}
+                    <div className="overflow-x-auto custom-scrollbar w-full border border-slate-100 rounded-2xl print:overflow-visible print:border-0">
+                      <table className="w-full min-w-[900px] text-left border-separate border-spacing-y-2 print:min-w-0 print:border-spacing-0">
+                        <thead>
+                          <tr className="bg-emerald-50 text-emerald-900">
+                            <th className="p-4 rounded-l-2xl text-xs font-black uppercase tracking-widest text-center">র‍্যাঙ্ক</th>
+                            <th className="p-4 text-xs font-black uppercase tracking-widest text-left">ছাত্রের নাম</th>
+                            <th className="p-4 text-xs font-black uppercase tracking-widest text-center">রোল</th>
+                            {viewMode === 'detailed' && classSubjects.map(sub => (
+                              <th key={sub.id} className="p-4 text-xs font-black uppercase tracking-widest text-center">{sub.name}</th>
+                            ))}
+                            <th className="p-4 text-xs font-black uppercase tracking-widest text-center">মোট</th>
+                            <th className="p-4 text-xs font-black uppercase tracking-widest text-center">গড়</th>
+                            <th className="p-4 text-xs font-black uppercase tracking-widest text-center">গ্রেড</th>
+                            <th className="p-4 rounded-r-2xl text-xs font-black uppercase tracking-widest text-center no-print print:hidden">অ্যাকশন</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-50">
+                          {[...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll)).map((r, index) => {
+                            const avg = r.avgMarks || (r.totalMarks / (classSubjects.length || 1));
+                            const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                            return (
+                              <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none">
+                                <td className="p-4 rounded-l-2xl text-center print:rounded-none">
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg",
+                                    index === 0 ? "bg-amber-100 text-amber-700" : 
+                                    index === 1 ? "bg-slate-200 text-slate-700" :
+                                    index === 2 ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-600"
+                                  )}>
+                                    {index + 1}
+                                  </div>
+                                </td>
+                                <td className="p-4 font-black text-slate-900">{r.name}</td>
+                                <td className="p-4 font-bold text-slate-600 text-center">{r.roll}</td>
+                                {viewMode === 'detailed' && classSubjects.map(sub => (
+                                  <td key={sub.id} className="p-4 text-center font-bold text-slate-700">
+                                    {r.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-"}
+                                  </td>
+                                ))}
+                                <td className="p-4 font-black text-emerald-700 text-lg text-center">{r.totalMarks}</td>
+                                <td className="p-4 font-black text-slate-900 text-lg text-center">{avg.toFixed(2)}</td>
+                                <td className="p-4 font-black text-center">
+                                  <span className={cn(
+                                    "px-2 py-1 rounded-lg text-xs font-bold",
+                                    grade === 'A+' ? "bg-green-100 text-green-700" :
+                                    grade === 'F' ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                                  )}>
+                                    {grade}
+                                  </span>
+                                </td>
+                                <td className="p-4 rounded-r-2xl text-center print:hidden">
+                                  <button 
+                                    onClick={() => handlePrintIndividualResult(r)}
+                                    className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all no-print"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="print:table-footer-group">
+                          <tr>
+                            <td colSpan={viewMode === 'detailed' ? 7 + classSubjects.length : 7} className="pt-8 border-0!">
+                            <div className="signature-container no-border px-8">
+                              <div className="text-slate-400 font-bold text-[10px]">
+                                রিপোর্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                              </div>
+                              <div className="text-center">
+                                <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>
+                              </div>
+                            </div>
                           </td>
-                        )}
-                        <td className="p-4 text-center font-black border border-slate-200">{student.totalMarks}</td>
-                        <td className="p-4 text-center font-black border border-slate-200">{student.grade}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className="flex justify-end mt-24">
-                  <div className="text-center">
-                    <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">মুহতামিমের স্বাক্ষর</div>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {individualPrintData && (
-              <div id="individual-result-template" className="hidden print:block p-12 bg-white w-full">
-                <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
-                  <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
-                  <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
-                  <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
-                    মার্কশিট
-                  </h2>
-                  <p className="text-xl font-bold text-slate-700 mt-2">{selectedExam} - {selectedYear}</p>
-                </div>
-                
-                <div className="flex justify-between mb-8 text-lg font-bold text-slate-800">
-                  <div>
-                    <p>ছাত্রের নাম: {individualPrintData.name}</p>
-                    <p>শ্রেণী: {selectedClass}</p>
-                  </div>
-                  <div className="text-right">
-                    <p>রোল: {individualPrintData.roll}</p>
-                    <p>মোট নম্বর: {individualPrintData.totalMarks}</p>
-                    <p>গড় নম্বর: {individualPrintData.averageMarks || (individualPrintData.totalMarks / (classSubjects.length || 1)).toFixed(2)}</p>
-                  </div>
-                </div>
-
-                <table className="w-full border-collapse mb-12 text-lg">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-900">
-                      <th className="p-4 text-left border border-slate-300">বিষয়</th>
-                      <th className="p-4 text-center border border-slate-300">প্রাপ্ত নম্বর</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {classSubjects.map((sub, i) => {
-                      const subjectMark = individualPrintData.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
-                      return (
-                        <tr key={i} className="border-b border-slate-200">
-                          <td className="p-4 border border-slate-300 font-bold">{sub.name}</td>
-                          <td className="p-4 text-center font-black border border-slate-300">{subjectMark}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                <div className="flex justify-between mt-24">
-                  <div className="text-center">
-                    <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">শিক্ষকের স্বাক্ষর</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">অধ্যক্ষের স্বাক্ষর</div>
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </>
         ) : (
           <div className="text-center py-20 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
             <Award className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-bold">ফলাফল দেখতে প্রথমে শ্রেণী নির্বাচন করুন</p>
+            <p className="text-slate-500 font-bold">শ্রেণী নির্বাচন করলে এখানে বিষয় ব্যবস্থাপনা এবং রেজাল্ট এন্ট্রি অপশন আসবে</p>
           </div>
         )}
       </motion.div>
 
-      {/* Result Entry Modal */}
-      <AnimatePresence>
-        {isAdding && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <div>
-                  <h3 className="text-2xl font-black text-slate-900">রেজাল্ট এন্ট্রি</h3>
-                  <p className="text-emerald-600 font-bold">{selectedStudent?.name} | {selectedExam}</p>
-                </div>
-                <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><CloseIcon className="w-6 h-6" /></button>
-              </div>
-              <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
-                {studentSubjects.map((sub, i) => (
-                  <div key={i} className="flex gap-4 items-center">
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-700 mb-1">{sub.name}</p>
+      {/* Printing Templates (Rendered but hidden) */}
+      {printData && (
+                  <div id="class-results-report-batch-template" className="hidden print:block print-container p-12 bg-white w-full mx-auto">
+                    <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
+                      <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
+                      <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                      <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
+                        {printType === 'short' ? 'সংক্ষিপ্ত রেজাল্ট শীট' : 'বিস্তারিত রেজাল্ট শীট'}
+                      </h2>
+                      <p className="text-xl font-bold text-slate-700 mt-2">{selectedExam} - {selectedYear}</p>
+                      <p className="text-lg font-bold text-slate-700">শ্রেণী: {selectedClass}</p>
                     </div>
-                    <div className="w-32">
-                      <input 
-                        type="number"
-                        value={sub.marks} 
-                        onChange={(e) => {
-                          const newSubs = [...studentSubjects];
-                          newSubs[i].marks = e.target.value;
-                          setStudentSubjects(newSubs);
-                        }}
-                        placeholder="নম্বর" 
-                        className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-center" 
-                      />
-                    </div>
+                    
+                    <table className="w-full border-collapse mb-12">
+                      <thead>
+                        <tr className="bg-slate-900 text-white">
+                          <th className="p-4 text-left border border-slate-900">রোল</th>
+                          <th className="p-4 text-left border border-slate-900">নাম</th>
+                          {printType === 'detailed' && <th className="p-4 text-left border border-slate-900">বিষয়সমূহ</th>}
+                          <th className="p-4 text-center border border-slate-900">মোট নম্বর</th>
+                          <th className="p-4 text-center border border-slate-900">গ্রেড</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printData.map((student: any, i: number) => {
+                          const avg = student.avgMarks || (student.totalMarks / (classSubjects.length || 1));
+                          const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                          return (
+                            <tr key={i} className="border-b border-slate-200">
+                              <td className="p-4 border border-slate-200">{student.roll}</td>
+                              <td className="p-4 font-bold border border-slate-200">{student.name}</td>
+                              {printType === 'detailed' && (
+                                <td className="p-4 border border-slate-200 text-xs">
+                                  {student.subjects.map((s: any) => `${s.subject}: ${s.marks}`).join(', ')}
+                                </td>
+                              )}
+                              <td className="p-4 text-center font-black border border-slate-200">{student.totalMarks}</td>
+                              <td className="p-4 text-center font-black border border-slate-200">{grade}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="print:table-footer-group">
+                        <tr>
+                          <td colSpan={printType === 'detailed' ? 5 : 4} className="pt-10 border-0!">
+                            <div className="signature-container no-border px-8">
+                              <div className="text-slate-400 font-bold text-[10px]">
+                                প্রিন্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                              </div>
+                              <div className="text-center">
+                                <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
-                ))}
-                
-                {classSubjects.length === 0 && (
-                   <div className="text-center p-4 bg-amber-50 text-amber-800 rounded-xl text-sm">
-                     সতর্কতা: এই শ্রেণীর জন্য কোন বিষয় নির্ধারণ করা হয়নি। 'বিষয় ব্যবস্থাপনা' ট্যাব থেকে বিষয় যুক্ত করুন।
-                   </div>
                 )}
-              </div>
-              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-                <div className="text-slate-900 font-black">
-                  মোট: {studentSubjects.reduce((sum, s) => sum + (Number(s.marks) || 0), 0)}
+
+                {individualPrintData && (
+                  <div id="individual-result-template" className="hidden print:block print-container p-12 bg-white w-full mx-auto">
+                    <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
+                      <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
+                      <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
+                      <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
+                        মার্কশিট
+                      </h2>
+                      <p className="text-xl font-bold text-slate-700 mt-2">{selectedExam} - {selectedYear}</p>
+                    </div>
+                    
+                    <div className="flex justify-between mb-8 text-lg font-bold text-slate-800">
+                      <div>
+                        <p>ছাত্রের নাম: {individualPrintData.name}</p>
+                        <p>শ্রেণী: {selectedClass}</p>
+                      </div>
+                      <div className="text-right">
+                        <p>রোল: {individualPrintData.roll}</p>
+                        <p>মোট নম্বর: {individualPrintData.totalMarks}</p>
+                        <p>গড় নম্বর: {individualPrintData.avgMarks?.toFixed(2) || (individualPrintData.totalMarks / (classSubjects.length || 1)).toFixed(2)}</p>
+                        <p className="mt-2">
+                          গ্রেড: 
+                          <span className={cn(
+                            "ml-2 px-3 py-1 rounded-lg",
+                            (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 80 ? "bg-green-100 text-green-700" :
+                            (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) < 33 ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                          )}>
+                            {(individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 80 ? "A+" : 
+                             (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 70 ? "A" : 
+                             (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 60 ? "A-" : 
+                             (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 50 ? "B" : 
+                             (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 40 ? "C" : 
+                             (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 33 ? "D" : "F"}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <table className="w-full border-collapse mb-12 text-lg">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900">
+                          <th className="p-4 text-left border border-slate-300">বিষয়</th>
+                          <th className="p-4 text-center border border-slate-300">প্রাপ্ত নম্বর</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classSubjects.map((sub, i) => {
+                          const subjectMark = individualPrintData.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
+                          return (
+                            <tr key={i} className="border-b border-slate-200">
+                              <td className="p-4 border border-slate-300 font-bold">{sub.name}</td>
+                              <td className="p-4 text-center font-black border border-slate-300">{subjectMark}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="print:table-footer-group">
+                        <tr>
+                          <td colSpan={2} className="pt-10 border-0!">
+                            <div className="signature-container no-border px-8">
+                              <div className="text-slate-400 font-bold text-[10px]">
+                                প্রিন্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                              </div>
+                              <div className="text-center">
+                                <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+
+        {/* Result Entry Modal */}
+        <AnimatePresence>
+          {isAdding && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900">রেজাল্ট এন্ট্রি</h3>
+                    <p className="text-emerald-600 font-bold">{selectedStudent?.name} | {selectedExam}</p>
+                  </div>
+                  <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><CloseIcon className="w-6 h-6" /></button>
                 </div>
-                <LoadingButton 
-                  loading={loading}
-                  onClick={handleSaveResult}
-                  className="px-8 py-4 bg-emerald-900 text-white rounded-2xl font-black"
-                >
-                  <Save className="w-5 h-5" /> রেজাল্ট সেভ করুন
-                </LoadingButton>
-              </div>
+                <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
+                  {studentSubjects.map((sub, i) => (
+                    <div key={i} className="flex gap-4 items-center">
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-700 mb-1">{sub.name}</p>
+                      </div>
+                      <div className="w-32">
+                        <input 
+                          type="number"
+                          value={sub.marks} 
+                          onChange={(e) => {
+                            const newSubs = [...studentSubjects];
+                            newSubs[i].marks = e.target.value;
+                            setStudentSubjects(newSubs);
+                          }}
+                          placeholder="নম্বর" 
+                          className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-center" 
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {classSubjects.length === 0 && (
+                     <div className="text-center p-4 bg-amber-50 text-amber-800 rounded-xl text-sm">
+                       সতর্কতা: এই শ্রেণীর জন্য কোন বিষয় নির্ধারণ করা হয়নি। 'বিষয় ব্যবস্থাপনা' ট্যাব থেকে বিষয় যুক্ত করুন।
+                     </div>
+                  )}
+                </div>
+                <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                  <div className="text-slate-900 font-black">
+                    মোট: {studentSubjects.reduce((sum, s) => sum + (Number(s.marks) || 0), 0)}
+                  </div>
+                  <LoadingButton 
+                    loading={loading}
+                    onClick={handleSaveResult}
+                    className="px-8 py-4 bg-emerald-900 text-white rounded-2xl font-black"
+                  >
+                    <Save className="w-5 h-5" /> রেজাল্ট সেভ করুন
+                  </LoadingButton>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+          )}
+        </AnimatePresence>
+      </div>
+    );
 };
 
 
@@ -6086,7 +6251,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                 </div>
               </div>
               <div className="mt-4 max-h-[60vh] overflow-y-auto space-y-2">
-                {selectedClass === "All" ? (
+                {!selectedClass ? (
                   <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-100">
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                       <Users className="w-8 h-8 text-slate-300" />

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { jsPDF } from "jspdf";
+import * as htmlToImage from "html-to-image";
 import { 
   LayoutDashboard, 
   Phone, 
@@ -20,7 +22,10 @@ import {
   Send,
   Heart,
   Trophy,
-  Calendar
+  Calendar,
+  Download,
+  FileText,
+  Star
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useToast } from "./ToastContext";
@@ -78,6 +83,9 @@ export default function ParentPortal() {
   const [livePaymentPhone, setLivePaymentPhone] = useState("");
   const [livePaymentTrxID, setLivePaymentTrxID] = useState("");
   const [livePaymentReference, setLivePaymentReference] = useState("");
+  const [fullProfile, setFullProfile] = useState<any>(null);
+  const [selectedResultExam, setSelectedResultExam] = useState<string>("");
+  const [downloading, setDownloading] = useState(false);
 
   const monthsList = [
     "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
@@ -223,8 +231,14 @@ export default function ParentPortal() {
       handleLogin(null, savedIdentifier);
     }
 
-    // Handle payment verification from URL params
+    // Handle Deep Linking to Tabs
     const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get("tab");
+    if (tab) {
+      setActiveTab(tab);
+    }
+
+    // Handle payment verification from URL params
     const paymentStatus = urlParams.get("payment");
     const invoiceId = urlParams.get("invoice_id");
 
@@ -520,6 +534,7 @@ export default function ParentPortal() {
 
       setStudent({ ...data, isTeacher });
       localStorage.setItem("guardianPhone", loginIdentifier);
+      fetchFullProfile(data.id);
       
       if (isTeacher) {
         const [attRes, salaryRes, settingsRes] = await Promise.all([
@@ -584,6 +599,71 @@ export default function ParentPortal() {
       localStorage.removeItem("guardianPhone");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFullProfile = async (sId: string) => {
+    try {
+      const res = await fetch(`/api/students/${sId}/full-profile`);
+      if (res.ok) {
+        const data = await res.json();
+        setFullProfile(data);
+        if (data.results && data.results.length > 0) {
+          const exams = [...new Set(data.results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))];
+          setSelectedResultExam(exams[exams.length - 1] as string);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching full profile:", error);
+    }
+  };
+
+  const downloadPDF = async (elementId: string, filename: string) => {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    setDownloading(true);
+    try {
+      element.classList.remove('hidden');
+      // For mobile-friendliness during capture
+      const originalStyle = element.style.cssText;
+      element.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 800px;
+        z-index: -9999;
+        background: white;
+        display: block !important;
+      `;
+
+      const dataUrl = await htmlToImage.toPng(element, { 
+        quality: 1, 
+        pixelRatio: 2,
+        backgroundColor: 'white',
+        style: {
+          display: 'block'
+        }
+      });
+      
+      element.style.cssText = originalStyle;
+      element.classList.add('hidden');
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(filename);
+      addToast("সফলভাবে ডাউনলোড হয়েছে", "success");
+    } catch (err) {
+      console.error(err);
+      addToast("ডাউনলোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setDownloading(false);
+      const el = document.getElementById(elementId);
+      if (el) el.classList.add('hidden');
     }
   };
 
@@ -714,7 +794,7 @@ export default function ParentPortal() {
             { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
             { id: "results", label: "রেজাল্ট", icon: BookOpen },
             { id: "amal", label: "দৈনিক আমল", icon: Heart },
-            { id: "syllabus", label: "সিলেবাস ও রুটিন", icon: BookOpen },
+            { id: "syllabus", label: "রুটিন", icon: BookOpen },
             { id: "notices", label: "নোটিশ", icon: Bell },
             { id: "payment", label: "পেমেন্ট", icon: CreditCard },
             { id: "payment-history", label: "পেমেন্ট হিস্টোরি", icon: History },
@@ -1239,11 +1319,23 @@ export default function ParentPortal() {
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
                   <div className="flex justify-between items-center mb-8">
                     <h3 className="text-2xl font-bold text-slate-900">পরীক্ষার ফলাফল</h3>
-                    {settings?.enable_historical_reports ? (
-                      <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">সকল রেজাল্ট</span>
-                    ) : (
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">সর্বশেষ রেজাল্ট</span>
-                    )}
+                    <div className="flex gap-4">
+                      {fullProfile && selectedResultExam && (
+                        <button 
+                          onClick={() => downloadPDF('student-marksheet-template', `Marksheet_${student.name}.pdf`)}
+                          disabled={downloading}
+                          className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md shadow-emerald-900/20"
+                        >
+                          {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          মার্কশিট ডাউনলোড
+                        </button>
+                      )}
+                      {settings?.enable_historical_reports ? (
+                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">সকল রেজাল্ট</span>
+                      ) : (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">সর্বশেষ রেজাল্ট</span>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="space-y-8">
@@ -1294,6 +1386,119 @@ export default function ParentPortal() {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Marksheet Template (Hidden) */}
+                  {fullProfile && (
+                    <div id="student-marksheet-template" className="hidden absolute top-0 left-0 bg-white p-12 w-full max-w-[800px] mx-auto border-4 border-double border-emerald-900 text-center" style={{ borderColor: '#064e3b' }}>
+                      <div className="flex items-center justify-center gap-4 mb-8 border-b-4 border-emerald-100 pb-6" style={{ borderColor: '#d1fae5' }}>
+                        <GraduationCap className="w-12 h-12 text-emerald-600" style={{ color: '#059669' }} />
+                        <div>
+                          <h2 className="text-4xl font-black text-emerald-900" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                          <p className="text-lg font-bold text-slate-500 mt-1" style={{ color: '#64748b' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট - {(() => {
+                            if (!selectedResultExam) return "";
+                            const [exam, year] = selectedResultExam.split('|');
+                            return `${exam} (${year})`;
+                          })()}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-end mb-8 text-left bg-slate-50 p-6 rounded-2xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-900 mb-2" style={{ color: '#0f172a' }}>{fullProfile.student.name}</h3>
+                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>পিতার নাম: {fullProfile.student.father_name}</p>
+                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>মাতার নাম: {fullProfile.student.mother_name}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-emerald-700 font-black text-xl mb-1" style={{ color: '#047857' }}>ID: {fullProfile.student.studentId || fullProfile.student.id}</p>
+                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>শ্রেণী: {fullProfile.student.class}</p>
+                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>রোল: {fullProfile.student.roll}</p>
+                        </div>
+                      </div>
+
+                      {selectedResultExam && fullProfile && fullProfile.examStats && fullProfile.examStats[selectedResultExam] && (
+                        <div className="grid grid-cols-3 gap-4 mb-8">
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>মোট নম্বর</p>
+                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.examStats[selectedResultExam].myTotal}</p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>গড় নম্বর</p>
+                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
+                              {(() => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                const resData = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                                return resData.length > 0 
+                                  ? (fullProfile.examStats[selectedResultExam].myTotal / resData.length).toFixed(1)
+                                  : "0.0";
+                              })()}
+                            </p>
+                          </div>
+                          <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200" style={{ backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                            <p className="text-xs font-bold text-emerald-600 uppercase" style={{ color: '#059669' }}>মেধা স্থান</p>
+                            <p className="text-xl font-black text-emerald-700" style={{ color: '#047857' }}>
+                              {fullProfile.examStats[selectedResultExam].rank} <span className="text-sm text-emerald-500" style={{ color: '#10b981' }}>/ {fullProfile.examStats[selectedResultExam].totalStudents}</span>
+                            </p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>সর্বোচ্চ নম্বর</p>
+                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.examStats[selectedResultExam].highestMarks}</p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>উপস্থিতি</p>
+                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
+                              {fullProfile.attendance.length > 0 
+                                ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
+                                : 0}%
+                            </p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>ফলাফল</p>
+                            <p className={cn("text-xl font-black", 
+                              (() => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                                  ? "text-rose-600" 
+                                  : "text-emerald-600"
+                              })()
+                            )}>
+                              {(() => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <table className="w-full text-left border-collapse border border-slate-300 mb-8">
+                        <thead>
+                          <tr className="bg-emerald-50" style={{ backgroundColor: '#ecfdf5' }}>
+                            <th className="border border-slate-300 p-4 font-black text-slate-700" style={{ borderColor: '#cbd5e1', color: '#334155' }}>বিষয়</th>
+                            <th className="border border-slate-300 p-4 font-black text-slate-700 text-center" style={{ borderColor: '#cbd5e1', color: '#334155' }}>প্রাপ্ত নম্বর</th>
+                            <th className="border border-slate-300 p-4 font-black text-slate-700 text-center" style={{ borderColor: '#cbd5e1', color: '#334155' }}>লেটার গ্রেড</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            if (!selectedResultExam) return [];
+                            const [exam, year] = selectedResultExam.split('|');
+                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                          })().map((r: any, idx: number) => (
+                            <tr key={idx}>
+                              <td className="border border-slate-300 p-4 font-bold text-slate-800" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{r.subject}</td>
+                              <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.marks}</td>
+                              <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.grade}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      
+                      <div className="flex justify-between mt-24 px-12">
+                        <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>শ্রেণী শিক্ষকের স্বাক্ষর</div>
+                        <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>মুহতামিমের স্বাক্ষর</div>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 

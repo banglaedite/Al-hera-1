@@ -457,9 +457,12 @@ const LandingPage = () => {
                 <Globe className="w-5 h-5" /> একাডেমিক শোকেস
               </a>
             )}
+            <Link to="/parent?tab=results" className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-900/20 hover:bg-emerald-700 transition-all flex items-center gap-2">
+              <BookOpen className="w-5 h-5" /> রেজাল্ট
+            </Link>
             {settings?.show_routines_directly !== 1 && (
               <a href="#routines" className="px-8 py-4 bg-indigo-50 text-indigo-900 rounded-2xl font-black shadow-sm border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2">
-                <FileText className="w-5 h-5" /> সাজেশন শিট
+                <FileText className="w-5 h-5" /> রুটিন
               </a>
             )}
           </div>
@@ -478,8 +481,8 @@ const LandingPage = () => {
               >
                 <FileText className="w-4 h-4" /> Academic Resources
               </motion.div>
-              <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">সাজেশন শিট</h2>
-              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের সাজেশন শিট এখান থেকে ডাউনলোড করুন</p>
+              <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">রুটিন</h2>
+              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের রুটিন এখান থেকে ডাউনলোড করুন</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

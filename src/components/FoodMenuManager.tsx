@@ -172,7 +172,17 @@ export function FoodMenuManager() {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
-        {menu.sort((a, b) => (a.serial || 0) - (b.serial || 0)).map(item => (
+        {menu.sort((a, b) => {
+          const parseSerial = (val: any) => {
+            if (val === undefined || val === null || val === "") return 999999;
+            let s = String(val).trim();
+            const banglaDigits: any = { '০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9' };
+            s = s.replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+            const n = parseInt(s.replace(/[^0-9]/g, ''));
+            return isNaN(n) ? 999999 : n;
+          };
+          return parseSerial(a.serial) - parseSerial(b.serial);
+        }).map(item => (
           <motion.div whileHover={{ y: -5 }} key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative group">
             <div className="absolute top-4 right-4 z-30 flex gap-2 opacity-100 transition-all">
               <button 
