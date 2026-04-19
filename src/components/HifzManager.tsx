@@ -562,9 +562,22 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
   const formatDateBn = (dateStr: string) => {
     const d = new Date(dateStr);
     const day = toBn(d.getDate().toString().padStart(2, '0'));
-    const month = toBn((d.getMonth() + 1).toString().padStart(2, '0'));
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const bMonth = toBn(month);
+    const bDay = toBn(d.getDate().toString().padStart(2, '0'));
     const year = toBn(d.getFullYear().toString());
-    return `${day}-${month}-${year}`;
+    return `${bDay}-${bMonth}-${year}`;
+  };
+
+  const calculateSabokTotal = (sabok: any[]) => {
+    if (!sabok || !Array.isArray(sabok)) return 0;
+    let total = 0;
+    sabok.forEach(s => {
+      const page = s.page || "";
+      if (page.includes('অর্ধেক')) total += 0.5;
+      else if (page !== "") total += 1;
+    });
+    return total;
   };
 
   const handleTilawatChange = (field: 'from_para' | 'to_para', value: string) => {
@@ -869,14 +882,14 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                               onClick={() => setSabokHalf("first")}
                               className={cn("px-4 py-2 rounded-xl font-bold text-xs transition-all", sabokHalf === "first" ? "bg-amber-500 text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
                             >
-                              রুকুর আগের অর্ধেক
+                              শুরুর অর্ধেক
                             </button>
                             <button 
                               type="button"
                               onClick={() => setSabokHalf("last")}
                               className={cn("px-4 py-2 rounded-xl font-bold text-xs transition-all", sabokHalf === "last" ? "bg-orange-500 text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
                             >
-                              রুকুর পরের অর্ধেক
+                              শেষের অর্ধেক
                             </button>
                           </div>
 
@@ -901,6 +914,32 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                               );
                             })}
                           </div>
+                          
+                          {sabokPages && (
+                            <div className="mt-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex justify-between items-center">
+                              <span className="text-sm font-bold text-emerald-700">নির্বাচিত সবক:</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs font-bold text-slate-500 bg-white px-3 py-1 rounded-lg border border-slate-100">
+                                  মোট: {toBn((() => {
+                                    const parts = sabokPages.split(',').map(s => s.trim());
+                                    let total = 0;
+                                    parts.forEach(p => {
+                                      if (p.includes('অর্ধেক')) total += 0.5;
+                                      else if (p !== "") total += 1;
+                                    });
+                                    return total % 1 === 0 ? total : total.toFixed(1);
+                                  })())} পৃষ্ঠা
+                                </span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => setSabokPages("")}
+                                  className="text-[10px] font-black text-rose-500 bg-rose-50 px-2 py-1 rounded-md hover:bg-rose-100 uppercase tracking-tighter"
+                                >
+                                  মুছুন
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1079,33 +1118,57 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                             মোট: {toBn(sabina.total_paras)} পারা
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {Array.from({ length: 30 }, (_, i) => String(i + 1)).map(p => {
-                            const isSelected = sabina.paras.includes(p);
-                            return (
+                        <div className="space-y-4">
+                          {/* Range Selections (5 Paras) */}
+                          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                            {[
+                              { label: '১-৫', range: [1, 5] },
+                              { label: '৬-১০', range: [6, 10] },
+                              { label: '১১-১৫', range: [11, 15] },
+                              { label: '১৬-২০', range: [16, 20] },
+                              { label: '২১-২৫', range: [21, 25] },
+                              { label: '২৬-৩০', range: [26, 30] }
+                            ].map((r, idx) => (
                               <button
-                                key={p}
+                                key={idx}
                                 type="button"
                                 onClick={() => {
-                                  const newParas = isSelected 
-                                    ? sabina.paras.filter(x => x !== p)
-                                    : [...sabina.paras, p].sort((a, b) => Number(a) - Number(b));
-                                  setSabina({
-                                    paras: newParas,
-                                    total_paras: String(newParas.length)
-                                  });
+                                  const newParas = [];
+                                  for (let i = r.range[0]; i <= r.range[1]; i++) newParas.push(String(i));
+                                  setSabina({ paras: newParas, total_paras: String(newParas.length) });
                                 }}
-                                className={cn(
-                                  "w-12 h-12 flex items-center justify-center rounded-xl font-bold transition-all border-2",
-                                  isSelected 
-                                    ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
-                                    : "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:bg-indigo-50"
-                                )}
+                                className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black hover:bg-indigo-100 border border-indigo-100 transition-all"
                               >
-                                {toBn(p)}
+                                {toBn(r.label)} পারা
                               </button>
-                            );
-                          })}
+                            ))}
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {Array.from({ length: 30 }, (_, i) => String(i + 1)).map(p => {
+                              const isSelected = sabina.paras.includes(p);
+                              return (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => {
+                                    const clickedVal = parseInt(p);
+                                    const newParas = [];
+                                    for (let i = 1; i <= clickedVal; i++) newParas.push(String(i));
+                                    setSabina({ paras: newParas, total_paras: String(newParas.length) });
+                                  }}
+                                  className={cn(
+                                    "w-12 h-12 flex items-center justify-center rounded-xl font-bold transition-all border-2",
+                                    isSelected 
+                                      ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
+                                      : "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:bg-indigo-50"
+                                  )}
+                                >
+                                  {toBn(p)}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
 
@@ -1149,7 +1212,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                               <BookOpen className="w-5 h-5 text-emerald-600 mb-2" />
                               <p className="text-xs font-bold text-emerald-600 uppercase mb-1">মোট সবক পৃষ্ঠা</p>
                               <p className="text-2xl font-black text-emerald-900">
-                                {reports.reduce((sum, r) => sum + (r.sabok?.length || 0), 0)}
+                                {toBn(reports.reduce((sum, r) => sum + calculateSabokTotal(r.sabok), 0))}
                               </p>
                             </div>
                             <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center flex flex-col items-center">
@@ -1206,6 +1269,11 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                                       {report.sabok?.map((s: any, i: number) => (
                                         <div key={i}>{s.reading} (পৃষ্ঠা: {s.page})</div>
                                       ))}
+                                      {report.sabok && report.sabok.length > 0 && (
+                                        <div className="mt-1 pt-1 border-t border-slate-100 text-[10px] font-black text-emerald-600">
+                                          মোট: {toBn(calculateSabokTotal(report.sabok))} পৃষ্ঠা
+                                        </div>
+                                      )}
                                     </td>
                                     <td className="p-4 text-center">
                                       {report.sat_sabok ? <Check className="w-5 h-5 text-emerald-500 mx-auto" /> : <X className="w-5 h-5 text-rose-300 mx-auto" />}

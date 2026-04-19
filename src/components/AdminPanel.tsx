@@ -82,6 +82,21 @@ const parseRoll = (val: any) => {
   return isNaN(n) ? Infinity : n;
 };
 
+const toBn = (n: number | string) => {
+  if (n === undefined || n === null) return "";
+  return n.toString().replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d as any]);
+};
+
+const formatDate = (date: any) => {
+  if (!date) return "";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  return `${toBn(day)}-${toBn(month)}-${toBn(year)}`;
+};
+
 import { LoadingButton } from "./LoadingButton";
 
 const AdminStat = ({ label, value, icon: Icon, color }: any) => (
@@ -3556,7 +3571,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             <p className="text-lg font-black text-slate-900">
                               {fullProfile.hifzReports[0].sabok?.map((s: any) => `${s.reading} (${s.page})`).join(', ')}
                             </p>
-                            <p className="text-xs text-slate-500">তারিখ: {new Date(fullProfile.hifzReports[0].date).toLocaleDateString('bn-BD')}</p>
+                          <p className="text-xs text-slate-500">তারিখ: {formatDate(fullProfile.hifzReports[0].date)}</p>
                           </div>
                         ) : (
                           <p className="text-slate-400 italic">কোনো রিপোর্ট পাওয়া যায়নি</p>
@@ -5082,14 +5097,16 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
                     {/* Top Scorers for Print */}
                     {includeTopScorersInPrint && Object.keys(topScorersPerSubject).length > 0 && (
-                      <div className="mb-8 bg-amber-50 p-6 rounded-2xl border-2 border-amber-100 hidden print:block">
+                      <div className="mb-8 bg-amber-50 p-6 rounded-2xl border-2 border-amber-100 print:bg-amber-50 print:border-amber-100">
                         <h3 className="text-amber-800 font-black mb-4 text-center text-lg">সর্বোচ্চ নাম্বার (বিষয়ভিত্তিক)</h3>
                         <div className="grid grid-cols-4 gap-4">
                           {Object.entries(topScorersPerSubject).map(([subj, data]: [string, any]) => (
-                            <div key={subj} className="bg-white p-3 rounded-xl border border-amber-100 text-center">
+                            <div key={subj} className="bg-white p-3 rounded-xl border border-amber-100 text-center shadow-sm">
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1 leading-none">{subj}</p>
-                              <p className="text-lg font-black text-amber-600 leading-tight">{data.marks}</p>
-                              <p className="text-[10px] font-bold text-slate-700 truncate leading-tight">{data.students[0]}</p>
+                              <p className="text-lg font-black text-amber-600 leading-tight">{toBn(data.marks)}</p>
+                              <div className="text-[10px] font-bold text-slate-700 truncate leading-tight mt-1">
+                                {data.students.join(", ")}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -5164,7 +5181,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             <td colSpan={viewMode === 'detailed' ? 7 + classSubjects.length : 7} className="pt-8 border-0!">
                             <div className="signature-container no-border px-8">
                               <div className="text-slate-400 font-bold text-[10px]">
-                                রিপোর্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                              রিপোর্ট তারিখ: {formatDate(new Date())}
                               </div>
                               <div className="text-center">
                                 <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>
@@ -5235,7 +5252,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                           <td colSpan={printType === 'detailed' ? 5 : 4} className="pt-10 border-0!">
                             <div className="signature-container no-border px-8">
                               <div className="text-slate-400 font-bold text-[10px]">
-                                প্রিন্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                                প্রিন্ট তারিখ: {formatDate(new Date())}
                               </div>
                               <div className="text-center">
                                 <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>
@@ -5309,7 +5326,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                           <td colSpan={2} className="pt-10 border-0!">
                             <div className="signature-container no-border px-8">
                               <div className="text-slate-400 font-bold text-[10px]">
-                                প্রিন্ট তারিখ: {new Date().toLocaleDateString('bn-BD')}
+                                প্রিন্ট তারিখ: {formatDate(new Date())}
                               </div>
                               <div className="text-center">
                                 <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>

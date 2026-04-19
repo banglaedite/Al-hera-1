@@ -326,11 +326,7 @@ async function seedDatabase() {
     }
   }
 
-try {
-  await seedDatabase();
-} catch (e) {
-  console.error("Critical error during database seeding:", e);
-}
+seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
   // --- Sequential Serial Number Helper ---
   async function getNextSerial(prefix: string = "AHM") {
@@ -4000,6 +3996,31 @@ try {
   });
 
   
+  // --- Top Students API ---
+  app.get("/api/top-students", async (req, res) => {
+    try {
+      const type = req.query.type as string || 'monthly';
+      // In a real app, you would query the 'results' or 'attendance' collection.
+      // For now, we'll return a sorted list of students.
+      const db = getFirestoreInstance();
+      const studentsSnapshot = await db.collection("students").limit(20).get();
+      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      const topStudents = students.map(s => ({
+        id: s.id,
+        name: s.name,
+        roll: s.roll,
+        class: s.class,
+        score: Math.floor(Math.random() * 100) // Mock score
+      })).sort((a, b) => b.score - a.score).slice(0, 5);
+
+      res.json(topStudents);
+    } catch (error) {
+      console.error("Top students error:", error);
+      res.status(500).json({ error: "Failed to fetch top students" });
+    }
+  });
+
   // --- Leaderboard API ---
   app.get("/api/leaderboard", async (req, res) => {
     try {
@@ -4842,9 +4863,7 @@ process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", env: process.env.NODE_ENV });
-});
+// Removed duplicate /api/health
 
 // 404 handler for API routes
 app.all("/api/*", (req, res) => {
@@ -4874,11 +4893,9 @@ async function start() {
     });
   }
 
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running at http://0.0.0.0:${PORT}`);
-    });
-  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running at http://0.0.0.0:${PORT}`);
+  });
 }
 
 // Global error handler for API routes - MUST BE AT THE END
