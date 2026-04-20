@@ -4024,17 +4024,73 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   // --- Leaderboard API ---
   app.get("/api/leaderboard", async (req, res) => {
     try {
+      const type = req.query.type as string; // 'amol' or 'attendance'
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      const startDate = startOfMonth.toISOString().split('T')[0];
+
+      if (type === 'amol') {
+        const tasksSnapshot = await firestore.collection("amal_tasks").where("target", "==", "student").get();
+        const activeTasksCount = tasksSnapshot.docs.length || 1;
+        const days = new Date().getDate();
+        const totalPossible = activeTasksCount * days;
+
+        const logsSnapshot = await firestore.collection("amal_logs").where("date", ">=", startDate).get();
+        const userStats: Record<string, number> = {};
+        logsSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.user_type !== 'student' || data.task_id === 'submission_record' || data.status !== 'completed') return;
+          userStats[data.user_id] = (userStats[data.user_id] || 0) + 1;
+        });
+
+        const studentsSnapshot = await firestore.collection("students").where("deleted_at", "==", null).get();
+        
+        const leaderboard = studentsSnapshot.docs.map(doc => {
+          const s = doc.data();
+          const completed = userStats[doc.id] || 0;
+          return {
+            id: doc.id,
+            name: s.name,
+            class: s.class,
+            photo_url: s.photo_url,
+            score: Math.min(100, Math.round((completed / totalPossible) * 100))
+          };
+        }).sort((a, b) => b.score - a.score).slice(0, 10);
+        return res.json(leaderboard);
+      } 
+      else if (type === 'attendance') {
+        const attendanceSnapshot = await firestore.collection("attendance").where("date", ">=", startDate).get();
+        const userStats: Record<string, number> = {};
+        attendanceSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.status === 'present') userStats[data.student_id] = (userStats[data.student_id] || 0) + 1;
+        });
+
+        const studentsSnapshot = await firestore.collection("students").where("deleted_at", "==", null).get();
+        const days = new Date().getDate();
+        
+        const leaderboard = studentsSnapshot.docs.map(doc => {
+          const s = doc.data();
+          const presentCount = userStats[doc.id] || 0;
+          return {
+            id: doc.id,
+            name: s.name,
+            class: s.class,
+            photo_url: s.photo_url,
+            score: Math.min(100, Math.round((presentCount / days) * 100))
+          };
+        }).sort((a, b) => b.score - a.score).slice(0, 10);
+        return res.json(leaderboard);
+      }
+
+      // Default mock logic if no type specified
       const studentsSnapshot = await firestore.collection("students").where("deleted_at", "==", null).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Simple scoring for now: Randomize slightly or use actual data if available
-      // In a real app, you'd aggregate attendance and amal. Here we'll generate a score based on their data.
       const leaderboard = students.map(s => {
-        // Mock score calculation based on ID length or other fields to make it deterministic but varied
         let score = 0;
         if (s.roll) score += parseInt(s.roll) || 0;
         score += (s.name?.length || 0) * 5;
-        // Add random element for demo purposes if no real data
         score += Math.floor(Math.random() * 50);
         
         return {
@@ -4177,7 +4233,14 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     console.log(`Fetching subjects for class: ${req.params.className}`);
     try {
       const snapshot = await firestore.collection("subjects").where("class", "==", req.params.className).get();
-      const subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      let subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      // Sort subjects by order, then by creation date or name
+      subjects.sort((a, b) => {
+        const orderA = a.order || 0;
+        const orderB = b.order || 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.name || "").localeCompare(b.name || "");
+      });
       res.json(subjects);
     } catch (error) {
       console.error("Fetch subjects error:", error);
@@ -4186,7 +4249,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.post("/api/subjects", async (req, res) => {
-    const { class_name: className, name, full_marks } = req.body;
+    const { class_name: className, name, full_marks, order } = req.body;
     try {
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
@@ -4194,12 +4257,32 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         class: className || "Unknown",
         name,
         full_marks: full_marks || 100,
+        order: order || 0,
         created_at: new Date().toISOString()
       });
       res.json({ success: true });
     } catch (error) {
       console.error("Add subject error:", error);
       res.status(500).json({ error: "Failed to add subject" });
+    }
+  });
+
+  app.put("/api/subjects/:id", async (req, res) => {
+    const { password, name, full_marks, order } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
+    try {
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (full_marks !== undefined) updates.full_marks = full_marks;
+      if (order !== undefined) updates.order = order;
+      
+      await db.collection("subjects").doc(req.params.id).update(updates);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Update subject error:", error);
+      res.status(500).json({ error: "Failed to update subject" });
     }
   });
 

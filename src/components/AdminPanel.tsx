@@ -4292,8 +4292,11 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   
   // Subject Management State
   const [classSubjects, setClassSubjects] = useState<any[]>([]);
-  const [newSubject, setNewSubject] = useState({ name: "", total_marks: 100 });
+  const [newSubject, setNewSubject] = useState({ name: "", total_marks: 100, order: 0 });
   const [addingSubject, setAddingSubject] = useState(false);
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
+  const [editSubjectData, setEditSubjectData] = useState({ name: "", total_marks: 100, order: 0 });
+
   
   // Exam Management State
   const [exams, setExams] = useState<any[]>([]);
@@ -4484,10 +4487,10 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
       const res = await fetch("/api/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newSubject, class_name: selectedClass })
+        body: JSON.stringify({ ...newSubject, class_name: selectedClass, full_marks: newSubject.total_marks })
       });
       if (!res.ok) throw new Error("Failed to add subject");
-      setNewSubject({ name: "", total_marks: 100 });
+      setNewSubject({ name: "", total_marks: 100, order: 0 });
       fetchClassSubjects();
       addToast("বিষয় যুক্ত করা হয়েছে", "success");
     } catch (error) {
@@ -4495,6 +4498,32 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
       addToast("বিষয় যুক্ত করতে সমস্যা হয়েছে", "error");
     } finally {
       setAddingSubject(false);
+    }
+  };
+
+  const handleEditSubjectSave = async (id: string) => {
+    if (!editSubjectData.name) return;
+    try {
+      const password = prompt("পাসওয়ার্ড দিন:");
+      if (!password) return;
+      
+      const res = await fetch(`/api/subjects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          password, 
+          name: editSubjectData.name, 
+          full_marks: editSubjectData.total_marks, 
+          order: editSubjectData.order 
+        })
+      });
+      if (!res.ok) throw new Error("Failed to update subject");
+      setEditingSubjectId(null);
+      fetchClassSubjects();
+      addToast("বিষয় আপডেট করা হয়েছে", "success");
+    } catch (error) {
+      console.error(error);
+      addToast("বিষয় আপডেট করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -4853,12 +4882,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100">
                   <h4 className="text-lg font-black text-slate-900 mb-6 font-display">নতুন বিষয় যুক্ত করুন</h4>
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap gap-4">
                     <input 
                       value={newSubject.name}
                       onChange={(e) => setNewSubject({...newSubject, name: e.target.value})}
                       placeholder="বিষয় নাম (উদা: বাংলা)"
-                      className="flex-1 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
+                      className="flex-1 min-w-[200px] p-4 bg-white border border-slate-200 rounded-2xl font-bold"
                     />
                     <input 
                       type="number"
@@ -4866,6 +4895,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       onChange={(e) => setNewSubject({...newSubject, total_marks: Number(e.target.value)})}
                       placeholder="পূর্ণমান"
                       className="w-32 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
+                    />
+                    <input 
+                      type="number"
+                      value={newSubject.order}
+                      onChange={(e) => setNewSubject({...newSubject, order: Number(e.target.value)})}
+                      placeholder="সিরিয়াল"
+                      className="w-28 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
+                      title="কত নম্বর সিরিয়ালে থাকবে"
                     />
                     <LoadingButton 
                       loading={addingSubject}
@@ -4879,17 +4916,64 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {classSubjects.map((sub) => (
-                    <div key={sub.id} className="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm flex justify-between items-center group hover:shadow-md transition-all">
-                      <div>
-                        <p className="font-black text-slate-900 text-lg">{sub.name}</p>
-                        <p className="text-xs text-slate-400 font-bold">পূর্ণমান: {sub.total_marks}</p>
-                      </div>
-                      <button 
-                        onClick={() => handleDeleteSubject(sub.id)}
-                        className="p-2 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                    <div key={sub.id} className="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
+                      {editingSubjectId === sub.id ? (
+                        <div className="flex flex-col gap-3">
+                          <input 
+                            value={editSubjectData.name}
+                            onChange={(e) => setEditSubjectData({...editSubjectData, name: e.target.value})}
+                            placeholder="বিষয় নাম"
+                            className="p-3 border border-emerald-200 rounded-xl"
+                          />
+                          <div className="flex gap-2">
+                            <input 
+                              type="number"
+                              value={editSubjectData.total_marks}
+                              onChange={(e) => setEditSubjectData({...editSubjectData, total_marks: Number(e.target.value)})}
+                              placeholder="পূর্ণমান"
+                              className="w-full p-3 border border-emerald-200 rounded-xl"
+                            />
+                            <input 
+                              type="number"
+                              value={editSubjectData.order}
+                              onChange={(e) => setEditSubjectData({...editSubjectData, order: Number(e.target.value)})}
+                              placeholder="সিরিয়াল"
+                              className="w-full p-3 border border-emerald-200 rounded-xl"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end mt-2">
+                            <button onClick={() => setEditingSubjectId(null)} className="px-4 py-2 text-sm bg-slate-100 rounded-xl font-bold text-slate-600">বাতিল</button>
+                            <button onClick={() => handleEditSubjectSave(sub.id)} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-xl font-bold">সেভ করুন</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="bg-slate-100 text-slate-500 font-black text-xs px-2 py-1 rounded-md">#{sub.order || 0}</span>
+                              <p className="font-black text-slate-900 text-lg">{sub.name}</p>
+                            </div>
+                            <p className="text-xs text-slate-400 font-bold mt-1">পূর্ণমান: {sub.total_marks}</p>
+                          </div>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => {
+                                setEditingSubjectId(sub.id);
+                                setEditSubjectData({ name: sub.name, total_marks: sub.full_marks || sub.total_marks || 100, order: sub.order || 0 });
+                              }}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteSubject(sub.id)}
+                              className="p-2 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {classSubjects.length === 0 && (
@@ -5131,50 +5215,63 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-emerald-50">
-                          {[...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll)).map((r, index) => {
-                            const avg = r.avgMarks || (r.totalMarks / (classSubjects.length || 1));
-                            const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
-                            return (
-                              <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none">
-                                <td className="p-4 rounded-l-2xl text-center print:rounded-none">
-                                  <div className={cn(
-                                    "w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg",
-                                    index === 0 ? "bg-amber-100 text-amber-700" : 
-                                    index === 1 ? "bg-slate-200 text-slate-700" :
-                                    index === 2 ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-600"
-                                  )}>
-                                    {index + 1}
-                                  </div>
-                                </td>
-                                <td className="p-4 font-black text-slate-900">{r.name}</td>
-                                <td className="p-4 font-bold text-slate-600 text-center">{r.roll}</td>
-                                {viewMode === 'detailed' && classSubjects.map(sub => (
-                                  <td key={sub.id} className="p-4 text-center font-bold text-slate-700">
-                                    {r.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-"}
+                          {(() => {
+                            const sortedResults = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
+                            let currentRank = 1;
+                            let prevMarks = -1;
+                            let mappedRank = 1;
+                            
+                            return sortedResults.map((r, index) => {
+                              if (r.totalMarks !== prevMarks) {
+                                mappedRank = currentRank;
+                                prevMarks = r.totalMarks;
+                              }
+                              currentRank++;
+                              
+                              const avg = r.avgMarks || (r.totalMarks / (classSubjects.length || 1));
+                              const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                              return (
+                                <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none">
+                                  <td className="p-4 rounded-l-2xl text-center print:rounded-none">
+                                    <div className={cn(
+                                      "w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg mx-auto",
+                                      mappedRank === 1 ? "bg-amber-100 text-amber-700" : 
+                                      mappedRank === 2 ? "bg-slate-200 text-slate-700" :
+                                      mappedRank === 3 ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-600"
+                                    )}>
+                                      {mappedRank}
+                                    </div>
                                   </td>
-                                ))}
-                                <td className="p-4 font-black text-emerald-700 text-lg text-center">{r.totalMarks}</td>
-                                <td className="p-4 font-black text-slate-900 text-lg text-center">{avg.toFixed(2)}</td>
-                                <td className="p-4 font-black text-center">
-                                  <span className={cn(
-                                    "px-2 py-1 rounded-lg text-xs font-bold",
-                                    grade === 'A+' ? "bg-green-100 text-green-700" :
-                                    grade === 'F' ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
-                                  )}>
-                                    {grade}
-                                  </span>
-                                </td>
-                                <td className="p-4 rounded-r-2xl text-center print:hidden">
-                                  <button 
-                                    onClick={() => handlePrintIndividualResult(r)}
-                                    className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all no-print"
-                                  >
-                                    <Printer className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                  <td className="p-4 font-black text-slate-900">{r.name}</td>
+                                  <td className="p-4 font-bold text-slate-600 text-center">{r.roll}</td>
+                                  {viewMode === 'detailed' && classSubjects.map(sub => (
+                                    <td key={sub.id} className="p-4 text-center font-bold text-slate-700">
+                                      {r.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-"}
+                                    </td>
+                                  ))}
+                                  <td className="p-4 font-black text-emerald-700 text-lg text-center">{r.totalMarks}</td>
+                                  <td className="p-4 font-black text-slate-900 text-lg text-center">{avg.toFixed(2)}</td>
+                                  <td className="p-4 font-black text-center">
+                                    <span className={cn(
+                                      "px-2 py-1 rounded-lg text-xs font-bold",
+                                      grade === 'A+' ? "bg-green-100 text-green-700" :
+                                      grade === 'F' ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                                    )}>
+                                      {grade}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 rounded-r-2xl text-center print:hidden">
+                                    <button 
+                                      onClick={() => handlePrintIndividualResult(r)}
+                                      className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all no-print"
+                                    >
+                                      <Printer className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
                         </tbody>
                         <tfoot className="print:table-footer-group">
                           <tr>

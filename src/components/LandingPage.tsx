@@ -69,8 +69,26 @@ const LandingPage = () => {
   const [notices, setNotices] = useState<any[]>([]);
   const [routines, setRoutines] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [leaderboardType, setLeaderboardType] = useState<"amol" | "attendance">("amol");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchWithTimeout = (url: string, timeout = 15000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+    };
+
+    fetchWithTimeout(`/api/leaderboard?type=${leaderboardType}`)
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setLeaderboard(data);
+        }
+      })
+      .catch(err => console.error("Failed to load leaderboard:", err));
+  }, [leaderboardType]);
 
   useEffect(() => {
     // Check if user is already logged in and redirect
@@ -87,15 +105,6 @@ const LandingPage = () => {
       const id = setTimeout(() => controller.abort(), timeout);
       return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
     };
-
-    fetchWithTimeout("/api/leaderboard")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setLeaderboard(data);
-        }
-      })
-      .catch(err => console.error("Failed to load leaderboard:", err));
 
     fetchWithTimeout("/api/site-settings")
       .then((res) => {
@@ -699,7 +708,7 @@ const LandingPage = () => {
       {leaderboard.length > 0 && (
         <section id="leaderboard" className={`py-24 bg-slate-50 relative overflow-hidden hidden target:block`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="text-center max-w-3xl mx-auto mb-12">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100/80 text-amber-700 font-bold text-sm mb-6 border border-amber-200/50 shadow-sm">
                 <Award className="w-4 h-4" />
                 <span>মাসিক সেরা ছাত্র</span>
@@ -707,9 +716,24 @@ const LandingPage = () => {
               <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 font-sans tracking-tight">
                 সেরা ১০ জন ছাত্র
               </h2>
-              <p className="text-xl text-slate-500 font-medium font-sans leading-relaxed">
-                দৈনিক আমল, হাজিরা এবং রেজাল্টের ওপর ভিত্তি করে নির্বাচিত এই মাসের সেরা ছাত্ররা।
+              <p className="text-xl text-slate-500 font-medium font-sans leading-relaxed mb-8">
+                দৈনিক আমল এবং হাজিরার ওপর ভিত্তি করে নির্বাচিত এই মাসের সেরা ছাত্ররা।
               </p>
+              
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => setLeaderboardType("amol")}
+                  className={`px-6 py-3 rounded-2xl font-black transition-all ${leaderboardType === "amol" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200" : "bg-white text-slate-500 hover:bg-slate-100"}`}
+                >
+                  সেরা আমল
+                </button>
+                <button
+                  onClick={() => setLeaderboardType("attendance")}
+                  className={`px-6 py-3 rounded-2xl font-black transition-all ${leaderboardType === "attendance" ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-white text-slate-500 hover:bg-slate-100"}`}
+                >
+                  সেরা উপস্থিতি
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
