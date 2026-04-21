@@ -441,7 +441,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
   const generateBeautifulReportHTML = (reportTitle: string, contentHtml: string, dateRange: string, classInfo: string = "") => {
     const title = settings?.title || "আল-হেরা ক্যাডেট মাদ্রাসা";
     const address = settings?.address || "সাভার, ঢাকা";
-    const logo = settings?.logo || "/logo.png";
+    const logo = settings?.logo_url || settings?.logo || "/logo.png";
 
     return `
       <!DOCTYPE html>
@@ -1102,7 +1102,7 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             {/* Hidden Header for Print */}
             <div className="hidden print:block mb-8 text-center border-b-2 border-slate-900 pb-6">
               <div className="flex items-center justify-center gap-4 mb-4">
-                <img src="/logo.png" alt="School Logo" className="w-20 h-20 object-contain" referrerPolicy="no-referrer" />
+                <img src={settings?.logo_url || settings?.logo || "/logo.png"} alt="School Logo" className="w-20 h-20 object-contain" referrerPolicy="no-referrer" />
                 <div className="text-left">
                   <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">আল-হেরা ক্যাডেট মাদ্রাসা</h1>
                   <p className="text-sm font-bold text-slate-600">সাভার, ঢাকা</p>
