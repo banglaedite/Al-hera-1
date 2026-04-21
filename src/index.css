@@ -62,7 +62,7 @@
 
 @layer base {
   body {
-    @apply font-sans antialiased overflow-x-hidden;
+    @apply font-sans antialiased;
   }
 }
 
@@ -148,32 +148,62 @@
   }
 
   th, td {
-    border: 1px solid #000 !important;
+    border: 3px solid #000 !important;
   }
 
   /* Scale based on view mode */
-  .is-detailed table {
-    font-size: 10pt !important;
+  table.is-detailed {
+    font-size: 32pt !important;
   }
   
-  .is-detailed th, 
-  .is-detailed td {
-    padding: 3pt !important;
-    word-break: break-all !important;
+  table.is-detailed th, 
+  table.is-detailed td {
+    padding: 18pt !important;
+    word-break: normal !important;
+    border: 5px solid #000 !important;
   }
 
-  .is-detailed td:not(:nth-child(2)) {
+  table.is-detailed td:not(:nth-child(2)) {
     white-space: nowrap !important;
     text-align: center !important;
+    font-weight: 900 !important;
   }
 
-  .is-short table {
-    font-size: 13pt !important;
+  table.is-detailed .vertical-header {
+    font-size: 36pt !important;
+    height: 400px !important;
   }
 
-  .is-short th,
-  .is-short td {
-    padding: 8pt !important;
+  table.is-short {
+    font-size: 48pt !important;
+  }
+
+  table.is-short th,
+  table.is-short td {
+    padding: 28pt !important;
+    border: 10px solid #000 !important;
+    font-weight: 900 !important;
+  }
+
+  /* Marksheet Print Styles */
+  #marksheet-template {
+    width: 148mm !important;
+    min-height: 210mm !important;
+    padding: 15mm !important;
+    border: 22px double #064e3b !important;
+    font-size: 32pt !important;
+  }
+
+  #marksheet-template table {
+    border: 8px solid #000 !important;
+    font-size: 36pt !important;
+  }
+
+  #marksheet-template th,
+  #marksheet-template td {
+    border: 6px solid #000 !important;
+    padding: 22pt !important;
+    font-weight: 900 !important;
   }
 
   /* Ensure signature stays at bottom of page */
@@ -191,9 +221,9 @@
     transform: rotate(180deg);
     white-space: nowrap;
     padding: 5px;
-    font-size: 11pt;
-    font-weight: bold;
-    height: 120px;
+    font-size: 14pt;
+    font-weight: 900;
+    height: 150px;
     display: flex;
     align-items: center;
     justify-content: center;

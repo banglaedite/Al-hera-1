@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import path from "path";
 import fs from "fs";
 import nodemailer from "nodemailer";
@@ -43,20 +44,24 @@ function getFirestoreInstance() {
   if (firestore) return firestore;
 
   try {
+    console.log("Initializing Firestore instance...");
     let config = { ...hardcodedServiceAccount };
     let dbId = firebaseConfig.firestoreDatabaseId;
 
     // Try to load from dynamic config file
     if (fs.existsSync(ADMIN_CONFIG_PATH)) {
       try {
-        const dynamicConfig = JSON.parse(fs.readFileSync(ADMIN_CONFIG_PATH, 'utf-8'));
-        config = {
-          project_id: dynamicConfig.projectId,
-          client_email: dynamicConfig.clientEmail,
-          private_key: dynamicConfig.privateKey,
-        };
-        dbId = dynamicConfig.databaseId || "(default)";
-        console.log("Loaded dynamic Firebase Admin config from file.");
+        const dynamicContent = fs.readFileSync(ADMIN_CONFIG_PATH, 'utf-8');
+        if (dynamicContent) {
+          const dynamicConfig = JSON.parse(dynamicContent);
+          config = {
+            project_id: dynamicConfig.projectId || dynamicConfig.project_id || config.project_id,
+            client_email: dynamicConfig.clientEmail || dynamicConfig.client_email || config.client_email,
+            private_key: dynamicConfig.privateKey || dynamicConfig.private_key || config.private_key,
+          };
+          dbId = dynamicConfig.databaseId || dynamicConfig.database_id || dbId;
+          console.log("Loaded dynamic Firebase Admin config.");
+        }
       } catch (e) {
         console.error("Error parsing dynamic config file:", e);
       }
@@ -68,14 +73,18 @@ function getFirestoreInstance() {
 
     if (!admin.apps.length) {
       console.log("Initializing Firebase Admin with project:", projectId);
-      const privateKeyFormatted = (privateKey || "").replace(/\\n/g, '\n');
+      // Handle both literal and escaped newlines
+      const privateKeyFormatted = (privateKey || "").includes("\\n") 
+        ? privateKey.replace(/\\n/g, '\n') 
+        : privateKey;
+
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId,
           clientEmail,
           privateKey: privateKeyFormatted,
         }),
-        storageBucket: `${projectId}.appspot.com`
+        storageBucket: `${projectId}.firebasestorage.app`
       });
       console.log("Firebase Admin initialized successfully.");
     }
@@ -83,8 +92,12 @@ function getFirestoreInstance() {
     const finalDbId = dbId === "(default)" ? undefined : dbId;
     const appInstance = admin.app();
     firestore = finalDbId ? getAdminFirestore(appInstance, finalDbId) : getAdminFirestore(appInstance);
-    firestore.settings({ ignoreUndefinedProperties: true });
-    console.log("Firestore instance created with ignoreUndefinedProperties: true");
+    
+    if (firestore) {
+      firestore.settings({ ignoreUndefinedProperties: true });
+      console.log("Firestore instance created successfully.");
+    }
+    
     return firestore;
   } catch (err) {
     console.error("Firebase Admin init error:", err);
@@ -94,14 +107,59 @@ function getFirestoreInstance() {
 
 const app = express();
 
+app.use(cors());
+
+// Enhanced logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.path.startsWith('/api/')) {
+       console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+    }
+  });
   next();
+});
+
+// Consolidated Health check
+app.get("/api/health", async (req, res) => {
+  try {
+    const db = getFirestoreInstance();
+    const status: any = { 
+      status: "ok", 
+      time: new Date().toISOString(),
+      firestoreInitialized: !!db,
+      adminApps: admin.apps.length,
+      env: process.env.NODE_ENV || 'development'
+    };
+    
+    if (db) {
+      try {
+        const test = await db.collection("site_settings").limit(1).get();
+        status.firestoreConnected = true;
+        status.hasData = !test.empty;
+      } catch (e: any) {
+        status.firestoreConnected = false;
+        status.firestoreError = e.message;
+      }
+    }
+    
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ 
+      status: "error", 
+      error: err.message 
+    });
+  }
 });
 
 // Ensure Firestore is initialized for all requests
 app.use((req, res, next) => {
-  getFirestoreInstance();
+  const db = getFirestoreInstance();
+  if (!db && req.path.startsWith('/api/')) {
+    console.error("Critical: Firestore failed to initialize before API request:", req.path);
+    return res.status(503).json({ error: "Database not available. Please check environment variables and Firebase Admin config." });
+  }
   next();
 });
 
@@ -210,39 +268,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
-app.get("/api/health", async (req, res) => {
-  try {
-    const db = getFirestoreInstance();
-    if (!db) {
-      throw new Error("Firestore initialization failed");
-    }
-    const test = await db.collection("site_settings").limit(1).get();
-    res.json({ 
-      status: "ok", 
-      firestore: "connected", 
-      data: !test.empty,
-      config: {
-        projectId: hardcodedServiceAccount.project_id,
-        clientEmail: hardcodedServiceAccount.client_email,
-        hasPrivateKey: !!hardcodedServiceAccount.private_key,
-        databaseId: firebaseConfig.firestoreDatabaseId
-      }
-    });
-  } catch (err: any) {
-    res.status(500).json({ 
-      status: "error", 
-      firestore: "disconnected", 
-      error: err.message,
-      config: {
-        projectId: hardcodedServiceAccount.project_id,
-        clientEmail: hardcodedServiceAccount.client_email,
-        hasPrivateKey: !!hardcodedServiceAccount.private_key,
-        databaseId: firebaseConfig.firestoreDatabaseId
-      }
-    });
-  }
-});
+// Health check removed (consolidated above)
 
 // Hardcoded SMTP Settings
 process.env.SMTP_HOST = "smtp.gmail.com";
@@ -928,7 +954,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       youtube_url, muhtamim_signature_url, show_muhtamim_signature,
       qr_code_url, enable_qr_code, auto_whatsapp, enable_historical_reports,
       show_routines_directly, bkash_instructions, nagad_instructions, rocket_instructions,
-      payment_special_note, enable_signature, signature_url
+      payment_special_note, enable_signature, signature_url,
+      popup_enabled, popup_image, popup_link, popup_title, popup_description, popup_duration, popup_show_close
     } = req.body;
     try {
       const db = getFirestoreInstance();
@@ -964,7 +991,14 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         rocket_instructions: rocket_instructions || "",
         payment_special_note: payment_special_note || "",
         enable_signature: enable_signature ? 1 : 0,
-        signature_url: signature_url || ""
+        signature_url: signature_url || "",
+        popup_enabled: popup_enabled ? 1 : 0,
+        popup_image: popup_image || "",
+        popup_link: popup_link || "",
+        popup_title: popup_title || "",
+        popup_description: popup_description || "",
+        popup_duration: popup_duration || 10,
+        popup_show_close: popup_show_close ? 1 : 0
       }, { merge: true });
       res.json({ success: true });
     } catch (error) {
@@ -4317,25 +4351,56 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     if (!identifier) return res.status(400).json({ error: "মোবাইল নম্বর বা ইমেইল আবশ্যক" });
 
     try {
+      let matchedTeacher: any = null;
+      let matchedId = "";
+
       const snapshot = await firestore.collection("teachers").where("phone", "==", identifier).get();
       if (!snapshot.empty) {
-        const teacher = snapshot.docs[0].data();
-        if (teacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
-        return res.json({ id: snapshot.docs[0].id, ...teacher });
+        matchedTeacher = snapshot.docs[0].data();
+        matchedId = snapshot.docs[0].id;
+      } else {
+        const emailSnapshot = await firestore.collection("teachers").where("email", "==", identifier).get();
+        if (!emailSnapshot.empty) {
+          matchedTeacher = emailSnapshot.docs[0].data();
+          matchedId = emailSnapshot.docs[0].id;
+        } else {
+          const codeSnapshot = await firestore.collection("teachers").where("id_code", "==", identifier).get();
+          if (!codeSnapshot.empty) {
+            matchedTeacher = codeSnapshot.docs[0].data();
+            matchedId = codeSnapshot.docs[0].id;
+          }
+        }
       }
 
-      const emailSnapshot = await firestore.collection("teachers").where("email", "==", identifier).get();
-      if (!emailSnapshot.empty) {
-        const teacher = emailSnapshot.docs[0].data();
-        if (teacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
-        return res.json({ id: emailSnapshot.docs[0].id, ...teacher });
-      }
+      if (matchedTeacher) {
+        if (matchedTeacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
+        
+        let permissions: string[] = [];
+        let isSubAdmin = false;
 
-      const codeSnapshot = await firestore.collection("teachers").where("id_code", "==", identifier).get();
-      if (!codeSnapshot.empty) {
-        const teacher = codeSnapshot.docs[0].data();
-        if (teacher.deleted_at) return res.status(401).json({ error: "আপনার অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে" });
-        return res.json({ id: codeSnapshot.docs[0].id, ...teacher });
+        // Try to find if teacher is a sub-admin by looking up email/phone/name
+        // AdminPanel configures sub-admins using "email" column which can be anything
+        const allPossibleIdentifiers = [matchedTeacher.email, matchedTeacher.phone, matchedTeacher.name].filter(Boolean);
+        let actualMatchedIdentifier = null;
+        
+        for (const subId of allPossibleIdentifiers) {
+          if (!subId) continue;
+          const subAdminSnapshot = await firestore.collection("sub_admins").where("email", "==", subId).get();
+          if (!subAdminSnapshot.empty) {
+            permissions = subAdminSnapshot.docs[0].data().permissions || [];
+            isSubAdmin = true;
+            actualMatchedIdentifier = subId;
+            break;
+          }
+        }
+        
+        return res.json({ 
+          id: matchedId, 
+          ...matchedTeacher,
+          isSubAdmin,
+          permissions,
+          adminIdentifier: actualMatchedIdentifier
+        });
       }
 
       res.status(401).json({ error: "শিক্ষক খুঁজে পাওয়া যায়নি" });

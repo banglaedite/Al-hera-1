@@ -428,7 +428,7 @@ export default function AdminPanel() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/site-settings");
+      const res = await fetchWithRetry("/api/site-settings");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (!data.smtp_user) data.smtp_user = "banglaedite@gmail.com";
@@ -444,7 +444,7 @@ export default function AdminPanel() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch("/api/classes");
+      const res = await fetchWithRetry("/api/classes");
       if (res.ok) setClasses(await res.json());
     } catch (error) {
       console.error(error);
@@ -479,9 +479,26 @@ export default function AdminPanel() {
     }
   };
 
+  const fetchWithRetry = async (url: string, options: any = {}, retries = 3): Promise<Response> => {
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok && res.status >= 500 && retries > 0) {
+        await new Promise(r => setTimeout(r, 1000));
+        return fetchWithRetry(url, options, retries - 1);
+      }
+      return res;
+    } catch (err) {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, 1000));
+        return fetchWithRetry(url, options, retries - 1);
+      }
+      throw err;
+    }
+  };
+
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/admin/stats");
+      const res = await fetchWithRetry("/api/admin/stats");
       if (res.ok) {
         setStats(await res.json());
       } else {
@@ -495,7 +512,7 @@ export default function AdminPanel() {
 
   const fetchTeachers = async () => {
     try {
-      const res = await fetch("/api/admin/teachers?t=" + Date.now());
+      const res = await fetchWithRetry("/api/admin/teachers?t=" + Date.now());
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -641,7 +658,30 @@ export default function AdminPanel() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => {
+              onClick={async () => {
+                if (tab.id === 'settings' || tab.id === 'delete-history') {
+                  const pwd = prompt("এই অপশনে প্রবেশ করতে পাসওয়ার্ড দিন:");
+                  if (!pwd) return;
+                  try {
+                    const res = await fetch("/api/admin-login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ identifier: pwd })
+                    });
+                    if (!res.ok) {
+                      addToast("ভুল পাসওয়ার্ড!", "error");
+                      return;
+                    }
+                    const data = await res.json();
+                    if (data.role !== "admin") {
+                      addToast("আপনার এই অপশনে প্রবেশ করার অনুমতি নেই!", "error");
+                      return;
+                    }
+                  } catch {
+                    addToast("পাসওয়ার্ড যাচাই করতে সমস্যা হয়েছে", "error");
+                    return;
+                  }
+                }
                 setActiveTab(tab.id);
                 if (tab.id === 'amal') {
                   const today = new Date().toDateString();
@@ -691,7 +731,7 @@ export default function AdminPanel() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 print:w-full print:max-w-none">
+        <main className="flex-1 print:w-full print:max-w-none min-w-0">
           {loading ? (
             <div className="flex items-center justify-center h-96">
               <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
@@ -2019,6 +2059,43 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           </div>
         </div>
 
+        {/* Global Popup Settings */}
+        <div className="border-t border-slate-100 pt-8 mt-8">
+          <h4 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+            <Bell className="w-5 h-5 text-emerald-600" /> গ্লোবাল পপআপ সেটিংস (Global Popup)
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2 flex items-center gap-3">
+              <input type="checkbox" id="popup_enabled" checked={!!settings.popup_enabled} onChange={(e) => setSettings({...settings, popup_enabled: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
+              <label htmlFor="popup_enabled" className="text-sm font-bold text-slate-700 font-black">পপআপ অপশন চালু করুন (Enable Popup)</label>
+            </div>
+            <div className="space-y-2 flex items-center gap-3">
+              <input type="checkbox" id="popup_show_close" checked={!!settings.popup_show_close} onChange={(e) => setSettings({...settings, popup_show_close: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
+              <label htmlFor="popup_show_close" className="text-sm font-bold text-slate-700 font-black">ক্লোজ বাটন দেখান (Show Close Button)</label>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700">পপআপ শিরোনাম (Title)</label>
+              <input value={settings.popup_title || ""} onChange={(e) => setSettings({...settings, popup_title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: নতুন ঘোষণা!" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700">পপআপ ছবি ইউআরএল (Image URL)</label>
+              <input value={settings.popup_image || ""} onChange={(e) => setSettings({...settings, popup_image: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/popup.jpg" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700">ছবির লিঙ্ক (Image Click Link)</label>
+              <input value={settings.popup_link || ""} onChange={(e) => setSettings({...settings, popup_link: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/more-info" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700">পপআপ কতক্ষণ দেখাবে (সেকেন্ডে)</label>
+              <input type="number" value={settings.popup_duration || 10} onChange={(e) => setSettings({...settings, popup_duration: parseInt(e.target.value) || 0})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="10" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-bold text-slate-700">বিস্তারিত তথ্য (Description)</label>
+              <textarea value={settings.popup_description || ""} onChange={(e) => setSettings({...settings, popup_description: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-24" placeholder="পপআপের বিস্তারিত বর্ণনা এখানে লিখুন..." />
+            </div>
+          </div>
+        </div>
+
         <div className="border-t border-slate-100 pt-8 flex justify-between items-center">
           <button 
             type="button" 
@@ -2347,15 +2424,17 @@ const printElement = (elementId: string) => {
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Hind+Siliguri:wght@400;700&display=swap');
           @page {
             size: auto;
-            margin: 5mm;
+            margin: 15mm 10mm;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           body { 
             font-family: 'Hind Siliguri', 'Inter', sans-serif;
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
           }
           .print-container { 
             width: 100% !important; 
@@ -2365,22 +2444,30 @@ const printElement = (elementId: string) => {
             overflow: visible !important;
           }
           table { width: 100% !important; border-collapse: collapse !important; table-layout: auto !important; }
-          th, td { border: 1px solid #000 !important; font-size: 8px !important; padding: 2px !important; line-height: 1.1; }
+          th, td { 
+            border: 1.5px solid #000 !important; 
+            font-size: 14pt !important; 
+            padding: 8px !important; 
+            line-height: 1.2; 
+            font-weight: 800 !important;
+          }
+          .text-rose-600 { color: #e11d48 !important; }
+          .text-emerald-500 { color: #10b981 !important; }
           .no-print { display: none !important; }
-          .signature-container { display: flex !important; justify-content: space-between !important; border: none !important; margin-top: 15px !important; }
-          .signature-line { border-top: 1px solid black !important; width: 100px !important; text-align: center !important; font-weight: bold; font-size: 9px; }
+          .signature-container { display: flex !important; justify-content: space-between !important; border: none !important; margin-top: 30px !important; }
+          .signature-line { border-top: 2px solid black !important; width: 150px !important; text-align: center !important; font-weight: bold; font-size: 11pt; padding-top: 5px; }
           
           .vertical-header {
             writing-mode: vertical-rl;
             transform: rotate(180deg);
             white-space: nowrap;
-            height: 80px;
-            padding: 2px !important;
+            height: 150px;
+            padding: 5px !important;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 8px !important;
-            font-weight: bold !important;
+            font-size: 11pt !important;
+            font-weight: 900 !important;
             margin: 0 auto;
           }
           
@@ -2388,9 +2475,26 @@ const printElement = (elementId: string) => {
              display: grid;
              grid-template-columns: 1fr 1fr;
              gap: 8px;
-             margin-bottom: 8px;
-             font-size: 10px !important;
+             margin-bottom: 12px;
+             font-size: 12pt !important;
+             font-weight: bold !important;
           }
+
+          /* Marksheet Specific Scaling in Print Window */
+          #marksheet-template {
+            font-size: 14pt !important;
+            border: 10px double #064e3b !important;
+            padding: 40px !important;
+            width: 200mm !important; /* Slightly responsive to container */
+            max-width: 100% !important;
+            margin: 0 auto !important;
+          }
+          #marksheet-template h2 { font-size: 32pt !important; margin-bottom: 5px !important; }
+          #marksheet-template h3 { font-size: 38pt !important; margin-bottom: 20px !important; }
+          #marksheet-template p { font-size: 14pt !important; margin-bottom: 5px !important; }
+          #marksheet-template table { font-size: 14pt !important; border: 3px solid #000 !important; margin-bottom: 15px !important; }
+          #marksheet-template th, #marksheet-template td { padding: 15px !important; border: 2.5px solid #000 !important; }
+          #marksheet-template img { border-radius: 20px !important; }
 
           /* Force page breaks in batch mode */
           .batch-item {
@@ -3576,54 +3680,71 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   </div>
                 </div>
 
-                {/* Hidden Template for Individual Marksheet Print */}
+                {/* Hidden Template for Individual Marksheet Print (Profile View) */}
                 {individualPrintData && (
-                  <div id="profile-individual-result-template" className="hidden print:block pb-8 bg-white w-full mx-auto">
-                    <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
-                      <h1 className="text-4xl font-black text-slate-900">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
-                      <p className="text-lg font-bold text-slate-600 mt-2">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
-                      <h2 className="text-2xl font-black text-slate-900 mt-6 uppercase tracking-widest border-b-2 border-slate-900 inline-block pb-1">
-                        মার্কশিট
-                      </h2>
-                      <p className="text-xl font-bold text-slate-700 mt-2">{individualPrintData.exam_name} - {individualPrintData.year}</p>
+                  <div id="profile-individual-result-template" className="hidden print:block pb-8 bg-white w-full mx-auto" style={{ padding: '80px 48px 48px 48px', overflow: 'hidden', position: 'relative' }}>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+                      <GraduationCap className="w-96 h-96" style={{ color: '#064e3b' }} />
                     </div>
                     
-                    <div className="flex justify-between mb-8 text-lg font-bold text-slate-800">
-                      <div>
-                        <p>ছাত্রের নাম: {individualPrintData.name}</p>
-                        <p>শ্রেণী: {individualPrintData.class}</p>
+                    <div className="relative z-10 flex flex-col items-center justify-center mb-10 pb-8" style={{ borderBottom: '4px double #10b981' }}>
+                      <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border-2 border-emerald-200">
+                        <GraduationCap className="w-12 h-12" style={{ color: '#059669' }} />
                       </div>
-                      <div className="text-right">
-                        <p>রোল: {individualPrintData.roll}</p>
-                        <p>মেধাস্থান: {fullProfile.examStats?.[selectedResultExam]?.rank || '-'}</p>
-                        <p>মোট নম্বর: {individualPrintData.totalMarks}</p>
-                        <p>গড় নম্বর: {(individualPrintData.totalMarks / (individualPrintData.subjects.length || 1)).toFixed(2)}</p>
+                      <h2 className="text-5xl font-black mb-3 drop-shadow-sm" style={{ color: '#064e3b', fontFamily: 'sans-serif' }}>{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h2>
+                      <div className="px-6 py-2 rounded-full" style={{ backgroundColor: '#ecfdf5', border: '1px solid #10b981' }}>
+                        <p className="text-xl font-bold tracking-wide" style={{ color: '#047857' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট</p>
+                      </div>
+                      <p className="text-lg font-bold mt-4" style={{ color: '#475569' }}>পরীক্ষা: <span style={{ color: '#1e293b' }}>{individualPrintData.exam_name} - {individualPrintData.year}</span></p>
+                    </div>
+                    
+                    <div className="relative z-10 flex justify-between items-center mb-10 text-left p-8 rounded-2xl shadow-sm" style={{ backgroundColor: '#f8fafc', borderLeft: '8px solid #059669', borderRight: '8px solid #059669' }}>
+                      <div>
+                        <h3 className="text-3xl font-black mb-3" style={{ color: '#0f172a' }}>{individualPrintData.name}</h3>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>শ্রেণী:</span> {individualPrintData.class}</p>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>রোল:</span> <span className="text-xl font-black">{individualPrintData.roll}</span></p>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মোট নম্বর:</span> <span className="text-xl font-black">{individualPrintData.totalMarks}</span></p>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>গড় নম্বর:</span> <span className="text-xl font-black">{(individualPrintData.totalMarks / (individualPrintData.subjects.length || 1)).toFixed(2)}</span></p>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মেধাস্থান:</span> <span className="text-xl font-black" style={{ color: '#059669' }}>{fullProfile.examStats?.[selectedResultExam]?.rank || '-'}</span></p>
                       </div>
                     </div>
 
-                    <table className="w-full border-collapse mb-12 text-lg">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-900">
-                          <th className="p-4 text-left border border-slate-300">বিষয়</th>
-                          <th className="p-4 text-center border border-slate-300">প্রাপ্ত নম্বর</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {individualPrintData.subjects.map((sub: any, i: number) => (
-                          <tr key={i} className="border-b border-slate-200">
-                            <td className="p-4 border border-slate-300 font-bold">{sub.subject}</td>
-                            <td className="p-4 text-center font-black border border-slate-300">{sub.marks}</td>
+                    <div className="relative z-10 w-full rounded-2xl overflow-hidden" style={{ border: '2px solid #cbd5e1' }}>
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9' }}>
+                            <th className="p-5 font-black text-lg" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1' }}>বিষয়</th>
+                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>প্রাপ্ত নম্বর</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {individualPrintData.subjects.map((sub: any, idx: number, arr: any[]) => {
+                            const mk = Number(sub.marks) || 0;
+                            let markColor = '#0f172a';
+                            if (mk < 33) markColor = '#dc2626';
+                            else if (mk === 100) markColor = '#10b981';
+                            
+                            return (
+                              <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                <td className="p-5 font-bold text-lg" style={{ color: '#1e293b', borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0' }}>{sub.subject}</td>
+                                <td className="p-5 font-black text-2xl text-center" style={{ color: markColor, borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>{sub.marks}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                    <div className="flex justify-between mt-24">
+                    <div className="relative z-10 flex justify-between items-end mt-32 px-8">
                       <div className="text-center">
-                        <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">শিক্ষকের স্বাক্ষর</div>
+                        <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
+                        <p className="font-bold text-xl uppercase tracking-widest text-slate-800">শিক্ষকের স্বাক্ষর</p>
                       </div>
                       <div className="text-center">
-                        <div className="border-t-2 border-slate-900 w-48 pt-2 font-black">অধ্যক্ষের স্বাক্ষর</div>
+                        <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
+                        <p className="font-bold text-xl uppercase tracking-widest text-slate-800">অধ্যক্ষের স্বাক্ষর</p>
                       </div>
                     </div>
                   </div>
@@ -3698,116 +3819,157 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                 </div>
               </div>
 
-              <div id="marksheet-template" className="hidden absolute top-0 left-0 bg-white p-12 w-full max-w-[800px] mx-auto border-4 border-double border-emerald-900 text-center" style={{ borderColor: '#064e3b' }}>
-                <div className="flex items-center justify-center gap-4 mb-8 border-b-4 border-emerald-100 pb-6" style={{ borderColor: '#d1fae5' }}>
-                  <GraduationCap className="w-12 h-12 text-emerald-600" style={{ color: '#059669' }} />
-                  <div>
-                    <h2 className="text-4xl font-black text-emerald-900" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                    <p className="text-lg font-bold text-slate-500 mt-1" style={{ color: '#64748b' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট - {(() => {
-                      if (!selectedResultExam) return "";
-                      const [exam, year] = selectedResultExam.split('|');
-                      return `${exam} (${year})`;
-                    })()}</p>
+              <div id="marksheet-template" className="hidden absolute top-0 left-0 bg-white p-8 w-full max-w-[800px] mx-auto border-[16px] border-double border-emerald-900 text-center shadow-2xl print:p-14 print:border-[24px]" style={{ borderColor: '#064e3b' }}>
+                <div className="absolute top-8 right-8 print:top-12 print:right-12">
+                  {settings?.qr_code_url && (
+                    <img src={settings.qr_code_url} className="w-20 h-20 object-contain print:w-32 print:h-32 opacity-80" alt="QR" referrerPolicy="no-referrer" />
+                  )}
+                </div>
+                
+                <div className="flex items-center justify-center gap-6 mb-8 border-b-8 border-emerald-50 pb-8 rounded-t-3xl print:gap-10 print:mb-14 print:border-b-[12px]" style={{ borderColor: '#f0fdf4' }}>
+                  <div className="bg-emerald-900 p-4 rounded-2xl shadow-lg print:p-6 print:rounded-3xl">
+                    <GraduationCap className="w-12 h-12 text-white print:w-24 print:h-24" />
+                  </div>
+                  <div className="text-center">
+                    <h2 className="text-4xl font-black text-emerald-900 mb-2 tracking-tighter print:text-[80pt] print:mb-6" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                    <p className="text-xl font-bold text-emerald-700 print:text-4xl" style={{ color: '#047857' }}>{settings?.address || ""}</p>
+                    <div className="mt-4 print:mt-8">
+                      <span className="text-sm font-black text-white bg-slate-900 px-6 py-2 rounded-full inline-block print:text-4xl print:px-12 print:py-4">একাডেমিক ট্রান্সক্রিপ্ট - {(() => {
+                        if (!selectedResultExam) return "";
+                        const [exam, year] = selectedResultExam.split('|');
+                        return `${exam} (${toBn(year)})`;
+                      })()}</span>
+                    </div>
                   </div>
                 </div>
                 
-                <div className="flex justify-between items-end mb-8 text-left bg-slate-50 p-6 rounded-2xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-900 mb-2" style={{ color: '#0f172a' }}>{fullProfile.student.name}</h3>
-                    <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>পিতার নাম: {fullProfile.student.father_name}</p>
-                    <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>মাতার নাম: {fullProfile.student.mother_name}</p>
+                <div className="flex justify-between items-stretch mb-8 gap-4 print:mb-14 print:gap-8 min-h-[160px] print:min-h-[250px]">
+                  <div className="flex-1 bg-gradient-to-br from-slate-50 to-white p-6 rounded-[2.5rem] border-4 border-slate-100 flex items-center gap-6 text-left print:p-10 print:rounded-[4rem] print:border-[10px]">
+                    <div className="relative">
+                      <img src={fullProfile.student.photo_url || `https://picsum.photos/seed/${fullProfile.student.id}/200`} className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-xl ring-4 ring-emerald-50 print:w-44 print:h-44 print:rounded-[3rem] print:border-8" referrerPolicy="no-referrer" />
+                      <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1 rounded-lg print:p-2 print:rounded-2xl">
+                        <UserCheck className="w-4 h-4 print:w-8 print:h-8" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900 mb-2 leading-none print:text-[110pt] print:mb-12 print:underline print:decoration-emerald-200 print:decoration-[12px] print:underline-offset-[20px]">{fullProfile.student.name}</h3>
+                      <div className="space-y-1 print:space-y-6">
+                        <p className="text-sm font-bold text-slate-500 print:text-4xl"><span className="text-slate-400 print:text-3xl">পিতা:</span> {fullProfile.student.father_name}</p>
+                        <p className="text-sm font-bold text-slate-500 print:text-4xl"><span className="text-slate-400 print:text-3xl">মাতা:</span> {fullProfile.student.mother_name}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-emerald-700 font-black text-xl mb-1" style={{ color: '#047857' }}>ID: {fullProfile.student.studentId || fullProfile.student.id}</p>
-                    <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>শ্রেণী: {fullProfile.student.class}</p>
-                    <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>রোল: {fullProfile.student.roll}</p>
+                  <div className="w-48 bg-emerald-900 text-white p-6 rounded-[2.5rem] flex flex-col justify-center gap-3 text-center print:w-80 print:p-10 print:rounded-[4rem] print:gap-6">
+                    <div className="bg-white/10 p-2 rounded-2xl print:p-4">
+                      <p className="text-[10px] font-black uppercase text-emerald-200 print:text-2xl mb-1">শ্রেণী</p>
+                      <p className="text-lg font-black print:text-5xl">{fullProfile.student.class}</p>
+                    </div>
+                    <div className="bg-white/10 p-2 rounded-2xl print:p-4">
+                      <p className="text-[10px] font-black uppercase text-emerald-200 print:text-2xl mb-1">রোল</p>
+                      <p className="text-lg font-black print:text-5xl">{toBn(fullProfile.student.roll)}</p>
+                    </div>
                   </div>
                 </div>
 
                 {selectedResultExam && fullProfile && fullProfile.examStats && fullProfile.examStats[selectedResultExam] && (
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                      <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>মোট নম্বর</p>
-                      <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.examStats[selectedResultExam].myTotal}</p>
+                  <div className="grid grid-cols-2 gap-4 mb-8 print:gap-8 print:mb-14">
+                    <div className="bg-slate-900 rounded-[3rem] p-1 flex items-center print:p-2">
+                       <div className="flex-1 text-left px-8 py-4 print:px-14 print:py-8">
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 print:text-2xl">মেধা স্থান (Rank)</p>
+                         <p className="text-3xl font-black text-white print:text-[100pt] leading-none">{toBn(fullProfile.examStats[selectedResultExam].rank)}</p>
+                       </div>
+                       <div className="w-20 h-20 bg-white/10 rounded-full mr-4 flex items-center justify-center print:w-36 print:h-36 print:mr-8">
+                         < Award className="w-10 h-10 text-emerald-400 print:w-20 print:h-20" />
+                       </div>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                      <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>গড় নম্বর</p>
-                      <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
-                        {(() => {
-                          const [exam, year] = selectedResultExam.split('|');
-                          const results = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
-                          return results.length > 0 
-                            ? (fullProfile.examStats[selectedResultExam].myTotal / results.length).toFixed(1)
-                            : "0.0";
-                        })()}
-                      </p>
-                    </div>
-                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200" style={{ backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }}>
-                      <p className="text-xs font-bold text-emerald-600 uppercase" style={{ color: '#059669' }}>মেধা স্থান</p>
-                      <p className="text-xl font-black text-emerald-700" style={{ color: '#047857' }}>
-                        {fullProfile.examStats[selectedResultExam].rank} <span className="text-sm text-emerald-500" style={{ color: '#10b981' }}>/ {fullProfile.examStats[selectedResultExam].totalStudents}</span>
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                      <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>সর্বোচ্চ নম্বর</p>
-                      <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.examStats[selectedResultExam].highestMarks}</p>
-                    </div>
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                      <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>উপস্থিতি</p>
-                      <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
-                        {fullProfile.attendance.length > 0 
-                          ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
-                          : 0}%
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                      <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>ফলাফল</p>
-                      <p className={cn("text-xl font-black", 
-                        (() => {
-                          const [exam, year] = selectedResultExam.split('|');
-                          return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
-                            ? "text-rose-600" 
-                            : "text-emerald-600"
-                        })()
-                      )} style={{ color: (() => {
-                        const [exam, year] = selectedResultExam.split('|');
-                        return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? '#e11d48' : '#059669'
-                      })() }}>
-                        {(() => {
-                          const [exam, year] = selectedResultExam.split('|');
-                          return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"
-                        })()}
-                      </p>
+                    <div className="bg-emerald-600 rounded-[3rem] p-1 flex items-center print:p-2 shadow-lg shadow-emerald-100">
+                       <div className="flex-1 text-left px-8 py-4 print:px-14 print:py-8">
+                         <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 print:text-2xl">লেটার গ্রেড (Grade)</p>
+                         <p className="text-3xl font-black text-white print:text-[100pt] leading-none">
+                           {(() => {
+                             const avg = fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
+                               const [exam, year] = selectedResultExam.split('|');
+                               return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
+                             }).length || 1);
+                             return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                           })()}
+                         </p>
+                       </div>
+                       <div className="w-20 h-20 bg-white/20 rounded-full mr-4 flex items-center justify-center print:w-36 print:h-36 print:mr-8">
+                         < Star className="w-10 h-10 text-white print:w-20 print:h-20" />
+                       </div>
                     </div>
                   </div>
                 )}
 
-                <table className="w-full text-left border-collapse border border-slate-300 mb-8">
-                  <thead>
-                    <tr className="bg-emerald-50" style={{ backgroundColor: '#ecfdf5' }}>
-                      <th className="border border-slate-300 p-4 font-black text-slate-700" style={{ borderColor: '#cbd5e1', color: '#334155' }}>বিষয়</th>
-                      <th className="border border-slate-300 p-4 font-black text-slate-700 text-center" style={{ borderColor: '#cbd5e1', color: '#334155' }}>প্রাপ্ত নম্বর</th>
-                      <th className="border border-slate-300 p-4 font-black text-slate-700 text-center" style={{ borderColor: '#cbd5e1', color: '#334155' }}>লেটার গ্রেড</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      if (!selectedResultExam) return [];
-                      const [exam, year] = selectedResultExam.split('|');
-                      return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
-                    })().map((r: any, idx: number) => (
-                      <tr key={idx}>
-                        <td className="border border-slate-300 p-4 font-bold text-slate-800" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{r.subject}</td>
-                        <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.marks}</td>
-                        <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.grade}</td>
+                <div className="grid grid-cols-2 gap-8 items-start">
+                  <table className="w-full text-left border-collapse border-4 border-slate-900 rounded-3xl overflow-hidden print:border-[12px]">
+                    <thead>
+                      <tr className="bg-slate-900 text-white">
+                        <th className="p-4 font-black print:p-12 print:text-4xl text-center border-b-2 border-slate-700">বিষয়</th>
+                        <th className="p-4 font-black print:p-12 print:text-4xl text-center border-b-2 border-slate-700">নম্বর</th>
+                        <th className="p-4 font-black print:p-12 print:text-4xl text-center border-b-2 border-slate-700">গ্রেড</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                <div className="flex justify-between mt-24 px-12">
-                  <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>শ্রেণী শিক্ষকের স্বাক্ষর</div>
-                  <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>মুহতামিমের স্বাক্ষর</div>
+                    </thead>
+                    <tbody className="divide-y-2 divide-slate-100 print:divide-y-[6px]">
+                      {(() => {
+                        if (!selectedResultExam) return [];
+                        const [exam, year] = selectedResultExam.split('|');
+                        return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                      })().map((r: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-black text-slate-800 print:p-12 print:text-[70pt]">{r.subject}</td>
+                          <td className="p-4 font-black text-center print:p-12 print:text-[100pt]">
+                            <span className={cn(
+                              Number(r.marks) < 33 ? "text-rose-600" : 
+                              Number(r.marks) === 100 ? "text-emerald-500" : 
+                              "text-slate-900"
+                            )}>
+                              {toBn(r.marks)}
+                            </span>
+                          </td>
+                          <td className="p-4 font-black text-center text-emerald-600 print:p-12 print:text-[50pt]">{r.grade}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="space-y-6 print:space-y-12">
+                    <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-4 border-emerald-100 print:p-12 print:rounded-[4rem] print:border-[10px]">
+                      <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-4 print:text-3xl print:mb-8 text-center">ফলাফল সারসংক্ষেপ</h4>
+                      <div className="space-y-4 print:space-y-8">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-8 print:rounded-[2.5rem]">
+                           <span className="text-sm font-bold text-slate-500 print:text-4xl">মোট নম্বর:</span>
+                           <span className="text-xl font-black text-emerald-900 print:text-7xl">{toBn(fullProfile.examStats[selectedResultExam].myTotal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-8 print:rounded-[2.5rem]">
+                           <span className="text-sm font-bold text-slate-500 print:text-4xl">গড় নম্বর:</span>
+                           <span className="text-xl font-black text-emerald-900 print:text-7xl">
+                             {toBn((fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
+                               const [exam, year] = selectedResultExam.split('|');
+                               return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
+                             }).length || 1)).toFixed(1))}
+                           </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-end pt-10 print:pt-28 px-4">
+                      <div className="text-left">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 print:text-2xl print:mb-3">ইস্যুর তারিখ</p>
+                        <p className="text-sm font-black text-slate-900 print:text-4xl">{toBn(new Date().getDate())}/{toBn(new Date().getMonth() + 1)}/{toBn(new Date().getFullYear())}</p>
+                      </div>
+                      <div className="text-center">
+                        <div className="w-24 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[10px] print:w-48 print:pt-4 print:text-3xl">শ্রেণী শিক্ষক</div>
+                      </div>
+                      <div className="text-center">
+                        {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
+                          <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-18px] relative z-10 print:h-22 print:mb-[-30px]" alt="Sig" referrerPolicy="no-referrer" />
+                        )}
+                        <div className="w-24 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[10px] print:w-48 print:pt-4 print:text-3xl">মুহতামিম</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -4614,7 +4776,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   const executeDeleteSubject = async () => {
     if (!confirmDelete) return;
     try {
-      const res = await fetch(`/api/subjects/${confirmDelete}`, { method: "DELETE" });
+      const password = prompt("ডিলিট করতে পাসওয়ার্ড দিন:");
+      if (!password) return;
+      
+      const res = await fetch(`/api/subjects/${confirmDelete}`, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      });
       if (!res.ok) throw new Error("Failed to delete subject");
       fetchClassSubjects();
       addToast("বিষয় ডিলিট করা হয়েছে", "success");
@@ -5016,7 +5185,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {classSubjects.map((sub) => (
-                    <div key={sub.id} className="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
+                    <div key={sub.id} className="group p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
                       {editingSubjectId === sub.id ? (
                         <div className="flex flex-col gap-3">
                           <input 
@@ -5055,19 +5224,21 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             </div>
                             <p className="text-xs text-slate-400 font-bold mt-1">পূর্ণমান: {sub.total_marks}</p>
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={() => {
                                 setEditingSubjectId(sub.id);
                                 setEditSubjectData({ name: sub.name, total_marks: sub.full_marks || sub.total_marks || 100, order: sub.order || 0 });
                               }}
                               className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                              title="এডিট করুন"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button 
                               onClick={() => handleDeleteSubject(sub.id)}
                               className="p-2 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors"
+                              title="ডিলিট করুন"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -5299,70 +5470,98 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
                     {/* Results Table Scroll Wrapper */}
                     <div className="overflow-x-auto custom-scrollbar w-full border border-slate-100 rounded-2xl print:overflow-visible print:border-0">
-                      <table className="w-full min-w-[900px] text-left border-separate border-spacing-y-2 print:min-w-0 print:border-spacing-0">
+                      <table className={cn(
+                        "w-full min-w-[900px] text-left border-separate border-spacing-y-2 print:min-w-0 print:border-spacing-0",
+                        viewMode === 'detailed' ? "is-detailed" : "is-short"
+                      )}>
                         <thead>
                           <tr className="bg-emerald-50 text-emerald-900">
-                            <th className="p-4 text-center border-b font-black text-lg">র‍্যাঙ্ক</th>
-                            <th className="p-4 text-left border-b font-black text-lg">নাম</th>
-                            <th className="p-4 text-center border-b font-black text-lg">রোল</th>
+                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">রোল</th>
+                            <th className="p-4 text-left border-b font-black text-xl print:text-5xl">নাম</th>
                             {viewMode === 'detailed' && classSubjects.map(sub => (
-                              <th key={sub.id} className="p-0 border-b border-slate-900 text-center align-bottom" style={{ height: '120px' }}>
-                                <div className="vertical-header" style={{ fontSize: '16px', height: '120px' }}>{sub.name}</div>
+                              <th key={sub.id} className="p-0 border-b border-slate-900 text-center align-bottom" style={{ height: 'auto' }}>
+                                <div className="vertical-header" style={{ height: 'auto' }}>{sub.name}</div>
                               </th>
                             ))}
-                            <th className="p-4 text-center border-b font-black text-lg">মোট</th>
-                            <th className="p-4 text-center border-b font-black text-lg">গড়</th>
-                            <th className="p-4 text-center border-b font-black text-lg">গ্রেড</th>
+                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">মোট</th>
+                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">গড়</th>
+                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">গ্রেড</th>
+                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">র‍্যাঙ্ক</th>
                             <th className="p-4 rounded-r-2xl text-xs font-black uppercase tracking-widest text-center no-print print:hidden">অ্যাকশন</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-emerald-50">
                           {(() => {
-                            const sortedResults = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
+                            // 1. Calculate Ranks first using Total Marks (Descending)
+                            const forRanking = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
+                            const rankMap: Record<string, number> = {};
                             let currentRank = 1;
                             let prevMarks = -1;
                             let mappedRank = 1;
                             
-                            return sortedResults.map((r, index) => {
+                            forRanking.forEach((r) => {
                               if (r.totalMarks !== prevMarks) {
                                 mappedRank = currentRank;
                                 prevMarks = r.totalMarks;
                               }
+                              rankMap[r.id] = mappedRank;
                               currentRank++;
-                              
+                            });
+
+                            // 2. Final Sorting by Roll Number (Ascending)
+                            const finalSorted = [...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
+                            
+                            return finalSorted.map((r) => {
+                              const rank = rankMap[r.id];
                               const avg = r.avgMarks || (r.totalMarks / (classSubjects.length || 1));
                               const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
-                              return (
-                                <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none">
-                                  <td className="p-4 rounded-l-2xl text-center print:rounded-none">
-                                    <div className={cn(
-                                      "w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg mx-auto",
-                                      mappedRank === 1 ? "bg-amber-100 text-amber-700" : 
-                                      mappedRank === 2 ? "bg-slate-200 text-slate-700" :
-                                      mappedRank === 3 ? "bg-orange-100 text-orange-700" : "bg-emerald-50 text-emerald-600"
-                                    )}>
-                                      {mappedRank}
-                                    </div>
-                                  </td>
-                                  <td className="p-4 font-black text-slate-900 text-lg">{r.name}</td>
-                                  <td className="p-4 font-bold text-slate-600 text-center text-lg">{r.roll}</td>
-                                  {viewMode === 'detailed' && classSubjects.map(sub => (
-                                    <td key={sub.id} className="p-4 text-center font-bold text-slate-700 text-lg">
-                                      {r.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-"}
+                              
+                                return (
+                                  <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none">
+                                    <td className="p-4 font-black text-slate-700 text-center text-lg print:p-8 print:text-5xl">{toBn(r.roll)}</td>
+                                    <td className="p-4 font-black text-slate-900 text-xl print:p-8 print:text-5xl">{r.name}</td>
+                                    {viewMode === 'detailed' && classSubjects.map(sub => {
+                                      const marks = r.subjects?.find((s: any) => s.subject === sub.name)?.marks;
+                                      return (
+                                        <td key={sub.id} className="p-4 text-center font-black text-lg print:p-8 print:text-5xl">
+                                          <span className={cn(
+                                            marks !== undefined && marks !== "-" ? (
+                                              Number(marks) < 33 ? "text-rose-600" : 
+                                              Number(marks) === 100 ? "text-emerald-500" : 
+                                              "text-slate-900"
+                                            ) : "text-slate-400"
+                                          )}>
+                                            {toBn(marks || "-")}
+                                          </span>
+                                        </td>
+                                      )
+                                    })}
+                                    <td className="p-4 font-black text-emerald-700 text-2xl text-center print:p-8 print:text-6xl">{toBn(r.totalMarks)}</td>
+                                    <td className="p-4 font-black text-slate-900 text-xl text-center print:p-8 print:text-4xl">{toBn(avg.toFixed(1))}</td>
+                                    <td className="p-4 font-black text-center print:p-4 text-center">
+                                      <span className={cn(
+                                        "px-4 py-1 rounded-xl text-base font-black print:text-[10pt] print:px-2 print:py-0.5 print:bg-transparent print:border print:border-slate-300",
+                                        grade === 'A+' ? "bg-green-100 text-green-700 print:text-emerald-900 print:border-emerald-600" :
+                                        grade === 'A' ? "bg-blue-100 text-blue-700 print:text-blue-900 print:border-blue-600" :
+                                        grade === 'B' ? "bg-orange-100 text-orange-700 print:text-orange-900 print:border-orange-600" :
+                                        grade === 'C' ? "bg-purple-100 text-purple-700 print:text-purple-900 print:border-purple-600" :
+                                        grade === 'D' ? "bg-slate-100 text-slate-700 print:text-slate-900 print:border-slate-600" :
+                                        grade === 'F' ? "bg-red-100 text-red-700 print:text-rose-900 print:border-rose-600" : "bg-blue-100 text-blue-700"
+                                      )}>
+                                        {grade}
+                                      </span>
                                     </td>
-                                  ))}
-                                  <td className="p-4 font-black text-emerald-700 text-lg text-center">{r.totalMarks}</td>
-                                  <td className="p-4 font-black text-slate-900 text-lg text-center">{avg.toFixed(2)}</td>
-                                  <td className="p-4 font-black text-center">
-                                    <span className={cn(
-                                      "px-2 py-1 rounded-lg text-xs font-bold",
-                                      grade === 'A+' ? "bg-green-100 text-green-700" :
-                                      grade === 'F' ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
-                                    )}>
-                                      {grade}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 rounded-r-2xl text-center print:hidden">
+                                    <td className="p-4 text-center print:p-6">
+                                      <div className={cn(
+                                        "w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm mx-auto print:w-12 print:h-12 print:text-[14pt] print:shadow-none print:border-2",
+                                        rank <= 3 ? "bg-green-100 text-green-700 print:bg-green-50 print:border-green-400 print:text-green-900" : 
+                                        rank <= 10 ? "bg-yellow-100 text-yellow-700 print:bg-yellow-50 print:border-yellow-400 print:text-yellow-900" :
+                                        "bg-blue-50 text-blue-600 border border-blue-100 print:bg-blue-50 print:border-blue-300 print:text-blue-900"
+                                      )}>
+                                        {toBn(rank)}
+                                      </div>
+                                    </td>
+                                  <td className="p-6 rounded-r-2xl text-center print:hidden">
                                     <button 
                                       onClick={() => handlePrintIndividualResult(r)}
                                       className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all no-print"
@@ -5377,13 +5576,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                         </tbody>
                         <tfoot className="print:table-footer-group">
                           <tr>
-                            <td colSpan={viewMode === 'detailed' ? 7 + classSubjects.length : 7} className="pt-8 border-0!">
-                            <div className="signature-container no-border px-8">
-                              <div className="text-slate-400 font-bold text-[10px]">
-                              রিপোর্ট তারিখ: {formatDate(new Date())}
+                            <td colSpan={viewMode === 'detailed' ? 7 + classSubjects.length : 7} className="pt-12 border-0!">
+                            <div className="flex justify-between items-end px-16">
+                              <div className="text-left">
+                                <p className="text-slate-400 font-bold text-[12px] print:text-3xl mb-2">রিপোর্ট তারিখ:</p>
+                                <p className="text-slate-900 font-black text-sm print:text-4xl">{formatDate(new Date())}</p>
                               </div>
                               <div className="text-center">
-                                <div className="w-32 border-t border-slate-900 pt-1 font-black text-slate-900 text-sm">মুহতামিম</div>
+                                <div className="w-48 border-t-4 border-slate-900 pt-3 font-black text-slate-900 text-lg print:w-96 print:pt-6 print:text-6xl print:border-t-[10px]">মুহতামিম</div>
                               </div>
                             </div>
                           </td>
@@ -5422,27 +5622,27 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       </div>
                     </div>
                     
-                    <table className="w-full border-collapse mb-12 text-[10px]">
+                    <table className="w-full border-collapse mb-12 text-[12px] print:text-xl">
                       <thead>
                         <tr className="bg-slate-100 text-slate-900">
-                          <th className="p-1 text-center border border-slate-900 whitespace-nowrap">রোল</th>
-                          <th className="p-1 text-left border border-slate-900 whitespace-nowrap w-[120px]">ছাত্রের নাম</th>
+                          <th className="p-2 text-center border border-slate-900 whitespace-nowrap print:p-4">রোল</th>
+                          <th className="p-2 text-left border border-slate-900 whitespace-nowrap w-[150px] print:p-4 print:w-[200px]">ছাত্রের নাম</th>
                           {printType === 'detailed' && classSubjects.map(sub => (
-                            <th key={sub.id} className="p-0 border border-slate-900 text-center align-bottom" style={{ height: '100px' }}>
+                            <th key={sub.id} className="p-0 border border-slate-900 text-center align-bottom" style={{ height: '120px' }}>
                               <div className="vertical-header">{sub.name}</div>
                             </th>
                           ))}
-                          <th className="p-1 text-center border border-slate-900">মোট</th>
-                          <th className="p-1 text-center border border-slate-900">গড়</th>
-                          <th className="p-1 text-center border border-slate-900">গ্রেড</th>
-                          <th className="p-1 text-center border border-slate-900 whitespace-nowrap">মেধা</th>
+                          <th className="p-2 text-center border border-slate-900 print:p-4">মোট</th>
+                          <th className="p-2 text-center border border-slate-900 print:p-4">গড়</th>
+                          <th className="p-2 text-center border border-slate-900 print:p-4">গ্রেড</th>
+                          <th className="p-2 text-center border border-slate-900 whitespace-nowrap print:p-4">মেধা</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(() => {
                            const sortedByRollForPrint = [...printData].sort((a, b) => {
-                             const rA = parseInt(a.roll) || Infinity;
-                             const rB = parseInt(b.roll) || Infinity;
+                             const rA = parseInt(a.roll) || 0;
+                             const rB = parseInt(b.roll) || 0;
                              return rA - rB;
                            });
 
@@ -5451,16 +5651,23 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                              const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
                              return (
                                <tr key={i} className="border-b border-slate-200">
-                                 <td className="p-1 text-center border border-slate-300 font-bold">{student.roll}</td>
-                                 <td className="p-1 font-bold border border-slate-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px] text-[10px]">{student.name}</td>
+                                 <td className="p-2 text-center border border-slate-300 font-bold print:p-4">{toBn(student.roll)}</td>
+                                 <td className="p-2 font-bold border border-slate-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] text-[12px] print:text-xl print:p-4 print:max-w-[200px]">{student.name}</td>
                                  {printType === 'detailed' && classSubjects.map(sub => {
                                    const subjMark = student.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
-                                   return <td key={sub.id} className="p-1 text-center border border-slate-300 font-bold">{subjMark}</td>
+                                   return (
+                                     <td key={sub.id} className={cn(
+                                       "p-2 text-center border border-slate-300 font-bold print:p-4",
+                                       Number(subjMark) < 33 ? "text-rose-600" : Number(subjMark) === 100 ? "text-emerald-500" : ""
+                                     )}>
+                                       {subjMark === "-" ? "-" : toBn(subjMark)}
+                                     </td>
+                                   );
                                  })}
-                                 <td className="p-1 text-center font-black border border-slate-300 bg-slate-50">{student.totalMarks}</td>
-                                 <td className="p-1 text-center font-bold border border-slate-300">{avg.toFixed(1)}</td>
-                                 <td className="p-1 text-center font-black border border-slate-300">{grade}</td>
-                                 <td className="p-1 text-center font-black border border-slate-300 text-blue-700 bg-blue-50">{student.calculatedRank}</td>
+                                 <td className="p-2 text-center font-black border border-slate-300 bg-slate-50 print:p-4">{toBn(student.totalMarks)}</td>
+                                 <td className="p-2 text-center font-bold border border-slate-300 print:p-4">{toBn(avg.toFixed(1))}</td>
+                                 <td className="p-2 text-center font-black border border-slate-300 print:p-4">{grade}</td>
+                                 <td className="p-2 text-center font-black border border-slate-300 text-blue-700 bg-blue-50 print:p-4">{toBn(student.calculatedRank)}</td>
                                </tr>
                              );
                            });
@@ -5468,13 +5675,17 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       </tbody>
                       <tfoot className="print:table-footer-group">
                         <tr>
-                          <td colSpan={printType === 'detailed' ? 6 + classSubjects.length : 6} className="pt-6 border-0!">
-                            <div className="signature-container no-border px-8">
-                              <div className="text-slate-400 font-bold text-[9px]">
-                                প্রিন্ট তারিখ: {formatDate(new Date())}
+                          <td colSpan={printType === 'detailed' ? 6 + classSubjects.length : 6} className="pt-8 border-0!">
+                            <div className="flex justify-between items-end px-12 border-none">
+                              <div className="text-left">
+                                <p className="text-slate-400 font-bold text-[10px] print:text-2xl mb-1">রিপোর্ট তারিখ:</p>
+                                <p className="text-slate-900 font-black text-[12px] print:text-3xl">{formatDate(new Date())}</p>
                               </div>
                               <div className="text-center">
-                                <div className="signature-line font-black text-slate-900 text-[10px]">মুহতামিম</div>
+                                {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
+                                  <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-20" alt="Sig" referrerPolicy="no-referrer" />
+                                )}
+                                <div className="w-32 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[12px] print:w-64 print:pt-4 print:text-4xl print:border-t-4">মুহতামিম</div>
                               </div>
                             </div>
                           </td>
@@ -5485,33 +5696,40 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 )}
 
                 {individualPrintData && (
-                  <div id="individual-result-template" className="hidden print:block print-container bg-white w-full mx-auto p-4 border border-slate-200 rounded-3xl">
-                    <div className="text-center mb-4 border-b-2 border-slate-900 pb-4">
-                      <h1 className="text-xl font-black text-slate-900 leading-tight">{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h1>
-                      <p className="text-xs font-bold text-slate-600 leading-tight">{settings?.address || ""}</p>
-                      <h2 className="text-md font-black text-slate-900 mt-2 uppercase tracking-wide border-b-2 border-slate-900 inline-block pb-0.5">
-                        মার্কশিট
-                      </h2>
-                      <p className="text-sm font-bold text-slate-700 mt-1">{selectedExam} - {selectedYear}</p>
+                  <div id="individual-result-template" className="hidden print:block pb-8 bg-white w-full mx-auto" style={{ padding: '80px 48px 48px 48px', overflow: 'hidden', position: 'relative' }}>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+                      <GraduationCap className="w-[80%] h-[80%]" style={{ color: '#064e3b' }} />
                     </div>
                     
-                    <div className="student-info-grid mb-2">
-                      <div>
-                        <p><span className="text-slate-500">ছাত্রের নাম:</span> {individualPrintData.name}</p>
-                        <p><span className="text-slate-500">শ্রেণী:</span> {selectedClass}</p>
-                        <p><span className="text-slate-500">রোল:</span> {individualPrintData.roll}</p>
+                    <div className="relative z-10 flex flex-col items-center justify-center mb-10 pb-8" style={{ borderBottom: '4px double #10b981' }}>
+                      <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border-2 border-emerald-200">
+                        <GraduationCap className="w-12 h-12" style={{ color: '#059669' }} />
                       </div>
-                      <div className="text-right">
-                        <p><span className="text-slate-500">মোট নম্বর:</span> <span className="font-black text-slate-900">{individualPrintData.totalMarks}</span></p>
-                        <p><span className="text-slate-500">গড় নম্বর:</span> <span className="font-black text-slate-900">{(individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))).toFixed(2)}</span></p>
-                        <p><span className="text-slate-500">মেধাস্থান:</span> <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-black">{individualPrintData.calculatedRank || '-'}</span></p>
-                        <p className="mt-1">
-                          <span className="text-slate-500">গ্রেড:</span> 
-                          <span className={cn(
-                            "ml-2 px-2 py-0.5 rounded font-black",
-                            (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) >= 80 ? "bg-green-100 text-green-700" :
-                            (individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))) < 33 ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
-                          )}>
+                      <h2 className="text-5xl font-black mb-3 drop-shadow-sm" style={{ color: '#064e3b', fontFamily: 'sans-serif' }}>{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h2>
+                      <div className="px-6 py-2 rounded-full" style={{ backgroundColor: '#ecfdf5', border: '1px solid #10b981' }}>
+                        <p className="text-xl font-bold tracking-wide" style={{ color: '#047857' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট</p>
+                      </div>
+                      <p className="text-lg font-bold mt-4" style={{ color: '#475569' }}>পরীক্ষা: <span style={{ color: '#1e293b' }}>{selectedExam} - {selectedYear}</span></p>
+                    </div>
+                    
+                    <div className="relative z-10 flex justify-between items-center mb-10 text-left p-8 rounded-2xl shadow-sm" style={{ backgroundColor: '#f8fafc', borderLeft: '8px solid #059669', borderRight: '8px solid #059669' }}>
+                      <div>
+                        <h3 className="text-3xl font-black mb-3" style={{ color: '#0f172a' }}>{individualPrintData.name}</h3>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>শ্রেণী:</span> {selectedClass}</p>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>রোল:</span> <span className="text-xl font-black">{individualPrintData.roll}</span></p>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মোট নম্বর:</span> <span className="text-xl font-black">{individualPrintData.totalMarks}</span></p>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>গড় নম্বর:</span> <span className="text-xl font-black">{(individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))).toFixed(2)}</span></p>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মেধাস্থান:</span> <span className="text-xl font-black" style={{ color: '#059669' }}>{individualPrintData.calculatedRank || '-'}</span></p>
+                        <p className="text-lg font-bold mt-1" style={{ color: '#334155' }}>
+                          <span style={{ color: '#64748b' }}>গ্রেড:</span> 
+                          <span className="text-xl font-black ml-2" style={(() => {
+                            const avg = individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1));
+                            if (avg >= 80) return { color: '#059669' };
+                            if (avg < 33) return { color: '#dc2626' };
+                            return { color: '#2563eb' };
+                          })()}>
                              {(() => {
                                const avg = individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1));
                                return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
@@ -5521,44 +5739,55 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       </div>
                     </div>
 
-                    <table className="w-full border-collapse mb-4 text-[11px]">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-900">
-                          <th className="p-1 px-2 text-left border border-slate-900">বিষয়</th>
-                          <th className="p-1 text-center border border-slate-900">পূর্ণমান</th>
-                          <th className="p-1 text-center border border-slate-900">সর্বোচ্চ</th>
-                          <th className="p-1 text-center border border-slate-900">প্রাপ্ত</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {classSubjects.map((sub, i) => {
-                          const subjectMark = individualPrintData.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
-                          const highestMark = topScorersPerSubject[sub.name]?.marks || "-";
-                          return (
-                            <tr key={i} className="border-b border-slate-200">
-                              <td className="p-1 px-2 border border-slate-300 font-bold text-slate-800">{sub.name}</td>
-                              <td className="p-1 text-center font-bold border border-slate-300">{sub.full_marks || 100}</td>
-                              <td className="p-1 text-center font-bold border border-slate-300 text-amber-700">{highestMark}</td>
-                              <td className="p-1 text-center font-black border border-slate-300 bg-slate-50">{subjectMark}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="print:table-footer-group">
-                        <tr>
-                          <td colSpan={4} className="pt-6 border-0!">
-                            <div className="signature-container no-border px-8">
-                              <div className="text-slate-400 font-bold text-[9px]">
-                                প্রিন্ট তারিখ: {formatDate(new Date())}
+                    <div className="relative z-10 w-full rounded-2xl overflow-hidden" style={{ border: '2px solid #cbd5e1' }}>
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9' }}>
+                            <th className="p-5 font-black text-lg" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1' }}>বিষয়</th>
+                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>পূর্ণমান</th>
+                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>সর্বোচ্চ</th>
+                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>প্রাপ্ত নম্বর</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {classSubjects.map((sub: any, idx: number, arr: any[]) => {
+                            const subjectMark = individualPrintData.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
+                            const highestMark = topScorersPerSubject[sub.name]?.marks || "-";
+                            const mk = Number(subjectMark) || 0;
+                            let markColor = '#0f172a';
+                            if (subjectMark !== "-" && mk < 33) markColor = '#dc2626';
+                            else if (subjectMark !== "-" && mk === 100) markColor = '#10b981';
+                            
+                            return (
+                              <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                <td className="p-5 font-bold text-lg" style={{ color: '#1e293b', borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0' }}>{sub.name}</td>
+                                <td className="p-5 font-bold text-lg text-center" style={{ color: '#64748b', borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>{sub.full_marks || 100}</td>
+                                <td className="p-5 font-bold text-lg text-center" style={{ color: '#b45309', borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>{highestMark}</td>
+                                <td className="p-5 font-black text-2xl text-center" style={{ color: markColor, borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>{subjectMark}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="print:table-footer-group">
+                          <tr>
+                            <td colSpan={4} className="pt-8 border-0!">
+                              <div className="flex justify-between items-end px-12 mt-12 border-none bg-white">
+                                <div className="text-left">
+                                  <p className="text-slate-400 font-bold text-[14px] print:text-2xl mb-1">প্রিন্ট তারিখ:</p>
+                                  <p className="text-slate-900 font-black text-[16px] print:text-3xl">{formatDate(new Date())}</p>
+                                </div>
+                                <div className="text-center">
+                                  {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
+                                    <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-20" alt="Sig" referrerPolicy="no-referrer" />
+                                  )}
+                                  <div className="w-48 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[14px] print:w-64 print:pt-4 print:text-4xl print:border-t-4">মুহতামিম</div>
+                                </div>
                               </div>
-                              <div className="text-center">
-                                <div className="signature-line font-black text-slate-900 text-[10px]">মুহতামিম</div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
                 )}
 

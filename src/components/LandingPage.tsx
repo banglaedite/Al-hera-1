@@ -74,10 +74,25 @@ const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
-    const fetchWithTimeout = (url: string, timeout = 15000) => {
+    const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
-      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        if (!res.ok && res.status >= 500 && retries > 0) {
+          await new Promise(r => setTimeout(r, 1000));
+          return fetchWithTimeout(url, timeout, retries - 1);
+        }
+        return res;
+      } catch (err) {
+        clearTimeout(id);
+        if (retries > 0 && (err instanceof Error && (err.name === 'AbortError' || err.message.includes('fetch')))) {
+          await new Promise(r => setTimeout(r, 1000));
+          return fetchWithTimeout(url, timeout, retries - 1);
+        }
+        throw err;
+      }
     };
 
     fetchWithTimeout(`/api/leaderboard?type=${leaderboardType}`)
@@ -100,10 +115,25 @@ const LandingPage = () => {
       return;
     }
 
-    const fetchWithTimeout = (url: string, timeout = 15000) => {
+    const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
-      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        if (!res.ok && res.status >= 500 && retries > 0) {
+          await new Promise(r => setTimeout(r, 1000));
+          return fetchWithTimeout(url, timeout, retries - 1);
+        }
+        return res;
+      } catch (err) {
+        clearTimeout(id);
+        if (retries > 0 && (err instanceof Error && (err.name === 'AbortError' || err.message.includes('fetch')))) {
+          await new Promise(r => setTimeout(r, 1000));
+          return fetchWithTimeout(url, timeout, retries - 1);
+        }
+        throw err;
+      }
     };
 
     fetchWithTimeout("/api/site-settings")
@@ -215,7 +245,7 @@ const LandingPage = () => {
   );
 
   return (
-    <div className="relative bg-white font-sans selection:bg-emerald-200 selection:text-emerald-900 overflow-x-hidden">
+    <div className="relative bg-white font-sans selection:bg-emerald-200 selection:text-emerald-900">
       {/* Top Menu */}
       <div className="absolute top-4 right-4 z-50">
         <div className="relative">
@@ -247,7 +277,14 @@ const LandingPage = () => {
                     className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-xl transition-all"
                   >
                     <LayoutDashboard className="w-4 h-4" />
-                    লগইন
+                    প্যারেন্ট লগইন
+                  </Link>
+                  <Link 
+                    to="/teacher" 
+                    className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-xl transition-all"
+                  >
+                    <GraduationCap className="w-4 h-4" />
+                    শিক্ষক লগইন
                   </Link>
                 </div>
               </motion.div>

@@ -61,6 +61,7 @@ const Navbar = () => {
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
     { name: "রেজাল্ট", path: "/parent?tab=results", icon: BookOpen },
     { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
+    { name: "শিক্ষক পোর্টাল", path: "/teacher", icon: GraduationCap },
   ];
 
   return (
@@ -140,11 +141,123 @@ const Navbar = () => {
   );
 };
 
+const GlobalPopup = () => {
+  const [settings, setSettings] = useState<any>(null);
+  const [show, setShow] = useState(false);
+  const [hasShown, setHasShown] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch("/api/site-settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.popup_enabled) {
+            setSettings(data);
+            // Show popup once per session/initial load
+            if (!hasShown) {
+              setTimeout(() => {
+                setShow(true);
+                setHasShown(true);
+              }, 1500); // Small delay for better UX
+
+              // Auto hide if duration is set
+              const duration = (data.popup_duration || 0) * 1000;
+              if (duration > 0) {
+                setTimeout(() => {
+                  setShow(false);
+                }, duration + 1500);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load popup settings:", err);
+      }
+    };
+    fetchSettings();
+  }, [hasShown]);
+
+  if (!settings || !show) return null;
+
+  return (
+    <AnimatePresence>
+      {show && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden relative border border-slate-100"
+          >
+            {settings.popup_show_close && (
+              <button 
+                onClick={() => setShow(false)}
+                className="absolute top-4 right-4 z-10 p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg text-slate-500 hover:text-rose-500 transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
+
+            {settings.popup_image && (
+              <div className="relative group overflow-hidden h-48 sm:h-64">
+                <img 
+                  src={settings.popup_image} 
+                  alt="Announcement" 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
+                  onClick={() => settings.popup_link && window.open(settings.popup_link, '_blank')}
+                />
+                {settings.popup_link && (
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                    <span className="bg-white text-slate-900 px-6 py-2 rounded-full font-black text-sm shadow-xl">বিস্তারিত দেখুন</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="p-8 text-center">
+              {settings.popup_title && (
+                <h3 className="text-2xl font-black text-emerald-900 mb-4">{settings.popup_title}</h3>
+              )}
+              {settings.popup_description && (
+                <p className="text-slate-600 font-bold leading-relaxed whitespace-pre-wrap">{settings.popup_description}</p>
+              )}
+              
+              <div className="mt-8 flex flex-col gap-3">
+                {settings.popup_link && (
+                  <a 
+                    href={settings.popup_link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-black shadow-lg shadow-emerald-900/20 hover:bg-emerald-800 transition-all flex items-center justify-center gap-2"
+                  >
+                    বিস্তারিত তথ্য <GraduationCap className="w-5 h-5" />
+                  </a>
+                )}
+                {!settings.popup_show_close && (
+                  <button 
+                    onClick={() => setShow(false)}
+                    className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
+                  >
+                    বন্ধ করুন
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 export default function App() {
   return (
     <Router>
       <ToastProvider>
         <div className="min-h-screen bg-[#fdfcf8] font-sans text-slate-900">
+          <GlobalPopup />
           <NoticeBoard />
           <Navbar />
           <main>
@@ -154,6 +267,7 @@ export default function App() {
               <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
               <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
               <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
+              <Route path="/teacher" element={<TeacherPortal />} />
               <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
             </Routes>
           </main>

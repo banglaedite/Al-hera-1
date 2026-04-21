@@ -1331,99 +1331,61 @@ export default function ParentPortal() {
                         </button>
                       )}
                       {settings?.enable_historical_reports ? (
-                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">সকল রেজাল্ট</span>
-                      ) : (
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">সর্বশেষ রেজাল্ট</span>
-                      )}
+                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold shadow-sm border border-emerald-200">অফিসিয়াল মার্কশিট প্রদেয়</span>
+                      ) : null}
                     </div>
                   </div>
-                  
-                  <div className="space-y-8">
-                    {results.length > 0 ? (() => {
-                      // Group results by exam
-                      const groupedResults = results.reduce((acc: any, res: any) => {
-                        if (!acc[res.exam_name]) acc[res.exam_name] = [];
-                        acc[res.exam_name].push(res);
-                        return acc;
-                      }, {});
 
-                      // Sort exams (latest first)
-                      const exams = Object.keys(groupedResults).sort((a, b) => {
-                        // Try to extract date or just sort by name
-                        return b.localeCompare(a);
-                      });
-
-                      // If historical reports disabled, only show the latest exam
-                      const visibleExams = settings?.enable_historical_reports ? exams : [exams[0]];
-
-                      return visibleExams.map((examName) => (
-                        <div key={examName} className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-px flex-1 bg-slate-100"></div>
-                            <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">{examName}</h4>
-                            <div className="h-px flex-1 bg-slate-100"></div>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {groupedResults[examName].map((res: any, i: number) => (
-                              <div key={i} className="p-6 bg-slate-50 rounded-3xl flex items-center justify-between border border-slate-100 hover:bg-white hover:shadow-md transition-all">
-                                <div>
-                                  <h4 className="text-lg font-bold text-slate-900">{res.subject}</h4>
-                                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">পূর্ণমান: ১০০</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-2xl font-black text-emerald-600">{res.marks}</p>
-                                  <p className="text-xs font-bold text-slate-500">গ্রেড: {res.grade}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ));
-                    })() : (
-                      <div className="text-center py-20">
-                        <BookOpen className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold">এখনো কোন রেজাল্ট পাওয়া যায়নি</p>
-                      </div>
-                    )}
-                  </div>
-                  
                   {/* Marksheet Template (Hidden) */}
                   {fullProfile && (
-                    <div id="student-marksheet-template" className="hidden absolute top-0 left-0 bg-white p-12 w-full max-w-[800px] mx-auto border-4 border-double border-emerald-900 text-center" style={{ borderColor: '#064e3b' }}>
-                      <div className="flex items-center justify-center gap-4 mb-8 border-b-4 border-emerald-100 pb-6" style={{ borderColor: '#d1fae5' }}>
-                        <GraduationCap className="w-12 h-12 text-emerald-600" style={{ color: '#059669' }} />
-                        <div>
-                          <h2 className="text-4xl font-black text-emerald-900" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                          <p className="text-lg font-bold text-slate-500 mt-1" style={{ color: '#64748b' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট - {(() => {
-                            if (!selectedResultExam) return "";
-                            const [exam, year] = selectedResultExam.split('|');
-                            return `${exam} (${year})`;
-                          })()}</p>
-                        </div>
+                    <div id="student-marksheet-template" className="hidden absolute top-0 left-0 bg-white w-[794px] min-h-[1123px] mx-auto text-center" style={{ padding: '80px 48px 48px 48px', overflow: 'hidden', position: 'relative' }}>
+                      {/* Watermark Logo/Pattern */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+                        <GraduationCap className="w-96 h-96" style={{ color: '#064e3b' }} />
                       </div>
                       
-                      <div className="flex justify-between items-end mb-8 text-left bg-slate-50 p-6 rounded-2xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                        <div>
-                          <h3 className="text-2xl font-black text-slate-900 mb-2" style={{ color: '#0f172a' }}>{fullProfile.student.name}</h3>
-                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>পিতার নাম: {fullProfile.student.father_name}</p>
-                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>মাতার নাম: {fullProfile.student.mother_name}</p>
+                      {/* Header Section */}
+                      <div className="relative z-10 flex flex-col items-center justify-center mb-10 pb-8" style={{ borderBottom: '4px double #10b981' }}>
+                        <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border-2 border-emerald-200">
+                          <GraduationCap className="w-12 h-12" style={{ color: '#059669' }} />
                         </div>
-                        <div className="text-right">
-                          <p className="text-emerald-700 font-black text-xl mb-1" style={{ color: '#047857' }}>ID: {fullProfile.student.studentId || fullProfile.student.id}</p>
-                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>শ্রেণী: {fullProfile.student.class}</p>
-                          <p className="text-slate-600 font-bold" style={{ color: '#475569' }}>রোল: {fullProfile.student.roll}</p>
+                        <h2 className="text-5xl font-black mb-3 drop-shadow-sm" style={{ color: '#064e3b', fontFamily: 'sans-serif' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                        <div className="px-6 py-2 rounded-full" style={{ backgroundColor: '#ecfdf5', border: '1px solid #10b981' }}>
+                          <p className="text-xl font-bold tracking-wide" style={{ color: '#047857' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট</p>
+                        </div>
+                        <p className="text-lg font-bold mt-4" style={{ color: '#475569' }}>পরীক্ষা: {(() => {
+                          if (!selectedResultExam) return "";
+                          const [exam, year] = selectedResultExam.split('|');
+                          return `${exam} (${year})`;
+                        })()}</p>
+                      </div>
+                      
+                      {/* Student Info Section */}
+                      <div className="relative z-10 flex justify-between items-center mb-10 text-left p-8 rounded-2xl shadow-sm" style={{ backgroundColor: '#f8fafc', borderLeft: '8px solid #059669', borderRight: '8px solid #059669' }}>
+                        <div>
+                          <h3 className="text-3xl font-black mb-3" style={{ color: '#0f172a' }}>{fullProfile.student.name}</h3>
+                          <div className="grid grid-cols-1 gap-2">
+                            <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>পিতার নাম:</span> {fullProfile.student.father_name}</p>
+                            <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মাতার নাম:</span> {fullProfile.student.mother_name}</p>
+                          </div>
+                        </div>
+                        <div className="text-right space-y-2">
+                          <p className="text-2xl font-black mb-2" style={{ color: '#059669' }}>আইডি: {fullProfile.student.studentId || fullProfile.student.id}</p>
+                          <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>শ্রেণী:</span> {fullProfile.student.class}</p>
+                          <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>রোল:</span> {fullProfile.student.roll}</p>
                         </div>
                       </div>
 
+                      {/* Stats Section */}
                       {selectedResultExam && fullProfile && fullProfile.examStats && fullProfile.examStats[selectedResultExam] && (
-                        <div className="grid grid-cols-3 gap-4 mb-8">
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>মোট নম্বর</p>
-                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.examStats[selectedResultExam].myTotal}</p>
+                        <div className="relative z-10 grid grid-cols-3 gap-6 mb-10">
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #3b82f6' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>মোট নম্বর</p>
+                            <p className="text-2xl font-black" style={{ color: '#1e293b' }}>{fullProfile.examStats[selectedResultExam].myTotal}</p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>গড় নম্বর</p>
-                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #8b5cf6' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>গড় নম্বর</p>
+                            <p className="text-2xl font-black" style={{ color: '#1e293b' }}>
                               {(() => {
                                 const [exam, year] = selectedResultExam.split('|');
                                 const resData = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
@@ -1433,69 +1395,89 @@ export default function ParentPortal() {
                               })()}
                             </p>
                           </div>
-                          <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200" style={{ backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }}>
-                            <p className="text-xs font-bold text-emerald-600 uppercase" style={{ color: '#059669' }}>মেধা স্থান</p>
-                            <p className="text-xl font-black text-emerald-700" style={{ color: '#047857' }}>
-                              {fullProfile.examStats[selectedResultExam].rank} <span className="text-sm text-emerald-500" style={{ color: '#10b981' }}>/ {fullProfile.examStats[selectedResultExam].totalStudents}</span>
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderTop: '4px solid #10b981' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#059669' }}>মেধা স্থান</p>
+                            <p className="text-3xl font-black" style={{ color: '#047857' }}>
+                              {fullProfile.examStats[selectedResultExam].rank} <span className="text-lg font-bold" style={{ color: '#10b981' }}>/ {fullProfile.examStats[selectedResultExam].totalStudents}</span>
                             </p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>সর্বোচ্চ নম্বর</p>
-                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.examStats[selectedResultExam].highestMarks}</p>
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #f59e0b' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>সর্বোচ্চ নম্বর</p>
+                            <p className="text-2xl font-black" style={{ color: '#1e293b' }}>{fullProfile.examStats[selectedResultExam].highestMarks}</p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>উপস্থিতি</p>
-                            <p className="text-xl font-black text-slate-900" style={{ color: '#0f172a' }}>
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #06b6d4' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>উপস্থিতি</p>
+                            <p className="text-2xl font-black" style={{ color: '#1e293b' }}>
                               {fullProfile.attendance.length > 0 
                                 ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
                                 : 0}%
                             </p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-                            <p className="text-xs font-bold text-slate-500 uppercase" style={{ color: '#64748b' }}>ফলাফল</p>
-                            <p className={cn("text-xl font-black", 
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #ec4899' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>ফলাফল</p>
+                            <p className={cn("text-2xl font-black", 
                               (() => {
                                 const [exam, year] = selectedResultExam.split('|');
                                 return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
                                   ? "text-rose-600" 
                                   : "text-emerald-600"
                               })()
-                            )}>
+                            )} style={(() => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                                  ? { color: '#e11d48' } : { color: '#059669' };
+                              })()}>
                               {(() => {
                                 const [exam, year] = selectedResultExam.split('|');
-                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"
+                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "উত্তীর্ণ"
                               })()}
                             </p>
                           </div>
                         </div>
                       )}
 
-                      <table className="w-full text-left border-collapse border border-slate-300 mb-8">
-                        <thead>
-                          <tr className="bg-emerald-50" style={{ backgroundColor: '#ecfdf5' }}>
-                            <th className="border border-slate-300 p-4 font-black text-slate-700" style={{ borderColor: '#cbd5e1', color: '#334155' }}>বিষয়</th>
-                            <th className="border border-slate-300 p-4 font-black text-slate-700 text-center" style={{ borderColor: '#cbd5e1', color: '#334155' }}>প্রাপ্ত নম্বর</th>
-                            <th className="border border-slate-300 p-4 font-black text-slate-700 text-center" style={{ borderColor: '#cbd5e1', color: '#334155' }}>লেটার গ্রেড</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            if (!selectedResultExam) return [];
-                            const [exam, year] = selectedResultExam.split('|');
-                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
-                          })().map((r: any, idx: number) => (
-                            <tr key={idx}>
-                              <td className="border border-slate-300 p-4 font-bold text-slate-800" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{r.subject}</td>
-                              <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.marks}</td>
-                              <td className="border border-slate-300 p-4 font-black text-emerald-700 text-center" style={{ borderColor: '#cbd5e1', color: '#047857' }}>{r.grade}</td>
+                      {/* Marks Table */}
+                      <div className="relative z-10 w-full rounded-2xl overflow-hidden" style={{ border: '2px solid #cbd5e1' }}>
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr style={{ backgroundColor: '#f1f5f9' }}>
+                              <th className="p-5 font-black text-lg" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1' }}>বিষয়</th>
+                              <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>নম্বর</th>
+                              <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>গ্রেড</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      
-                      <div className="flex justify-between mt-24 px-12">
-                        <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>শ্রেণী শিক্ষকের স্বাক্ষর</div>
-                        <div className="border-t-2 border-slate-400 pt-2 font-bold text-slate-600 w-48" style={{ borderColor: '#94a3b8', color: '#475569' }}>মুহতামিমের স্বাক্ষর</div>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              if (!selectedResultExam) return [];
+                              const [exam, year] = selectedResultExam.split('|');
+                              return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                            })().map((r: any, idx: number, arr: any[]) => {
+                              const mk = Number(r.marks) || 0;
+                              let markColor = '#0f172a'; // default slate-900
+                              if (mk < 33) markColor = '#dc2626'; // red-600
+                              else if (mk === 100) markColor = '#10b981'; // emerald-500
+                              
+                              return (
+                                <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                  <td className="p-5 font-bold text-lg" style={{ color: '#1e293b', borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0' }}>{r.subject}</td>
+                                  <td className="p-5 font-black text-2xl text-center" style={{ color: markColor, borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>{r.marks}</td>
+                                  <td className="p-5 font-black text-xl text-center" style={{ color: mk < 33 ? '#dc2626' : '#059669', borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>{r.grade}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="relative z-10 flex justify-between items-end mt-32 px-8">
+                        <div className="text-center">
+                          <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
+                          <p className="font-bold text-xl uppercase tracking-widest text-slate-800">শ্রেণী শিক্ষকের স্বাক্ষর</p>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
+                          <p className="font-bold text-xl uppercase tracking-widest text-slate-800">অধ্যক্ষের স্বাক্ষর</p>
+                        </div>
                       </div>
                     </div>
                   )}

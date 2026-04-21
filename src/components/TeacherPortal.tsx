@@ -14,7 +14,8 @@ import {
   History,
   Heart,
   Target,
-  Send
+  Send,
+  Settings
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -32,6 +33,7 @@ export default function TeacherPortal() {
   const [submissionStatus, setSubmissionStatus] = useState<any[]>([]);
   const [fetchingStatus, setFetchingStatus] = useState(false);
   const [studentTasks, setStudentTasks] = useState<any[]>([]);
+  const [salaries, setSalaries] = useState<any[]>([]);
   
   // Daily Amal State
   const [amalTasks, setAmalTasks] = useState<any[]>([]);
@@ -220,13 +222,15 @@ export default function TeacherPortal() {
       localStorage.setItem("teacherPhone", loginIdentifier);
       
       // Fetch related data
-      const [attRes, noticeRes] = await Promise.all([
+      const [attRes, noticeRes, salaryRes] = await Promise.all([
         fetch(`/api/admin/teacher-attendance?teacher_id=${data.id}`),
-        fetch("/api/notices")
+        fetch("/api/notices"),
+        fetch(`/api/teacher/salary-history/${data.id}`)
       ]);
       
       if (attRes.ok) setAttendance(await attRes.json());
       if (noticeRes.ok) setNotices(await noticeRes.json());
+      if (salaryRes.ok) setSalaries(await salaryRes.json());
     } catch (err: any) {
       setError(err.message);
       localStorage.removeItem("teacherPhone");
@@ -311,12 +315,28 @@ export default function TeacherPortal() {
             <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">শিক্ষক পোর্টাল</h1>
             <p className="text-slate-500 font-medium">স্বাগতম, {teacher.name}</p>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-6 py-3 bg-white text-rose-600 rounded-2xl font-bold hover:bg-rose-50 transition-all shadow-sm border border-rose-100 self-start"
-          >
-            <LogOut className="w-4 h-4" /> লগ আউট
-          </button>
+          <div className="flex gap-2 self-start flex-wrap">
+            {teacher?.isSubAdmin && (
+              <button 
+                onClick={() => {
+                  localStorage.setItem("isAdmin", "true");
+                  localStorage.setItem("adminRole", "sub_admin");
+                  localStorage.setItem("adminPermissions", JSON.stringify(teacher.permissions || []));
+                  localStorage.setItem("adminPassword", teacher.adminIdentifier); // This matches backend subAdmin password check
+                  window.location.href = "/secret-admin-access";
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-sm border border-emerald-700 whitespace-nowrap"
+              >
+                <Settings className="w-4 h-4" /> কন্ট্রোল প্যানেল
+              </button>
+            )}
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-6 py-3 bg-white text-rose-600 rounded-2xl font-bold hover:bg-rose-50 transition-all shadow-sm border border-rose-100 whitespace-nowrap"
+            >
+              <LogOut className="w-4 h-4" /> লগ আউট
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -326,6 +346,7 @@ export default function TeacherPortal() {
             { id: "amal", label: "দৈনিক আমল", icon: Heart },
             { id: "student-amal", label: "ছাত্রের আমল", icon: Users },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
+            { id: "salary", label: "বেতন", icon: History },
             { id: "notices", label: "নোটিশ", icon: Bell },
           ].map((tab: any) => (
             <motion.button
@@ -635,6 +656,35 @@ export default function TeacherPortal() {
                       <div className="text-center py-20">
                         <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                         <p className="text-slate-400 font-bold">এখনো কোন হাজিরা লগ পাওয়া যায়নি</p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "salary" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-8">বেতন হিস্টোরি</h3>
+                  <div className="space-y-4">
+                    {salaries.length > 0 ? salaries.map((salary, i) => (
+                      <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                            ৳
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900">{salary.month} {salary.year}</h4>
+                            <p className="text-xs text-slate-500 font-bold mt-1">প্রদান: {new Date(salary.created_at || salary.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-emerald-600">৳{salary.amount}</p>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="text-center py-20">
+                        <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">এখনো কোন বেতনের রেকর্ড পাওয়া যায়নি</p>
                       </div>
                     )}
                   </div>

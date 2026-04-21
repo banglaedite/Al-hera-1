@@ -7,6 +7,8 @@ import { cn } from "../lib/utils";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+const toBn = (n: any) => n ? n.toString().replace(/\d/g, (d: any) => "০১২৩৪৫৬৭৮৯"[d]) : n;
+
 export function HifzManager({ classesList }: { classesList: string[] }) {
   const { addToast } = useToast();
   const [students, setStudents] = useState<any[]>([]);
@@ -1340,11 +1342,18 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                       return (
                         <tr key={student.id} className="bg-white hover:bg-slate-50 transition-colors group shadow-sm">
                           <td className="px-6 py-5 rounded-l-2xl border-y border-l border-slate-100">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
-                                {student.roll}
+                            <div className="flex items-center gap-4">
+                              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-lg overflow-hidden border-2 border-emerald-50 shadow-inner">
+                                {student.photo_url ? (
+                                  <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="flex flex-col items-center leading-none">
+                                    <span className="text-[10px] uppercase opacity-50">Roll</span>
+                                    <span>{toBn(student.roll)}</span>
+                                  </div>
+                                )}
                               </div>
-                              <div className="font-bold text-slate-900">{student.name}</div>
+                              <div className="font-black text-xl text-slate-900 tracking-tight">{student.name}</div>
                             </div>
                           </td>
                           <td className="px-6 py-5 border-y border-slate-100 text-center">
