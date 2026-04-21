@@ -129,6 +129,12 @@
     padding: 0 !important;
   }
 
+  /* Hide all other elements to prevent empty pages/scrolling */
+  #root > *:not(.print-container):not(main),
+  main > *:not(.print-container) {
+    display: none !important;
+  }
+
   /* Repeated Header/Footer */
   thead { display: table-header-group !important; }
   tfoot { display: table-footer-group !important; }
@@ -138,23 +144,22 @@
   table {
     width: 100% !important;
     border-collapse: collapse !important;
+    table-layout: auto !important;
   }
 
   th, td {
-    border: 1px solid #e2e8f0 !important;
+    border: 1px solid #000 !important;
   }
 
   /* Scale based on view mode */
   .is-detailed table {
-    font-size: 7.5pt !important;
-    table-layout: auto !important;
+    font-size: 10pt !important;
   }
   
   .is-detailed th, 
   .is-detailed td {
-    padding: 2.5pt !important;
-    word-break: break-word !important;
-    white-space: normal !important;
+    padding: 3pt !important;
+    word-break: break-all !important;
   }
 
   .is-detailed td:not(:nth-child(2)) {
@@ -163,12 +168,12 @@
   }
 
   .is-short table {
-    font-size: 10pt !important;
+    font-size: 13pt !important;
   }
 
   .is-short th,
   .is-short td {
-    padding: 6pt !important;
+    padding: 8pt !important;
   }
 
   /* Ensure signature stays at bottom of page */
@@ -178,6 +183,21 @@
     align-items: flex-end !important;
     width: 100% !important;
     margin-top: 2rem !important;
+  }
+
+  /* Vertical Header for wide tables */
+  .vertical-header {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    padding: 5px;
+    font-size: 11pt;
+    font-weight: bold;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
   }
 }
 

@@ -114,19 +114,24 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
   }, [showDetails]);
 
   const fetchLastReport = async (studentId: string) => {
+    if (!studentId || studentId === "undefined") return;
     try {
       const res = await fetch(`/api/admin/hifz-reports?student_id=${studentId}&limit=1`);
       if (res.ok) {
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+           throw new Error("Invalid response from server (non-JSON)");
+        }
         const data = await res.json();
-        if (data.length > 0) {
+        if (data && Array.isArray(data) && data.length > 0) {
           setLastReport(data[0]);
         } else {
           setLastReport(null);
         }
       }
     } catch (error) {
-      console.error("Failed to fetch last report", error);
-      addToast("সর্বশেষ রিপোর্ট লোড করতে সমস্যা হয়েছে", "error");
+      console.error("Failed to fetch last report:", error);
+      // addToast("সর্বশেষ রিপোর্ট লোড করতে সমস্যা হয়েছে", "error"); // Keep it silent in background if desired
     }
   };
 
@@ -1119,31 +1124,6 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                           </div>
                         </div>
                         <div className="space-y-4">
-                          {/* Range Selections (5 Paras) */}
-                          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                            {[
-                              { label: '১-৫', range: [1, 5] },
-                              { label: '৬-১০', range: [6, 10] },
-                              { label: '১১-১৫', range: [11, 15] },
-                              { label: '১৬-২০', range: [16, 20] },
-                              { label: '২১-২৫', range: [21, 25] },
-                              { label: '২৬-৩০', range: [26, 30] }
-                            ].map((r, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  const newParas = [];
-                                  for (let i = r.range[0]; i <= r.range[1]; i++) newParas.push(String(i));
-                                  setSabina({ paras: newParas, total_paras: String(newParas.length) });
-                                }}
-                                className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black hover:bg-indigo-100 border border-indigo-100 transition-all"
-                              >
-                                {toBn(r.label)} পারা
-                              </button>
-                            ))}
-                          </div>
-
                           <div className="flex flex-wrap gap-2">
                             {Array.from({ length: 30 }, (_, i) => String(i + 1)).map(p => {
                               const isSelected = sabina.paras.includes(p);
@@ -1152,15 +1132,15 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                                   key={p}
                                   type="button"
                                   onClick={() => {
-                                    const clickedVal = parseInt(p);
-                                    const newParas = [];
-                                    for (let i = 1; i <= clickedVal; i++) newParas.push(String(i));
+                                    const newParas = isSelected 
+                                      ? sabina.paras.filter(x => x !== p)
+                                      : [...sabina.paras, p].sort((a,b) => parseInt(a)-parseInt(b));
                                     setSabina({ paras: newParas, total_paras: String(newParas.length) });
                                   }}
                                   className={cn(
                                     "w-12 h-12 flex items-center justify-center rounded-xl font-bold transition-all border-2",
                                     isSelected 
-                                      ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
+                                      ? "bg-indigo-600 border-indigo-600 text-white shadow-md scale-105" 
                                       : "bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:bg-indigo-50"
                                   )}
                                 >

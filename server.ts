@@ -184,12 +184,26 @@ app.post("/api/admin/update-firebase-config", async (req, res) => {
 
 // Middleware to check Firestore
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') && req.path !== '/api/health') {
-    const db = getFirestoreInstance();
-    if (!db) {
+  // Use req.url for cleaner path matching in middleware if needed, but req.path is fine
+  const path = req.path || "";
+  if (path.startsWith('/api/') && path !== '/api/health') {
+    try {
+      const db = getFirestoreInstance();
+      if (!db) {
+        console.error("Firestore initialization yielded null for path:", path);
+        return res.status(503).json({ 
+          error: "Service Unavailable", 
+          details: "Firestore initialization failed. The server may still be starting or configuration is invalid.",
+          path: path
+        });
+      }
+    } catch (err: any) {
+      console.error("Firestore middleware error for path:", path, err);
       return res.status(500).json({ 
-        error: "Firestore not initialized", 
-        details: "The server failed to connect to Firebase. Please check the logs." 
+        error: "Internal Server Error", 
+        details: "An error occurred while initializing Firestore.",
+        message: err.message,
+        path: path
       });
     }
   }
@@ -4936,8 +4950,6 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
 // --- Server Startup ---
-const PORT = 3000;
-
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
@@ -4946,11 +4958,16 @@ process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
 });
 
-// Removed duplicate /api/health
+const PORT = 3000;
 
-// 404 handler for API routes
+// API 404 handler (must be after all actual API routes)
 app.all("/api/*", (req, res) => {
-  res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
+  console.log(`404 for API route: ${req.method} ${req.path}`);
+  res.status(404).json({ 
+    error: "API route not found", 
+    method: req.method, 
+    path: req.path 
+  });
 });
 
 async function start() {
@@ -4958,44 +4975,54 @@ async function start() {
   const isProduction = process.env.NODE_ENV === "production";
   const hasDist = fs.existsSync(distPath);
 
-  console.log(`Starting server: isProduction=${isProduction}, hasDist=${hasDist}`);
+  console.log(`Starting server: isProduction=${isProduction}, hasDist=${hasDist}, time=${new Date().toISOString()}`);
 
   if (!isProduction || !hasDist) {
-    console.log("Using Vite middleware for development/fallback...");
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    console.log("Initializing Vite middleware...");
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware attached.");
+    } catch (err) {
+      console.error("Failed to initialize Vite middleware:", err);
+    }
   } else {
-    console.log("Serving static files from dist...");
+    console.log("Serving production assets from dist...");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running at http://0.0.0.0:${PORT}`);
+  // Global error handler for API routes - MUST BE AT THE END
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled API Error:", err);
+    if (req.path?.startsWith('/api/')) {
+      return res.status(500).json({ 
+        error: "Internal Server Error", 
+        details: err?.message || String(err),
+        path: req.path
+      });
+    }
+    next(err);
+  });
+
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    console.error("Server listen error:", err);
   });
 }
 
-// Global error handler for API routes - MUST BE AT THE END
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("Unhandled error:", err);
-  if (req.path.startsWith('/api/')) {
-    res.status(500).json({ 
-      error: "Internal Server Error", 
-      details: err.message,
-      path: req.path,
-      method: req.method
-    });
-  } else {
-    next(err);
-  }
+start().catch(err => {
+  console.error("Critical failure during server startup:", err);
+  process.exit(1);
 });
-
-start();
 
 export default app;
