@@ -164,7 +164,11 @@ export default function SyllabusRoutineManager() {
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
+          <div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

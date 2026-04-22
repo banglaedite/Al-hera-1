@@ -62,7 +62,11 @@ export function FirebaseSetup() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-20">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
+        <div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
       </div>
     );
   }
@@ -109,7 +113,10 @@ export function FirebaseSetup() {
           disabled={testing}
           className="flex items-center gap-2 px-6 py-3 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-all disabled:opacity-50"
         >
-          {testing ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+          {testing ? <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div> : <RefreshCw className="w-5 h-5" />}
           পুনরায় চেক করুন
         </button>
       </div>
@@ -271,7 +278,10 @@ export function FirebaseSetup() {
               disabled={saving}
               className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-3 disabled:opacity-50"
             >
-              {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
+              {saving ? <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div> : <CheckCircle2 className="w-6 h-6" />}
               Save and Connect
             </button>
           </form>

@@ -1176,7 +1176,11 @@ export default function ParentPortal() {
                             disabled={savingAmal}
                             className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-900/20 flex items-center gap-3 disabled:opacity-70"
                           >
-                            {savingAmal ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+                            {savingAmal ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : <Send className="w-6 h-6" />}
                             আমল সাবমিট করুন
                           </button>
                         )}
@@ -1227,7 +1231,11 @@ export default function ParentPortal() {
                           {fetchingStatus ? (
                             <tr>
                               <td colSpan={2} className="p-12 text-center">
-                                <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                                <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
                               </td>
                             </tr>
                           ) : submissionStatus.length > 0 ? submissionStatus.map((s) => (
@@ -1326,7 +1334,11 @@ export default function ParentPortal() {
                           disabled={downloading}
                           className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md shadow-emerald-900/20"
                         >
-                          {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          {downloading ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : <Download className="w-4 h-4" />}
                           মার্কশিট ডাউনলোড
                         </button>
                       )}
@@ -1860,7 +1872,11 @@ export default function ParentPortal() {
                                 onClick={() => fetchVotes(notice.id)}
                                 className="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1"
                               >
-                                {fetchingVotes === notice.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <History className="w-3 h-3" />}
+                                {fetchingVotes === notice.id ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : <History className="w-3 h-3" />}
                                 ফলাফল দেখুন
                               </button>
                             </div>
@@ -1871,7 +1887,11 @@ export default function ParentPortal() {
                                 onClick={() => handleVote(notice.id, 'yes')}
                                 className="flex-1 py-3 bg-emerald-50 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
                               >
-                                {votingOn === notice.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                {votingOn === notice.id ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : <CheckCircle2 className="w-4 h-4" />}
                                 হ্যাঁ
                               </button>
                               <button 
@@ -1879,7 +1899,11 @@ export default function ParentPortal() {
                                 onClick={() => handleVote(notice.id, 'no')}
                                 className="flex-1 py-3 bg-rose-50 text-rose-700 rounded-2xl font-bold hover:bg-rose-100 transition-all flex items-center justify-center gap-2"
                               >
-                                {votingOn === notice.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
+                                {votingOn === notice.id ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : <AlertCircle className="w-4 h-4" />}
                                 না
                               </button>
                             </div>
@@ -2034,7 +2058,11 @@ export default function ParentPortal() {
                         "bg-[#8C1515] hover:bg-[#6b1010]"
                       )}
                     >
-                      {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : "পেমেন্ট নিশ্চিত করুন"}
+                      {paying ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : "পেমেন্ট নিশ্চিত করুন"}
                     </button>
                   </div>
                 </div>

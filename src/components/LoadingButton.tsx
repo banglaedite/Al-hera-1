@@ -33,7 +33,10 @@ export const LoadingButton = ({
       )}
       {...props}
     >
-      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+      {loading && <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div>}
       {!loading && icon}
       <span>{children}</span>
     </button>

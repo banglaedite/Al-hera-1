@@ -537,7 +537,11 @@ export default function TeacherPortal() {
                             disabled={savingAmal}
                             className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-900/20 flex items-center gap-3 disabled:opacity-70"
                           >
-                            {savingAmal ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+                            {savingAmal ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : <Send className="w-6 h-6" />}
                             আমল সাবমিট করুন
                           </button>
                         )}
@@ -588,7 +592,11 @@ export default function TeacherPortal() {
                           {fetchingStatus ? (
                             <tr>
                               <td colSpan={2} className="p-12 text-center">
-                                <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                                <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
                               </td>
                             </tr>
                           ) : submissionStatus.length > 0 ? submissionStatus.map((student) => (

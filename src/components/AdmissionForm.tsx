@@ -103,8 +103,17 @@ export default function AdmissionForm() {
         <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-xl border border-slate-100">
           {settings?.admission_rules && (
             <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl">
-              <h4 className="font-bold text-amber-900 mb-2">ভর্তির নিয়মাবলী:</h4>
-              <p className="text-amber-800 text-sm whitespace-pre-wrap">{settings.admission_rules}</p>
+              <h4 className="font-bold text-amber-900 mb-4 flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-amber-600" /> ভর্তির নিয়মাবলী:
+              </h4>
+              <ul className="space-y-3">
+                {settings.admission_rules.split('\n').filter((line: string) => line.trim()).map((rule: string, i: number) => (
+                  <li key={i} className="flex gap-3 text-amber-800 text-sm leading-relaxed">
+                    <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5" />
+                    <span>{rule}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

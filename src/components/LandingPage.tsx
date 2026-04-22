@@ -60,6 +60,8 @@ const iconMap: any = {
   BookOpen, Users, ShieldCheck, Heart, Star, Award, Lightbulb, Globe, Clock, Calendar, GraduationCap
 };
 
+const toBn = (n: number | string) => n ? n.toString().replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d as any] as any) : '';
+
 const LandingPage = () => {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<any>(null);
@@ -72,6 +74,10 @@ const LandingPage = () => {
   const [leaderboardType, setLeaderboardType] = useState<"amol" | "attendance">("amol");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
+
+  const [visibleFeatures, setVisibleFeatures] = useState(6);
+  const [visibleFood, setVisibleFood] = useState(6);
+  const [visibleNotices, setVisibleNotices] = useState(6);
 
   useEffect(() => {
     const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
@@ -106,15 +112,6 @@ const LandingPage = () => {
   }, [leaderboardType]);
 
   useEffect(() => {
-    // Check if user is already logged in and redirect
-    if (localStorage.getItem("isAdmin") === "true") {
-      navigate("/secret-admin-access");
-      return;
-    } else if (localStorage.getItem("guardianPhone")) {
-      navigate("/parent");
-      return;
-    }
-
     const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
@@ -392,6 +389,23 @@ const LandingPage = () => {
             
             <TypingTitle text={settings.title} />
 
+            {settings.name_logo_url && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 }}
+                className="mb-6 flex justify-center"
+              >
+                <img 
+                  src={settings.name_logo_url} 
+                  alt={settings.title} 
+                  style={{ height: `${settings.name_logo_height || 80}px` }} 
+                  className="max-w-[90vw] object-contain drop-shadow-md"
+                  referrerPolicy="no-referrer"
+                />
+              </motion.div>
+            )}
+
             {settings.address && (
               <motion.p 
                 initial={{ opacity: 0 }}
@@ -404,12 +418,197 @@ const LandingPage = () => {
               </motion.p>
             )}
             
-            <p className="text-lg md:text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto font-medium font-sans">
+            <p className="text-lg md:text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto font-medium font-sans whitespace-pre-wrap">
               {settings.description}
             </p>
           </motion.div>
         </div>
       </section>
+
+      {/* Muhtamim's Quote Section */}
+      {settings?.show_muhtamim_msg === 1 && settings?.muhtamim_msg && (
+        <section className="py-24 relative overflow-hidden bg-white">
+          <div className="max-w-6xl mx-auto px-4 relative z-10">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              whileInView={{ opacity: 1, scale: 1, y: 0 }}
+              viewport={{ once: true }}
+              className={cn(
+                "relative p-10 md:p-20 rounded-[5rem] border flex flex-col md:flex-row items-center gap-16 text-center md:text-left shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)]",
+                settings.muhtamim_msg_template === 'premium' ? 
+                  "bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white border-emerald-800" : 
+                  settings.muhtamim_msg_template === 'classic' ?
+                  "bg-slate-50 border-slate-200 text-slate-800" :
+                  "bg-white border-emerald-100 text-slate-900"
+              )}
+            >
+              {/* Image Container */}
+              <div className="relative group">
+                <div className={cn(
+                  "w-56 h-56 md:w-80 md:h-80 rounded-full overflow-hidden border-8 shadow-2xl transition-all duration-1000 group-hover:scale-105 group-hover:rotate-3",
+                  settings.muhtamim_msg_template === 'premium' ? "border-emerald-800/50 shadow-emerald-900/50" : "border-white"
+                )}>
+                  <img 
+                    src={settings.muhtamim_photo_url || "https://picsum.photos/seed/muhtamim/600/600"} 
+                    alt="Muhtamim" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="absolute -top-6 -left-6 w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-2xl animate-bounce border-4 border-white z-20">
+                  <Star className="w-8 h-8 text-white" />
+                </div>
+                {/* Decorative rings for premium */}
+                {settings.muhtamim_msg_template === 'premium' && (
+                  <>
+                    <div className="absolute -inset-4 border-2 border-emerald-500/30 rounded-full animate-[spin_10s_linear_infinite]" />
+                    <div className="absolute -inset-8 border border-emerald-600/10 rounded-full animate-[spin_15s_linear_infinite_reverse]" />
+                  </>
+                )}
+              </div>
+
+              {/* Text Container */}
+              <div className="flex-1 space-y-8 relative">
+                <div className="relative">
+                  <MessageSquare className={cn(
+                    "w-20 h-20 absolute -top-16 -left-10 transform -rotate-12 opacity-10",
+                    settings.muhtamim_msg_template === 'premium' ? "text-emerald-500" : "text-emerald-900"
+                  )} />
+                  <h3 className={cn(
+                    "text-3xl md:text-5xl font-black italic leading-[1.4] relative z-10 font-sans tracking-tight whitespace-pre-wrap",
+                    settings.muhtamim_msg_template === 'premium' ? "text-emerald-50 drop-shadow-lg" : "text-slate-900"
+                  )}>
+                    "{settings.muhtamim_msg}"
+                  </h3>
+                </div>
+                
+                <div className="flex items-center gap-6">
+                  <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-transparent" />
+                  <div className="text-right border-l-4 border-emerald-500 pl-6">
+                    <h4 className={cn(
+                      "text-2xl md:text-3xl font-black mb-1",
+                      settings.muhtamim_msg_template === 'premium' ? "text-white" : "text-emerald-900"
+                    )}>
+                      {settings.muhtamim_name_title || "মুহতামিম সাহেব"}
+                    </h4>
+                    <p className={cn(
+                      "font-black text-xs md:text-sm tracking-[0.3em] uppercase",
+                      settings.muhtamim_msg_template === 'premium' ? "text-emerald-300" : "text-slate-500"
+                    )}>
+                      মুহতামিম এর বাণী
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Decorative elements */}
+              <div className="absolute bottom-0 right-0 p-12 opacity-5 pointer-events-none">
+                <Globe className="w-48 h-48" />
+              </div>
+            </motion.div>
+          </div>
+        </section>
+      )}
+
+      {/* Quick Action Icons */}
+      <section className="py-8 bg-white relative z-20">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
+            {[
+              { id: 'food-menu', icon: Utensils, label: 'খাবার মেনু', color: 'bg-rose-50 text-rose-600 border-rose-100', hover: 'hover:bg-rose-600 hover:text-white' },
+              { id: 'notices', icon: Bell, label: 'নোটিশ বোর্ড', color: 'bg-blue-50 text-blue-600 border-blue-100', hover: 'hover:bg-blue-600 hover:text-white' },
+              { id: 'routines', icon: Calendar, label: 'রুটিন-সিলেবাস', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', hover: 'hover:bg-emerald-600 hover:text-white' },
+              { id: 'showcase', icon: Globe, label: 'শোকেস', color: 'bg-amber-50 text-amber-600 border-amber-100', hover: 'hover:bg-amber-600 hover:text-white' },
+              { id: 'leaderboard', icon: Award, label: 'সেরা ছাত্র', color: 'bg-purple-50 text-purple-600 border-purple-100', hover: 'hover:bg-purple-600 hover:text-white' },
+              { id: 'rules', icon: FileText, label: 'নিয়মাবলী', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', hover: 'hover:bg-indigo-600 hover:text-white' },
+              { id: 'features', icon: Star, label: 'আমাদের বৈশিষ্ট্য', color: 'bg-emerald-50 text-emerald-900 border-emerald-200', hover: 'hover:bg-emerald-900 hover:text-white' },
+              { id: 'results', icon: BookOpen, label: 'রেজাল্ট', color: 'bg-cyan-50 text-cyan-600 border-cyan-100', hover: 'hover:bg-cyan-600 hover:text-white', isLink: true, path: '/parent?tab=results' },
+            ].map((item, i) => (
+              <motion.a
+                key={item.label}
+                href={item.isLink ? undefined : `#${item.id}`}
+                onClick={(e) => {
+                  if (item.isLink) {
+                    e.preventDefault();
+                    navigate(item.path!);
+                  }
+                }}
+                whileHover={{ y: -3, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.05 }}
+                className={cn(
+                  "flex flex-col items-center justify-center p-3 md:p-4 rounded-[1.5rem] border transition-all duration-300 gap-2 group shadow-sm cursor-pointer",
+                  item.color,
+                  item.hover
+                )}
+              >
+                <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-sm group-hover:bg-white group-hover:scale-110 transition-all">
+                  <item.icon className="w-5 h-5" />
+                </div>
+                <span className="font-black text-[10px] md:text-sm tracking-tight text-center">{item.label}</span>
+              </motion.a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Campus Gallery Section */}
+      {(settings?.gate_image_url || settings?.campus_image_url) && (
+        <section className="py-24 bg-slate-50">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {settings.gate_image_url ? (
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  className="group relative h-[400px] rounded-[3rem] overflow-hidden shadow-2xl"
+                >
+                  <img src={settings.gate_image_url} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-10">
+                    <h3 className="text-3xl font-black text-white mb-2">মাদরাসার ফটক</h3>
+                    <p className="text-emerald-400 font-bold">মাদরাসা প্রবেশদ্বার</p>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="h-[400px] rounded-[3rem] bg-emerald-900 flex items-center justify-center p-12 text-center text-white">
+                  <div>
+                    <ShieldCheck className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-2xl font-bold">মাদরাসা ফটক</h3>
+                    <p className="opacity-70">নিরাপদ ও সুনিয়ন্ত্রিত প্রবেশ পথ</p>
+                  </div>
+                </div>
+              )}
+
+              {settings.campus_image_url ? (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  className="group relative h-[400px] rounded-[3rem] overflow-hidden shadow-2xl"
+                >
+                  <img src={settings.campus_image_url} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-10">
+                    <h3 className="text-3xl font-black text-white mb-2">মাদরাসা প্রাঙ্গণ</h3>
+                    <p className="text-amber-400 font-bold">বিশাল খেলার মাঠ ও খোলামেলা পরিবেশ</p>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="h-[400px] rounded-[3rem] bg-amber-600 flex items-center justify-center p-12 text-center text-white">
+                  <div>
+                    <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-2xl font-bold">মাদরাসা প্রাঙ্গণ</h3>
+                    <p className="opacity-70">লেখাপড়ার পাশাপাশি খেলাধুলার সুব্যবস্থা</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Public Notice Board Section */}
       {notices.length > 0 && (
@@ -423,7 +622,7 @@ const LandingPage = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {notices.map((notice, i) => (
+              {notices.slice(0, visibleNotices).map((notice, i) => (
                 <motion.div
                   key={notice.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -470,49 +669,19 @@ const LandingPage = () => {
                 </motion.div>
               ))}
             </div>
+
+            {notices.length > visibleNotices && (
+              <div className="mt-12 text-center">
+                <button 
+                  onClick={() => setVisibleNotices(prev => prev + 6)}
+                  className="px-10 py-4 bg-emerald-900 text-white rounded-2xl font-black hover:bg-emerald-800 transition-all shadow-xl shadow-emerald-900/20 active:scale-95"
+                >
+                  আরও নোটিশ দেখুন
+                </button>
+              </div>
+            )}
           </div>
         </section>
-      )}
-
-      {/* Content Sections Toggle Buttons */}
-      {(settings?.show_features_directly !== 1 || settings?.show_food_directly !== 1 || settings?.show_showcase_directly !== 1 || settings?.show_routines_directly !== 1 || settings?.show_notices_directly !== 1) && (
-        <div className="bg-white py-8 border-b border-slate-100">
-          <div className="max-w-7xl mx-auto px-4 flex flex-wrap justify-center gap-4">
-            {settings?.show_notices_directly !== 1 && notices.length > 0 && (
-              <a href="#notices" className="px-8 py-4 bg-amber-50 text-amber-900 rounded-2xl font-black shadow-sm border border-amber-100 hover:bg-amber-100 transition-all flex items-center gap-2">
-                <Bell className="w-5 h-5" /> নোটিশ বোর্ড
-              </a>
-            )}
-            {leaderboard.length > 0 && (
-              <a href="#leaderboard" className="px-8 py-4 bg-amber-50 text-amber-900 rounded-2xl font-black shadow-sm border border-amber-100 hover:bg-amber-100 transition-all flex items-center gap-2">
-                <Award className="w-5 h-5" /> সেরা ছাত্র
-              </a>
-            )}
-            {settings?.show_features_directly !== 1 && (
-              <a href="#features" className="px-8 py-4 bg-emerald-50 text-emerald-900 rounded-2xl font-black shadow-sm border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center gap-2">
-                <Star className="w-5 h-5" /> আমাদের বৈশিষ্ট্য
-              </a>
-            )}
-            {settings?.show_food_directly !== 1 && (
-              <a href="#food-menu" className="px-8 py-4 bg-rose-50 text-rose-900 rounded-2xl font-black shadow-sm border border-rose-100 hover:bg-rose-100 transition-all flex items-center gap-2">
-                <Heart className="w-5 h-5" /> খাবার মেনু
-              </a>
-            )}
-            {settings?.show_showcase_directly !== 1 && (
-              <a href="#showcase" className="px-8 py-4 bg-blue-50 text-blue-900 rounded-2xl font-black shadow-sm border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-2">
-                <Globe className="w-5 h-5" /> একাডেমিক শোকেস
-              </a>
-            )}
-            <Link to="/parent?tab=results" className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-900/20 hover:bg-emerald-700 transition-all flex items-center gap-2">
-              <BookOpen className="w-5 h-5" /> রেজাল্ট
-            </Link>
-            {settings?.show_routines_directly !== 1 && (
-              <a href="#routines" className="px-8 py-4 bg-indigo-50 text-indigo-900 rounded-2xl font-black shadow-sm border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2">
-                <FileText className="w-5 h-5" /> রুটিন
-              </a>
-            )}
-          </div>
-        </div>
       )}
 
       {/* Routine & Syllabus Section */}
@@ -608,7 +777,7 @@ const LandingPage = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.length > 0 ? features.map((feature, i) => {
+            {features.length > 0 ? features.slice(0, visibleFeatures).map((feature, i) => {
               const Icon = iconMap[feature.icon] || Star;
               const gradients = [
                 "from-emerald-500 to-teal-400",
@@ -654,7 +823,7 @@ const LandingPage = () => {
                   
                   <div className="relative z-10">
                     <h3 className={`text-2xl font-bold mb-4 font-display bg-clip-text text-transparent bg-gradient-to-r ${gradient}`}>{feature.title}</h3>
-                    <div className="p-5 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 text-lg leading-relaxed font-sans shadow-inner">
+                    <div className="p-5 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 text-lg leading-relaxed font-sans shadow-inner whitespace-pre-wrap">
                       {feature.description}
                     </div>
                   </div>
@@ -667,6 +836,17 @@ const LandingPage = () => {
               </div>
             )}
           </div>
+          
+          {features.length > visibleFeatures && (
+            <div className="mt-16 text-center">
+              <button 
+                onClick={() => setVisibleFeatures(prev => prev + 6)}
+                className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-200 active:scale-95"
+              >
+                সব বৈশিষ্ট্য দেখুন
+              </button>
+            </div>
+          )}
         </div>
       </section>
     )}
@@ -689,7 +869,7 @@ const LandingPage = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-              {foodMenu.map((item, i) => {
+              {foodMenu.slice(0, visibleFood).map((item, i) => {
                 const gradients = [
                   "from-orange-500 to-amber-400",
                   "from-rose-500 to-pink-400",
@@ -737,6 +917,17 @@ const LandingPage = () => {
                 </motion.div>
               )})}
             </div>
+            
+            {foodMenu.length > visibleFood && (
+              <div className="mt-16 text-center">
+                <button 
+                  onClick={() => setVisibleFood(prev => prev + 6)}
+                  className="px-10 py-4 bg-rose-600 text-white rounded-2xl font-black hover:bg-rose-700 transition-all shadow-xl shadow-rose-200 active:scale-95"
+                >
+                  পুরো মেনু দেখুন
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -862,6 +1053,47 @@ const LandingPage = () => {
                   <p className="text-slate-500 font-medium">{item.description}</p>
                 </motion.div>
               ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Madrasa Rules Section */}
+      {settings?.admission_rules && (
+        <section id="rules" className="py-24 bg-slate-50 relative overflow-hidden scroll-mt-24">
+          <div className="max-w-4xl mx-auto px-4 relative z-10">
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold mb-6">
+                <FileText className="w-3 h-3" />
+                <span className="uppercase tracking-widest">মাদরাসার নিয়মাবলী</span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
+                ভর্তি ও <span className="text-indigo-600">সাধারণ নিয়মাবলী</span>
+              </h2>
+            </div>
+            
+            <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl shadow-indigo-100/50 border border-indigo-50">
+              <div className="space-y-6">
+                {settings.admission_rules.split('\n').filter((rule: string) => rule.trim()).map((rule: string, idx: number) => (
+                  <motion.div 
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="flex gap-5 group"
+                  >
+                    <div className="shrink-0 w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-lg group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-sm">
+                      {toBn(idx + 1)}
+                    </div>
+                    <div className="flex-1 pt-1.5">
+                      <p className="text-lg text-slate-700 font-medium leading-relaxed">
+                        {rule}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </div>
         </section>

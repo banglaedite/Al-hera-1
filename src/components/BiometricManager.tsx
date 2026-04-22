@@ -201,7 +201,11 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
               <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                 <div className="max-h-[600px] overflow-y-auto p-4 space-y-3 custom-scrollbar">
                   {loading ? (
-                    <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+                    <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
                   ) : filteredStudents.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 font-bold">কোন ছাত্র পাওয়া যায়নি</div>
                   ) : filteredStudents.map(student => (
@@ -248,7 +252,11 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
               <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                 <div className="max-h-[600px] overflow-y-auto p-4 space-y-3 custom-scrollbar">
                   {loading ? (
-                    <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+                    <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
                   ) : filteredTeachers.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 font-bold">কোন শিক্ষক পাওয়া যায়নি</div>
                   ) : filteredTeachers.map(teacher => (
@@ -315,7 +323,11 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loadingHistory ? (
-                  <tr><td colSpan={5} className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" /></td></tr>
+                  <tr><td colSpan={5} className="text-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></td></tr>
                 ) : history.length === 0 ? (
                   <tr><td colSpan={5} className="text-center py-12 text-slate-400 font-bold">কোন রেকর্ড পাওয়া যায়নি</td></tr>
                 ) : history.map(log => (

@@ -135,7 +135,11 @@ export function AmalManager() {
     }
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>;
 
   return (
     <div className="space-y-8">
@@ -286,7 +290,11 @@ export function AmalManager() {
                   {fetchingRankings ? (
                     <tr>
                       <td colSpan={5} className="p-12 text-center">
-                        <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                        <div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
                         <p className="mt-4 text-slate-500 font-bold">লোড হচ্ছে...</p>
                       </td>
                     </tr>
@@ -394,7 +402,11 @@ export function AmalManager() {
                   {fetchingStatus ? (
                     <tr>
                       <td colSpan={3} className="p-12 text-center">
-                        <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                        <div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
                         <p className="mt-4 text-slate-500 font-bold">লোড হচ্ছে...</p>
                       </td>
                     </tr>
@@ -486,7 +498,10 @@ export function AmalManager() {
                 </div>
 
                 <button type="submit" disabled={submitting} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                  {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                  {submitting ? <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div> : <Check className="w-5 h-5" />}
                   {submitting ? "লোড হচ্ছে..." : editingItem ? "আপডেট করুন" : "সেভ করুন"}
                 </button>
               </form>

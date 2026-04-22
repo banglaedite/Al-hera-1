@@ -155,7 +155,10 @@ export function RoutineManager() {
                 </div>
 
                 <button type="submit" disabled={submitting} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                  {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                  {submitting ? <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div> : <Check className="w-5 h-5" />}
                   {submitting ? "লোড হচ্ছে..." : editingItem ? "আপডেট করুন" : "সেভ করুন"}
                 </button>
               </form>

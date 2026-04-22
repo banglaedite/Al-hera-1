@@ -8,6 +8,9 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import html2canvas from 'html2canvas';
 
+import { CountUp } from './CountUp';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
+
 // ... (keep other imports)
 import { cn } from "../lib/utils";
 import { LoadingButton } from "./LoadingButton";
@@ -1119,6 +1122,130 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl border border-indigo-500 shadow-xl shadow-indigo-600/20 relative overflow-hidden group text-white">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/20 transition-all duration-500"></div>
+                <div className="relative z-10 flex flex-col h-full">
+                  <span className="text-xs font-black text-indigo-200 uppercase tracking-widest mb-2 inline-block">পূর্বের জের</span>
+                  <div className="flex items-end gap-2 mt-auto">
+                    <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={summary.prevBalance || 0} startColor="#ffffff" endColor="#ffffff" /></span>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-6 rounded-3xl border border-emerald-500 shadow-xl shadow-emerald-600/20 relative overflow-hidden group text-white">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/20 transition-all duration-500"></div>
+                <div className="relative z-10 flex flex-col h-full">
+                  <span className="text-xs font-black text-emerald-200 uppercase tracking-widest mb-2 inline-block">মোট আয়</span>
+                  <div className="flex items-end gap-2 mt-auto">
+                    <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={summary.totalIncome || 0} startColor="#ffffff" endColor="#34d399" /></span>
+                    <TrendingUp className="w-6 h-6 text-emerald-300 mb-1" />
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-rose-600 to-rose-800 p-6 rounded-3xl border border-rose-500 shadow-xl shadow-rose-600/20 relative overflow-hidden group text-white">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/20 transition-all duration-500"></div>
+                <div className="relative z-10 flex flex-col h-full">
+                  <span className="text-xs font-black text-rose-200 uppercase tracking-widest mb-2 inline-block">মোট ব্যয়</span>
+                  <div className="flex items-end gap-2 mt-auto">
+                    <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={summary.totalExpense || 0} startColor="#ffffff" endColor="#fb7185" /></span>
+                    <TrendingDown className="w-6 h-6 text-rose-300 mb-1" />
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl shadow-slate-900/20 relative overflow-hidden group text-white">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/10 transition-all duration-500"></div>
+                <div className="relative z-10 flex flex-col h-full">
+                  <span className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2 inline-block">বর্তমান স্থিতি</span>
+                  <div className="flex items-end gap-2 mt-auto">
+                    <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={summary.totalBalance || 0} startColor="#ffffff" endColor="#10b981" /></span>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm print:hidden mb-8 overflow-hidden relative">
+              <div className="absolute -right-24 -top-24 w-64 h-64 bg-emerald-50 rounded-full blur-3xl opacity-50"></div>
+              <div className="absolute -left-24 -bottom-24 w-64 h-64 bg-rose-50 rounded-full blur-3xl opacity-50"></div>
+              <div className="relative z-10">
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h4 className="text-xl font-black text-slate-900 tracking-tight">আয় ও ব্যয়ের গ্রাফ</h4>
+                    <p className="text-xs font-bold text-slate-400 mt-1">চলতি সময়ের লেনদেন বিশ্লেষণ</p>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase">আয়</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase">ব্যয়</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: 'পূর্বের জের', amount: summary.prevBalance || 0, color: '#6366f1' },
+                      { name: 'মোট আয়', amount: summary.totalIncome || 0, color: '#10b981' },
+                      { name: 'মোট ব্যয়', amount: summary.totalExpense || 0, color: '#f43f5e' },
+                      { name: 'বর্তমান স্থিতি', amount: summary.totalBalance || 0, color: '#10b981' }
+                    ]} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="inherit" stopOpacity={1} />
+                          <stop offset="100%" stopColor="inherit" stopOpacity={0.6} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#94a3b8', fontWeight: 800, fontSize: 11 }} 
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#94a3b8', fontWeight: 800, fontSize: 11 }} 
+                        tickFormatter={(value) => `৳${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} 
+                      />
+                      <RechartsTooltip 
+                        cursor={{ fill: 'transparent' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-800">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{payload[0].payload.name}</p>
+                                <p className="text-xl font-black">৳{payload[0].value?.toLocaleString('en-IN')}</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="amount" radius={[12, 12, 12, 12]} barSize={45}>
+                        {
+                          [
+                            { color: '#6366f1' },
+                            { color: '#10b981' },
+                            { color: '#f43f5e' },
+                            { color: '#10b981' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.9} />
+                          ))
+                        }
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
               <div className="flex justify-between items-center mb-6">
@@ -1322,24 +1449,28 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             </div>
             
             {loadingReport ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+              <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
             ) : categoryReportData ? (
               <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-2xl border border-emerald-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-emerald-700 mb-2 relative z-10">মোট আয়</p>
-                    <p className="text-3xl font-black text-emerald-950 relative z-10">৳{categoryReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0).toLocaleString('en-IN')}</p>
+                  <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-6 rounded-2xl border border-emerald-500 shadow-xl shadow-emerald-600/20 relative overflow-hidden group">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-emerald-100 mb-2 relative z-10 uppercase tracking-widest">মোট আয়</p>
+                    <p className="text-3xl font-black text-white relative z-10">৳<CountUp end={categoryReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)} startColor="#ffffff" endColor="#ffffff" /></p>
                   </div>
-                  <div className="bg-gradient-to-br from-rose-50 to-white p-6 rounded-2xl border border-rose-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-rose-700 mb-2 relative z-10">মোট ব্যয়</p>
-                    <p className="text-3xl font-black text-rose-950 relative z-10">৳{categoryReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0).toLocaleString('en-IN')}</p>
+                  <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden group">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-50 rounded-full blur-xl group-hover:bg-rose-100 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-slate-400 mb-2 relative z-10 uppercase tracking-widest">মোট ব্যয়</p>
+                    <p className="text-3xl font-black text-slate-900 relative z-10">৳<CountUp end={categoryReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)} startColor="#ffffff" endColor="#f43f5e" /></p>
                   </div>
-                  <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-blue-700 mb-2 relative z-10">অবশিষ্ট</p>
-                    <p className="text-3xl font-black text-blue-950 relative z-10">৳{(categoryReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0) - categoryReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)).toLocaleString('en-IN')}</p>
+                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl shadow-slate-900/20 relative overflow-hidden group text-white">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/5 rounded-full blur-xl group-hover:bg-white/10 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-emerald-400 mb-2 relative z-10 uppercase tracking-widest">অবশিষ্ট</p>
+                    <p className="text-3xl font-black text-white relative z-10">৳<CountUp end={(categoryReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0) - categoryReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0))} startColor="#ffffff" endColor="#10b981" /></p>
                   </div>
                 </div>
 
@@ -1397,36 +1528,40 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
             </div>
             
             {loadingReport ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+              <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
             ) : classReportData ? (
               <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-emerald-50 to-white p-6 rounded-2xl border border-emerald-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-emerald-700 mb-2 relative z-10">মোট উঠেছে (আয়)</p>
-                    <p className="text-3xl font-black text-emerald-950 relative z-10">
-                      ৳{(classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)).toLocaleString('en-IN')}
+                  <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-6 rounded-2xl border border-emerald-500 shadow-xl shadow-emerald-600/20 relative overflow-hidden group text-white">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-emerald-100 mb-2 relative z-10 uppercase tracking-widest">মোট উঠেছে (আয়)</p>
+                    <p className="text-3xl font-black relative z-10" style={{ color: '#fff' }}>
+                      ৳<CountUp end={(classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0))} startColor="#ffffff" endColor="#ffffff" />
                     </p>
                   </div>
-                  <div className="bg-gradient-to-br from-rose-50 to-white p-6 rounded-2xl border border-rose-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-rose-700 mb-2 relative z-10">মোট গিয়েছে (ব্যয়)</p>
-                    <p className="text-3xl font-black text-rose-950 relative z-10">
-                      ৳{classReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0).toLocaleString('en-IN')}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-xl shadow-slate-200/50 relative overflow-hidden group">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-50 rounded-full blur-xl group-hover:bg-rose-100 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-slate-400 mb-2 relative z-10 uppercase tracking-widest">মোট গিয়েছে (ব্যয়)</p>
+                    <p className="text-3xl font-black relative z-10">
+                      ৳<CountUp end={classReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)} startColor="#ffffff" endColor="#f43f5e" />
                     </p>
                   </div>
-                  <div className="bg-gradient-to-br from-orange-50 to-white p-6 rounded-2xl border border-orange-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-orange-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-orange-700 mb-2 relative z-10">ওঠেনি (বকেয়া)</p>
-                    <p className="text-3xl font-black text-orange-950 relative z-10">
-                      ৳{classReportData.fees.filter((f: any) => f.status !== 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0).toLocaleString('en-IN')}
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-700 p-6 rounded-2xl border border-orange-400 shadow-xl shadow-orange-500/20 relative overflow-hidden group text-white">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-orange-100 mb-2 relative z-10 uppercase tracking-widest">ওঠেনি (বকেয়া)</p>
+                    <p className="text-3xl font-black relative z-10" style={{ color: '#fff' }}>
+                      ৳<CountUp end={classReportData.fees.filter((f: any) => f.status !== 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0)} startColor="#ffffff" endColor="#ffffff" />
                     </p>
                   </div>
-                  <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-100/50 rounded-full blur-xl"></div>
-                    <p className="text-sm font-bold text-blue-700 mb-2 relative z-10">অবশিষ্ট</p>
-                    <p className="text-3xl font-black text-blue-950 relative z-10">
-                      ৳{((classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)) - classReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)).toLocaleString('en-IN')}
+                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl shadow-slate-900/20 relative overflow-hidden group text-white">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/5 rounded-full blur-xl group-hover:bg-white/10 transition-all duration-500"></div>
+                    <p className="text-xs font-black text-emerald-400 mb-2 relative z-10 uppercase tracking-widest">অবশিষ্ট</p>
+                    <p className="text-3xl font-black relative z-10" style={{ color: '#fff' }}>
+                      ৳<CountUp end={((classReportData.fees.filter((f: any) => f.status === 'paid').reduce((sum: number, f: any) => sum + (f.amount || 0), 0) + classReportData.income.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)) - classReportData.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0))} startColor="#ffffff" endColor="#10b981" />
                     </p>
                   </div>
                 </div>

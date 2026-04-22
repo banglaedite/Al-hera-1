@@ -216,7 +216,11 @@ export function TeacherManager({
     }
   }, [initialTeachers]);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>;
 
   const filteredTeachers = teachers
     .filter(t => t && t.name && t.name.toLowerCase().includes(search.toLowerCase()))
@@ -419,7 +423,10 @@ export function TeacherManager({
                 )}
               >
                 {submitting ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div>
                 ) : (
                   <Save className="w-6 h-6" />
                 )}
@@ -489,7 +496,10 @@ export function TeacherManager({
                     )}
                   >
                     {payingSalary ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
+                      <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div>
                     ) : (
                       <Save className="w-6 h-6" />
                     )}
@@ -624,7 +634,10 @@ export function TeacherManager({
                   deleting ? "bg-rose-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
                 )}
               >
-                {deleting ? <Loader2 className="w-6 h-6 animate-spin" /> : "ডিলিট করুন"}
+                {deleting ? <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div> : "ডিলিট করুন"}
               </button>
             </div>
           </div>
@@ -663,7 +676,10 @@ export function TeacherManager({
                   deleting ? "bg-rose-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
                 )}
               >
-                {deleting ? <Loader2 className="w-6 h-6 animate-spin" /> : "ডিলিট করুন"}
+                {deleting ? <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div> : "ডিলিট করুন"}
               </button>
             </div>
           </div>

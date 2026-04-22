@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense, createContext, useContext } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
 import { db } from "./firebase";
 import { 
@@ -14,29 +14,45 @@ import {
   BookOpen,
   Bell,
   Heart,
-  ShieldCheck
+  ShieldCheck,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import AdmissionForm from "./components/AdmissionForm";
-import StudentSearch from "./components/StudentSearch";
-import FeeManagement from "./components/FeeManagement";
-import ParentPortal from "./components/ParentPortal";
-import TeacherPortal from "./components/TeacherPortal";
-import DashboardHome from "./components/DashboardHome";
-import AdminPanel from "./components/AdminPanel";
-import LandingPage from "./components/LandingPage";
-import FloatingContact from "./components/FloatingContact";
-import { NoticeBoard } from "./components/NoticeBoard";
-import { ToastProvider } from "./components/ToastContext";
+import { ToastProvider, useToast } from "./components/ToastContext";
 import { cn } from "./lib/utils";
 
-import { useToast } from "./components/ToastContext";
+// Lazy Load Major Components
+const AdmissionForm = lazy(() => import("./components/AdmissionForm"));
+const StudentSearch = lazy(() => import("./components/StudentSearch"));
+const FeeManagement = lazy(() => import("./components/FeeManagement"));
+const ParentPortal = lazy(() => import("./components/ParentPortal"));
+const TeacherPortal = lazy(() => import("./components/TeacherPortal"));
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const LandingPage = lazy(() => import("./components/LandingPage"));
+const FloatingContact = lazy(() => import("./components/FloatingContact"));
+const NoticeBoard = lazy(() => import("./components/NoticeBoard").then(m => ({ default: m.NoticeBoard })));
 
-const Navbar = () => {
-  const { addToast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+// Settings Context
+const SettingsContext = createContext<{ settings: any; loading: boolean }>({ settings: null, loading: true });
+const useSettings = () => useContext(SettingsContext);
+
+const LoadingOverlay = () => (
+  <div className="min-h-screen flex items-center justify-center bg-[#fdfcf8]">
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative">
+        <Loader2 className="w-12 h-12 text-emerald-600 animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <GraduationCap className="w-5 h-5 text-emerald-600" />
+        </div>
+      </div>
+      <p className="text-emerald-900 font-black tracking-widest animate-pulse">লোড হচ্ছে...</p>
+    </div>
+  </div>
+);
+
+const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
   const [settings, setSettings] = useState<any>(null);
-  const location = useLocation();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -44,15 +60,41 @@ const Navbar = () => {
         const res = await fetch("/api/site-settings");
         if (res.ok) {
           const data = await res.json();
-          if (data && typeof data === 'object' && Object.keys(data).length > 0) setSettings(data);
+          if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+            setSettings(data);
+            if (data.title) document.title = data.title;
+            if (data.logo_url) {
+              let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+              if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+              }
+              link.href = data.logo_url;
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
-        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
+      } finally {
+        setLoading(false);
       }
     };
     fetchSettings();
   }, []);
+
+  return (
+    <SettingsContext.Provider value={{ settings, loading }}>
+      <Navbar />
+      {children}
+    </SettingsContext.Provider>
+  );
+};
+
+const Navbar = () => {
+  const { settings } = useSettings();
+  const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
 
   if (location.pathname === "/") return null;
 
@@ -69,9 +111,15 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-900 p-2 rounded-xl shadow-lg shadow-emerald-900/20">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
+            {settings?.logo_url ? (
+               <div className="p-1.5 rounded-xl shadow-lg bg-white border border-slate-100 flex items-center justify-center">
+                 <img src={settings.logo_url} alt="Logo" className="w-8 h-8 object-contain" />
+               </div>
+            ) : (
+               <div className="bg-emerald-900 p-2 rounded-xl shadow-lg shadow-emerald-900/20">
+                 <GraduationCap className="w-6 h-6 text-white" />
+               </div>
+            )}
             <span className="text-2xl font-black tracking-tight font-display text-emerald-900 drop-shadow-sm bg-clip-text text-transparent bg-gradient-to-r from-emerald-900 to-emerald-600">
               {settings?.title || "আল হেরা মাদরাসা"}
             </span>
@@ -142,41 +190,24 @@ const Navbar = () => {
 };
 
 const GlobalPopup = () => {
-  const [settings, setSettings] = useState<any>(null);
+  const { settings, loading } = useSettings();
   const [show, setShow] = useState(false);
   const [hasShown, setHasShown] = useState(false);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await fetch("/api/site-settings");
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.popup_enabled) {
-            setSettings(data);
-            // Show popup once per session/initial load
-            if (!hasShown) {
-              setTimeout(() => {
-                setShow(true);
-                setHasShown(true);
-              }, 1500); // Small delay for better UX
+    if (!loading && settings?.popup_enabled && !hasShown) {
+      const timer = setTimeout(() => {
+        setShow(true);
+        setHasShown(true);
+      }, 1500);
 
-              // Auto hide if duration is set
-              const duration = (data.popup_duration || 0) * 1000;
-              if (duration > 0) {
-                setTimeout(() => {
-                  setShow(false);
-                }, duration + 1500);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load popup settings:", err);
+      const duration = (settings.popup_duration || 0) * 1000;
+      if (duration > 0) {
+        setTimeout(() => setShow(false), duration + 1500);
       }
-    };
-    fetchSettings();
-  }, [hasShown]);
+      return () => clearTimeout(timer);
+    }
+  }, [settings, loading, hasShown]);
 
   if (!settings || !show) return null;
 
@@ -256,40 +287,42 @@ export default function App() {
   return (
     <Router>
       <ToastProvider>
-        <div className="min-h-screen bg-[#fdfcf8] font-sans text-slate-900">
-          <GlobalPopup />
-          <NoticeBoard />
-          <Navbar />
-          <main>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/admission" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdmissionForm /></div>} />
-              <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
-              <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
-              <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
-              <Route path="/teacher" element={<TeacherPortal />} />
-              <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
-            </Routes>
-          </main>
-          
-          <FloatingContact />
-          
-          <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
-            <div className="max-w-7xl mx-auto px-4 text-center">
-              <div className="flex justify-center gap-4 mb-6">
-                <Link to="/secret-admin-access" className="group relative p-2" title="Admin Access">
-                  <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <BookOpen className="w-10 h-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300 relative z-10 cursor-pointer" />
-                </Link>
+        <SiteSettingsProvider>
+          <div className="min-h-screen bg-[#fdfcf8] font-sans text-slate-900">
+            <GlobalPopup />
+            <Suspense fallback={<LoadingOverlay />}>
+              <NoticeBoard />
+              <main>
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/admission" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdmissionForm /></div>} />
+                  <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
+                  <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
+                  <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
+                  <Route path="/teacher" element={<TeacherPortal />} />
+                  <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
+                </Routes>
+              </main>
+              <FloatingContact />
+            </Suspense>
+            
+            <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
+              <div className="max-w-7xl mx-auto px-4 text-center">
+                <div className="flex justify-center gap-4 mb-6">
+                  <Link to="/secret-admin-access" className="group relative p-2" title="Admin Access">
+                    <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <BookOpen className="w-10 h-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300 relative z-10 cursor-pointer" />
+                  </Link>
+                </div>
+                <h3 className="text-xl font-bold mb-2">আল হেরা মাদ্রাসা</h3>
+                <p className="text-sm opacity-70 mb-8">একটি আদর্শ দ্বীনি শিক্ষা প্রতিষ্ঠান</p>
+                <div className="border-t border-emerald-900 pt-8 text-xs opacity-50">
+                  © {new Date().getFullYear()} আল হেরা মাদ্রাসা। সর্বস্বত্ব সংরক্ষিত।
+                </div>
               </div>
-              <h3 className="text-xl font-bold mb-2">আল হেরা মাদ্রাসা</h3>
-              <p className="text-sm opacity-70 mb-8">একটি আদর্শ দ্বীনি শিক্ষা প্রতিষ্ঠান</p>
-              <div className="border-t border-emerald-900 pt-8 text-xs opacity-50">
-                © {new Date().getFullYear()} আল হেরা মাদ্রাসা। সর্বস্বত্ব সংরক্ষিত।
-              </div>
-            </div>
-          </footer>
-        </div>
+            </footer>
+          </div>
+        </SiteSettingsProvider>
       </ToastProvider>
     </Router>
   );

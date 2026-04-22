@@ -43,6 +43,8 @@ import {
   Trash2,
   Filter,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   MoreVertical,
   User,
   Printer,
@@ -53,8 +55,6 @@ import {
   History,
   Fingerprint,
   Target,
-  ChevronDown,
-  ChevronUp,
   MessageCircle,
   MessageSquare,
   Send,
@@ -389,6 +389,9 @@ export default function AdminPanel() {
   });
   const [password, setPassword] = useState("");
   const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
+  const [sidebarPasswordModal, setSidebarPasswordModal] = useState<{isOpen: boolean, targetTab: string}>({isOpen: false, targetTab: ""});
+  const [sidebarPasswordInput, setSidebarPasswordInput] = useState("");
+  const [verifyingSidebarAccess, setVerifyingSidebarAccess] = useState(false);
 
   const isDataLoaded = isAuthenticated && !loading;
 
@@ -447,7 +450,11 @@ export default function AdminPanel() {
   const fetchClasses = async () => {
     try {
       const res = await fetchWithRetry("/api/classes");
-      if (res.ok) setClasses(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        const sorted = data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setClasses(sorted);
+      }
     } catch (error) {
       console.error(error);
       addToast("ক্লাস লিস্ট লোড করতে সমস্যা হয়েছে", "error");
@@ -673,29 +680,11 @@ export default function AdminPanel() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={async () => {
-                if (tab.id === 'settings' || tab.id === 'delete-history') {
-                  const pwd = prompt("এই অপশনে প্রবেশ করতে পাসওয়ার্ড দিন:");
-                  if (!pwd) return;
-                  try {
-                    const res = await fetch("/api/admin-login", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ identifier: pwd })
-                    });
-                    if (!res.ok) {
-                      addToast("ভুল পাসওয়ার্ড!", "error");
-                      return;
-                    }
-                    const data = await res.json();
-                    if (data.role !== "admin") {
-                      addToast("আপনার এই অপশনে প্রবেশ করার অনুমতি নেই!", "error");
-                      return;
-                    }
-                  } catch {
-                    addToast("পাসওয়ার্ড যাচাই করতে সমস্যা হয়েছে", "error");
-                    return;
-                  }
+              onClick={() => {
+                if (tab.id === 'settings' || tab.id === 'delete-history' || tab.id === 'accounting') {
+                  setSidebarPasswordInput("");
+                  setSidebarPasswordModal({ isOpen: true, targetTab: tab.id });
+                  return;
                 }
                 setActiveTab(tab.id);
                 if (tab.id === 'amal') {
@@ -749,7 +738,11 @@ export default function AdminPanel() {
         <main className="flex-1 print:w-full print:max-w-none min-w-0">
           {loading ? (
             <div className="flex items-center justify-center h-96">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+              <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -951,6 +944,64 @@ export default function AdminPanel() {
         </main>
       </div>
     </div>
+
+    {/* Sidebar Access Password Modal */}
+    <AnimatePresence>
+      {sidebarPasswordModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">নিরাপত্তা যাচাই</h3>
+            </div>
+            <p className="text-slate-600 font-bold mb-6">এই অংশে প্রবেশ করতে পাসওয়ার্ড দিন</p>
+            <input 
+              type="password"
+              placeholder="পাসওয়ার্ড"
+              value={sidebarPasswordInput}
+              onChange={e => setSidebarPasswordInput(e.target.value)}
+              className="w-full p-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold mb-8 text-center tracking-widest text-lg"
+              autoFocus
+            />
+            <div className="flex gap-4">
+              <button onClick={() => setSidebarPasswordModal({isOpen: false, targetTab: ""})} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all">বাতিল</button>
+              <button 
+                onClick={async () => {
+                  if(!sidebarPasswordInput) return;
+                  setVerifyingSidebarAccess(true);
+                  try {
+                    const res = await fetch("/api/admin/verify-password", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ password: sidebarPasswordInput })
+                    });
+                    if (res.ok) {
+                      setActiveTab(sidebarPasswordModal.targetTab);
+                      setSidebarPasswordModal({isOpen: false, targetTab: ""});
+                    } else {
+                      addToast("ভুল পাসওয়ার্ড!", "error");
+                    }
+                  } catch (e) {
+                    addToast("যাচাই করতে সমস্যা হয়েছে", "error");
+                  }
+                  setVerifyingSidebarAccess(false);
+                }}
+                disabled={verifyingSidebarAccess}
+                className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg flex justify-center items-center gap-2 disabled:opacity-50"
+              >
+                {verifyingSidebarAccess ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : "প্রবেশ করুন"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
     </>
   );
 }
@@ -1319,7 +1370,11 @@ function AdmissionManager({ onApprove }: { onApprove: () => void }) {
     }
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>;
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
@@ -1503,26 +1558,64 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
 
         <div className="space-y-2">
           {classes.map((c: any, index: number) => (
-            <div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-xl">
-              <span className="font-bold text-slate-800">{c.name}</span>
-              <div className="flex items-center gap-2">
-                <div className="flex flex-col border-r border-slate-200 pr-2 mr-2">
-                   <button onClick={() => handleMoveClass(c.id, -1, index)} disabled={index === 0} className="text-slate-400 hover:text-slate-800 disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
-                   <button onClick={() => handleMoveClass(c.id, 1, index)} disabled={index === classes.length - 1} className="text-slate-400 hover:text-slate-800 disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
+            <div key={c.id} className="flex justify-between items-center p-4 bg-white border border-slate-200 rounded-[1.5rem] gap-4 group hover:border-emerald-200 transition-all">
+              <div className="flex items-center gap-3">
+                <select
+                  value={c.order !== undefined ? c.order : index}
+                  onChange={(e) => {
+                    const newOrder = parseInt(e.target.value);
+                    if (!isNaN(newOrder) && newOrder !== c.order) {
+                      const pwd = prompt(`এডমিন পাসওয়ার্ড দিন (ক্রম ${toBn(newOrder)} করতে):`);
+                      if(pwd) {
+                         fetch(`/api/classes/${c.id}`, {
+                           method: "PUT",
+                           headers: { "Content-Type": "application/json" },
+                           body: JSON.stringify({ order: newOrder, password: pwd }),
+                         }).then(() => fetchClasses());
+                      }
+                    }
+                  }}
+                  className="w-20 p-2 border border-slate-200 rounded-xl text-center bg-slate-50 cursor-pointer hover:bg-white hover:border-emerald-300 transition-all font-black text-emerald-700"
+                  title="সিরিয়াল"
+                >
+                  {Array.from({length: Math.max(classes.length + 5, 20)}).map((_, i) => (
+                    <option key={i} value={i}>{toBn(i)}</option>
+                  ))}
+                </select>
+                
+                {/* Up/Down buttons for quick reorder */}
+                <div className="flex flex-col gap-1">
+                  <button 
+                    onClick={() => handleMoveClass(c.id, -1, index)}
+                    disabled={index === 0}
+                    className="p-1 hover:bg-emerald-50 rounded-md text-slate-400 hover:text-emerald-600 disabled:opacity-20"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleMoveClass(c.id, 1, index)}
+                    disabled={index === classes.length - 1}
+                    className="p-1 hover:bg-emerald-50 rounded-md text-slate-400 hover:text-emerald-600 disabled:opacity-20"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer mr-2">
-                  <input 
-                    type="checkbox" 
-                    checked={c.is_active} 
-                    onChange={() => handleToggleClass(c.id, c.is_active)} 
-                    className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500"
-                  />
-                  <span className={`text-sm font-medium ${c.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {c.is_active ? 'সক্রিয়' : 'হাইড'}
-                  </span>
-                </label>
-                <button onClick={() => handleEditClass(c.id, c.name)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"><Edit className="w-5 h-5" /></button>
-                <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="w-5 h-5" /></button>
+              </div>
+
+              <span className="font-black text-slate-800 flex-1 text-lg">{c.name}</span>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => handleToggleClass(c.id, c.is_active)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-black transition-all",
+                    c.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                  )}
+                >
+                  {c.is_active ? 'সক্রিয়' : 'হাইড'}
+                </button>
+                <button onClick={() => handleEditClass(c.id, c.name)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-xl transition-colors"><Edit2 className="w-5 h-5" /></button>
+                <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 className="w-5 h-5" /></button>
               </div>
             </div>
           ))}
@@ -1894,7 +1987,11 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
     }
   };
 
-  if (!settings) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
+  if (!settings) return <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>;
 
   return (
     <>
@@ -2012,6 +2109,42 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <label className="text-sm font-bold text-slate-700">লোগো ইউআরএল (PNG)</label>
             <input value={settings.logo_url || ""} onChange={(e) => setSettings({...settings, logo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/logo.png" />
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মাদরাসা নামের লোগো ইউআরএল (PNG)</label>
+            <input value={settings.name_logo_url || ""} onChange={(e) => setSettings({...settings, name_logo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/madrasa_name.png" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মাদরাসা নামের লোগোর উচ্চতা (px)</label>
+            <input type="number" value={settings.name_logo_height || 80} onChange={(e) => setSettings({...settings, name_logo_height: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+          </div>
+          
+          <div className="col-span-1 md:col-span-2 h-px bg-slate-100 my-4" />
+          <h4 className="col-span-1 md:col-span-2 text-lg font-black text-slate-900 mb-2">মুহতামিমের বাণী সেটিংস</h4>
+          
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মুহতামিমের বাণীর সেকশন চালু করুন</label>
+            <input type="checkbox" checked={!!settings.show_muhtamim_msg} onChange={(e) => setSettings({...settings, show_muhtamim_msg: e.target.checked ? 1 : 0})} className="w-6 h-6 ml-2" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মুহতামিমের ছবির ইউআরএল</label>
+            <input value={settings.muhtamim_photo_url || ""} onChange={(e) => setSettings({...settings, muhtamim_photo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/muhtamim.png" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মুহতামিমের বাণী</label>
+            <textarea value={settings.muhtamim_msg || ""} onChange={(e) => setSettings({...settings, muhtamim_msg: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-32" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মুহতামিমের নাম ও পদবী</label>
+            <input value={settings.muhtamim_name_title || ""} onChange={(e) => setSettings({...settings, muhtamim_name_title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="মুহতামিম সাহেবের নাম ও পদবী" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">বাণীর টেমপ্লেট</label>
+            <select value={settings.muhtamim_msg_template || "modern"} onChange={(e) => setSettings({...settings, muhtamim_msg_template: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+              <option value="modern">আধুনিক (Modern)</option>
+              <option value="classic">ক্লাসিক (Classic)</option>
+              <option value="premium">প্রিমিয়াম (Premium)</option>
+            </select>
+          </div>
           <div className="space-y-2 flex items-center gap-3">
             <input type="checkbox" id="auto_whatsapp" checked={!!settings.auto_whatsapp} onChange={(e) => setSettings({...settings, auto_whatsapp: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
             <label htmlFor="auto_whatsapp" className="text-sm font-bold text-slate-700">অটোমেটিক হোয়াটসঅ্যাপে রশিদ পাঠানো চালু করুন</label>
@@ -2040,9 +2173,17 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <label className="text-sm font-bold text-slate-700">একাডেমিক শোকেস (JSON Format)</label>
             <textarea value={settings.showcase_content || ""} onChange={(e) => setSettings({...settings, showcase_content: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-32 font-mono text-xs" placeholder='[{"type": "video", "url": "https://www.youtube.com/watch?v=...", "title": "ভিডিও টাইটেল", "description": "ভিডিও বর্ণনা"}]' />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">হিরো ইমেজ (URL)</label>
             <input value={settings.hero_image || ""} onChange={(e) => setSettings({...settings, hero_image: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মাদরাসা গেইট ইমেজ (URL)</label>
+            <input value={settings.gate_image_url || ""} onChange={(e) => setSettings({...settings, gate_image_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/gate.jpg" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">মাদরাসা মাঠ/প্রাঙ্গণ ইমেজ (URL)</label>
+            <input value={settings.campus_image_url || ""} onChange={(e) => setSettings({...settings, campus_image_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/campus.jpg" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">যোগাযোগ ফোন</label>
@@ -2503,6 +2644,8 @@ const printElement = (elementId: string) => {
             width: 200mm !important; /* Slightly responsive to container */
             max-width: 100% !important;
             margin: 0 auto !important;
+            page-break-inside: avoid !important;
+            height: auto !important;
           }
           #marksheet-template h2 { font-size: 32pt !important; margin-bottom: 5px !important; }
           #marksheet-template h3 { font-size: 38pt !important; margin-bottom: 20px !important; }
@@ -2548,6 +2691,8 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   const [isDeletingStudent, setIsDeletingStudent] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [interviewPermissions, setInterviewPermissions] = useState<any[]>([{ name: "", phone: "", relation: "", nid: "" }]);
+  const [hasMoreStudents, setHasMoreStudents] = useState(false);
+  const [offset, setOffset] = useState(0);
 
   const handleInterviewPermissionChange = (index: number, field: string, value: string) => {
     const newList = [...interviewPermissions];
@@ -2610,21 +2755,23 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
       setTimeout(() => setIndividualPrintData(null), 1000);
     }, 500);
   };
-  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchStudents = async (newOffset: number = 0) => {
     if (!selectedClass) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/students?className=${encodeURIComponent(selectedClass)}&limit=50&offset=${newOffset}`);
+      const res = await fetch(`/api/students?className=${encodeURIComponent(selectedClass)}&limit=20&offset=${newOffset}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (newOffset === 0) {
-        setStudents(data);
+        setStudents(Array.isArray(data) ? data : []);
+        setOffset(0);
       } else {
         setStudents(prev => [...prev, ...data]);
+        setOffset(newOffset);
       }
+      setHasMoreStudents(Array.isArray(data) && data.length === 20);
     } catch (err) {
       console.error("Failed to fetch students:", err);
     } finally {
@@ -3358,7 +3505,11 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
           </AnimatePresence>
 
           {loadingProfile ? (
-            <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
+            <div className="flex justify-center py-20"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
           ) : fullProfile && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left Column: Personal Info */}
@@ -3829,37 +3980,13 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>রক্তের গ্রুপ: <span className="text-rose-600" style={{ color: '#e11d48' }}>{fullProfile.student.blood_group}</span></p>
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>ফোন: <span className="text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.student.phone}</span></p>
                 </div>
-                <div className="inline-block px-6 py-2 bg-emerald-900 text-white rounded-xl text-sm font-black tracking-widest" style={{ backgroundColor: '#064e3b', color: '#ffffff' }}>
-                  ID: {fullProfile.student.studentId || fullProfile.student.id}
-                </div>
               </div>
 
-              <div id="marksheet-template" className="hidden absolute top-0 left-0 bg-white p-8 w-full max-w-[800px] mx-auto border-[16px] border-double border-emerald-900 text-center shadow-2xl print:p-14 print:border-[24px]" style={{ borderColor: '#064e3b' }}>
-                <div className="absolute top-8 right-8 print:top-12 print:right-12">
-                  {settings?.qr_code_url && (
-                    <img src={settings.qr_code_url} className="w-20 h-20 object-contain print:w-32 print:h-32 opacity-80" alt="QR" referrerPolicy="no-referrer" />
-                  )}
-                </div>
-                
-                <div className="flex items-center justify-center gap-6 mb-8 border-b-8 border-emerald-50 pb-8 rounded-t-3xl print:gap-10 print:mb-14 print:border-b-[12px]" style={{ borderColor: '#f0fdf4' }}>
-                  <div className="bg-emerald-900 p-4 rounded-2xl shadow-lg print:p-6 print:rounded-3xl">
-                    <GraduationCap className="w-12 h-12 text-white print:w-24 print:h-24" />
-                  </div>
-                  <div className="text-center">
-                    <h2 className="text-4xl font-black text-emerald-900 mb-2 tracking-tighter print:text-[80pt] print:mb-6" style={{ color: '#064e3b' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
-                    <p className="text-xl font-bold text-emerald-700 print:text-4xl" style={{ color: '#047857' }}>{settings?.address || ""}</p>
-                    <div className="mt-4 print:mt-8">
-                      <span className="text-sm font-black text-white bg-slate-900 px-6 py-2 rounded-full inline-block print:text-4xl print:px-12 print:py-4">একাডেমিক ট্রান্সক্রিপ্ট - {(() => {
-                        if (!selectedResultExam) return "";
-                        const [exam, year] = selectedResultExam.split('|');
-                        return `${exam} (${toBn(year)})`;
-                      })()}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-between items-stretch mb-8 gap-4 print:mb-14 print:gap-8 min-h-[160px] print:min-h-[250px]">
-                  <div className="flex-1 bg-gradient-to-br from-slate-50 to-white p-6 rounded-[2.5rem] border-4 border-slate-100 flex items-center gap-6 text-left print:p-10 print:rounded-[4rem] print:border-[10px]">
+              {/* Profile Card Overlay */}
+              <div id="student-report-card" className="hidden relative bg-white p-12 w-[210mm] min-h-[297mm] mx-auto print:block print:p-20" style={{ fontFamily: "'Inter', sans-serif" }}>
+                <div className="absolute top-0 left-0 w-full h-40 bg-emerald-900 print:h-64" />
+                <div className="relative flex justify-between items-start mb-12 print:mb-20">
+                  <div className="flex items-center gap-8">
                     <div className="relative">
                       <img src={fullProfile.student.photo_url || `https://picsum.photos/seed/${fullProfile.student.id}/200`} className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-xl ring-4 ring-emerald-50 print:w-44 print:h-44 print:rounded-[3rem] print:border-8" referrerPolicy="no-referrer" />
                       <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1 rounded-lg print:p-2 print:rounded-2xl">
@@ -3950,16 +4077,16 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   </table>
 
                   <div className="space-y-6 print:space-y-12">
-                    <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-4 border-emerald-100 print:p-12 print:rounded-[4rem] print:border-[10px]">
-                      <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-4 print:text-3xl print:mb-8 text-center">ফলাফল সারসংক্ষেপ</h4>
-                      <div className="space-y-4 print:space-y-8">
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-8 print:rounded-[2.5rem]">
-                           <span className="text-sm font-bold text-slate-500 print:text-4xl">মোট নম্বর:</span>
-                           <span className="text-xl font-black text-emerald-900 print:text-7xl">{toBn(fullProfile.examStats[selectedResultExam].myTotal)}</span>
+                    <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-4 border-emerald-100 print:p-12 print:rounded-[3rem] print:border-[8px]">
+                      <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-4 print:text-2xl print:mb-6 text-center">ফলাফল সারসংক্ষেপ</h4>
+                      <div className="space-y-4 print:space-y-6">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
+                           <span className="text-sm font-bold text-slate-500 print:text-3xl">মোট নম্বর:</span>
+                           <span className="text-xl font-black text-emerald-900 print:text-5xl">{toBn(fullProfile.examStats[selectedResultExam].myTotal)}</span>
                         </div>
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-8 print:rounded-[2.5rem]">
-                           <span className="text-sm font-bold text-slate-500 print:text-4xl">গড় নম্বর:</span>
-                           <span className="text-xl font-black text-emerald-900 print:text-7xl">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
+                           <span className="text-sm font-bold text-slate-500 print:text-3xl">গড় নম্বর:</span>
+                           <span className="text-xl font-black text-emerald-900 print:text-5xl">
                              {toBn((fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
                                const [exam, year] = selectedResultExam.split('|');
                                return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
@@ -3969,7 +4096,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-end pt-10 print:pt-28 px-4">
+                    <div className="flex justify-between items-end pt-10 print:pt-16 px-4">
                       <div className="text-left">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 print:text-[12px] print:mb-1">ইস্যুর তারিখ</p>
                         <p className="text-sm font-black text-slate-900 print:text-lg">{toBn(new Date().getDate())}/{toBn(new Date().getMonth() + 1)}/{toBn(new Date().getFullYear())}</p>
@@ -4080,19 +4207,18 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
               ))
             )}
           </div>
-          <div className="mt-8 text-center">
-            <button 
-              onClick={() => {
-                const newOffset = offset + 50;
-                setOffset(newOffset);
-                fetchStudents(newOffset);
-              }}
-              disabled={loading}
-              className="px-8 py-4 bg-slate-100 text-slate-700 rounded-2xl font-black hover:bg-slate-200 transition-all"
-            >
-              {loading ? "লোড হচ্ছে..." : "আরও দেখুন"}
-            </button>
-          </div>
+          
+          {hasMoreStudents && (
+            <div className="mt-8 text-center print:hidden">
+              <button 
+                onClick={() => fetchStudents(offset + 20)}
+                disabled={loading}
+                className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 disabled:opacity-50"
+              >
+                {loading ? "লোড হচ্ছে..." : "আরও দেখুন"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -4283,7 +4409,11 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
             </div>
 
             {loading ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+              <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
             ) : (
               <div className="overflow-x-auto print:overflow-visible w-full">
                 <table className="w-full border-collapse min-w-[600px] print:min-w-0">
@@ -4472,7 +4602,11 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+          <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2">
             {teachers.map((t) => (
@@ -4986,7 +5120,11 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
             <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
               {loadingAll ? (
                 <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
+                  <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div>
                   <p className="text-slate-500 font-bold">রেজাল্ট লোড হচ্ছে...</p>
                 </div>
               ) : allReports.length > 0 ? (() => {
@@ -5444,7 +5582,11 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 )}
 
                 {loading ? (
-                  <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
+                  <div className="flex justify-center py-20"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
                 ) : (
                   <div id="class-results-report-template" className={cn(
                     "p-12 bg-white border-4 border-emerald-50 rounded-3xl print:p-0 print:border-0 print:m-0 print:w-full print:max-w-none mx-auto print:shadow-none overflow-visible",
@@ -5568,10 +5710,10 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                                     </td>
                                     <td className="p-4 text-center print:p-6">
                                       <div className={cn(
-                                        "w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm mx-auto print:w-12 print:h-12 print:text-[14pt] print:shadow-none print:border-2",
-                                        rank <= 3 ? "bg-green-100 text-green-700 print:bg-green-50 print:border-green-400 print:text-green-900" : 
-                                        rank <= 10 ? "bg-yellow-100 text-yellow-700 print:bg-yellow-50 print:border-yellow-400 print:text-yellow-900" :
-                                        "bg-blue-50 text-blue-600 border border-blue-100 print:bg-blue-50 print:border-blue-300 print:text-blue-900"
+                                        "w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm mx-auto print:w-auto print:h-auto print:px-2 print:py-0.5 print:text-[10pt] print:shadow-none print:border print:rounded-xl",
+                                        rank <= 3 ? "bg-green-100 text-green-700 print:text-emerald-900 print:border-emerald-600" : 
+                                        rank <= 10 ? "bg-yellow-100 text-yellow-700 print:text-yellow-900 print:border-yellow-600" :
+                                        "bg-blue-50 text-blue-600 border border-blue-100 print:text-slate-900 print:border-slate-600"
                                       )}>
                                         {toBn(rank)}
                                       </div>
@@ -5711,35 +5853,34 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 )}
 
                 {individualPrintData && (
-                  <div id="individual-result-template" className="hidden print:block pb-8 bg-white w-full mx-auto" style={{ padding: '80px 48px 48px 48px', overflow: 'hidden', position: 'relative' }}>
+                  <div id="individual-result-template" className="hidden print:block pb-4 bg-white w-full mx-auto" style={{ padding: '20px 40px', overflow: 'hidden', position: 'relative' }}>
                     <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
                       <GraduationCap className="w-[80%] h-[80%]" style={{ color: '#064e3b' }} />
                     </div>
                     
-                    <div className="relative z-10 flex flex-col items-center justify-center mb-10 pb-8" style={{ borderBottom: '4px double #10b981' }}>
-                      <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border-2 border-emerald-200">
-                        <GraduationCap className="w-12 h-12" style={{ color: '#059669' }} />
+                    <div className="relative z-10 flex flex-col items-center justify-center mb-6 pb-4" style={{ borderBottom: '3px double #10b981' }}>
+                      <h2 className="text-4xl font-black mb-2 drop-shadow-sm" style={{ color: '#064e3b', fontFamily: 'sans-serif' }}>{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h2>
+                      <div className="px-5 py-1.5 rounded-full" style={{ backgroundColor: '#ecfdf5', border: '1px solid #10b981' }}>
+                        <p className="text-lg font-bold tracking-wide" style={{ color: '#047857' }}>একাডেমিক ট্রান্সক্রিপ্ট</p>
                       </div>
-                      <h2 className="text-5xl font-black mb-3 drop-shadow-sm" style={{ color: '#064e3b', fontFamily: 'sans-serif' }}>{settings?.title || "মাদরাসা ম্যানেজমেন্ট সিস্টেম"}</h2>
-                      <div className="px-6 py-2 rounded-full" style={{ backgroundColor: '#ecfdf5', border: '1px solid #10b981' }}>
-                        <p className="text-xl font-bold tracking-wide" style={{ color: '#047857' }}>একাডেমিক ট্রান্সক্রিপ্ট / মার্কশিট</p>
-                      </div>
-                      <p className="text-lg font-bold mt-4" style={{ color: '#475569' }}>পরীক্ষা: <span style={{ color: '#1e293b' }}>{selectedExam} - {selectedYear}</span></p>
+                      <p className="text-base font-bold mt-2" style={{ color: '#475569' }}>পরীক্ষা: <span style={{ color: '#1e293b' }}>{selectedExam} - {selectedYear}</span></p>
                     </div>
                     
-                    <div className="relative z-10 flex justify-between items-center mb-10 text-left p-8 rounded-2xl shadow-sm" style={{ backgroundColor: '#f8fafc', borderLeft: '8px solid #059669', borderRight: '8px solid #059669' }}>
-                      <div>
-                        <h3 className="text-3xl font-black mb-3" style={{ color: '#0f172a' }}>{individualPrintData.name}</h3>
-                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>শ্রেণী:</span> {selectedClass}</p>
+                    {/* Top Row: Name and Class */}
+                    <div className="relative z-10 text-center mb-6">
+                        <h3 className="text-3xl font-black mb-1" style={{ color: '#0f172a' }}>{individualPrintData.name}</h3>
+                        <p className="text-lg font-bold" style={{ color: '#334155' }}>শ্রেণী: <span className="font-black text-slate-800">{selectedClass}</span> <span className="mx-2 text-slate-300">|</span> আইডি/রোল: <span className="font-black text-slate-800">{individualPrintData.roll}</span></p>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="relative z-10 grid grid-cols-2 gap-6 mb-6">
+                      <div className="p-4 rounded-xl border border-slate-200 text-center" style={{ backgroundColor: '#f8fafc' }}>
+                        <p className="text-sm font-bold text-slate-500 mb-1">মোট নম্বর ও গড়</p>
+                        <p className="text-2xl font-black text-slate-800">{toBn(individualPrintData.totalMarks)} <span className="text-lg text-slate-300 mx-2">|</span> গড়: <span className="text-2xl font-black text-slate-800">{toBn((individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))).toFixed(2))}</span></p>
                       </div>
-                      <div className="text-right space-y-2">
-                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>রোল:</span> <span className="text-xl font-black">{individualPrintData.roll}</span></p>
-                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মোট নম্বর:</span> <span className="text-xl font-black">{individualPrintData.totalMarks}</span></p>
-                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>গড় নম্বর:</span> <span className="text-xl font-black">{(individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1))).toFixed(2)}</span></p>
-                        <p className="text-lg font-bold" style={{ color: '#334155' }}><span style={{ color: '#64748b' }}>মেধাস্থান:</span> <span className="text-xl font-black" style={{ color: '#059669' }}>{individualPrintData.calculatedRank || '-'}</span></p>
-                        <p className="text-lg font-bold mt-1" style={{ color: '#334155' }}>
-                          <span style={{ color: '#64748b' }}>গ্রেড:</span> 
-                          <span className="text-xl font-black ml-2" style={(() => {
+                      <div className="p-4 rounded-xl border border-slate-200 text-center" style={{ backgroundColor: '#f8fafc' }}>
+                        <p className="text-sm font-bold text-slate-500 mb-1">মেধাস্থান ও গ্রেড</p>
+                        <p className="text-2xl font-black text-blue-700">{toBn(individualPrintData.calculatedRank || '-')}<span className="text-xs ml-1 text-slate-500">তম</span> <span className="text-lg text-slate-300 mx-2">|</span> গ্রেড: <span className="text-2xl font-black" style={(() => {
                             const avg = individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1));
                             if (avg >= 80) return { color: '#059669' };
                             if (avg < 33) return { color: '#dc2626' };
@@ -5749,8 +5890,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                                const avg = individualPrintData.avgMarks || (individualPrintData.totalMarks / (classSubjects.length || 1));
                                return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
                              })()}
-                          </span>
-                        </p>
+                        </span></p>
                       </div>
                     </div>
 
@@ -5758,10 +5898,10 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr style={{ backgroundColor: '#f1f5f9' }}>
-                            <th className="p-5 font-black text-lg" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1' }}>বিষয়</th>
-                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>পূর্ণমান</th>
-                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>সর্বোচ্চ</th>
-                            <th className="p-5 font-black text-lg text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>প্রাপ্ত নম্বর</th>
+                            <th className="p-3 font-black text-base" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1' }}>বিষয়</th>
+                            <th className="p-3 font-black text-base text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>পূর্ণমান</th>
+                            <th className="p-3 font-black text-base text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>সর্বোচ্চ</th>
+                            <th className="p-3 font-black text-base text-center" style={{ color: '#334155', borderBottom: '2px solid #cbd5e1', borderLeft: '1px solid #e2e8f0' }}>প্রাপ্ত নম্বর</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -5785,17 +5925,17 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                         </tbody>
                         <tfoot className="print:table-footer-group">
                           <tr>
-                            <td colSpan={4} className="pt-8 border-0!">
-                              <div className="flex justify-between items-end px-12 mt-12 border-none bg-white">
+                            <td colSpan={4} className="pt-4 border-0!">
+                              <div className="flex justify-between items-end px-4 mt-6 border-none bg-white">
                                 <div className="text-left">
-                                  <p className="text-slate-400 font-bold text-[14px] print:text-lg mb-1">প্রিন্ট তারিখ:</p>
-                                  <p className="text-slate-900 font-black text-[16px] print:text-xl">{formatDate(new Date())}</p>
+                                  <p className="text-slate-400 font-bold text-[12px] print:text-base mb-1">প্রিন্ট তারিখ:</p>
+                                  <p className="text-slate-900 font-black text-[14px] print:text-lg">{formatDate(new Date())}</p>
                                 </div>
                                 <div className="text-center">
                                   {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
-                                    <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-12" alt="Sig" referrerPolicy="no-referrer" />
+                                    <img src={settings.muhtamim_signature_url} className="h-8 mx-auto mb-[-12px] relative z-10 print:h-10" alt="Sig" referrerPolicy="no-referrer" />
                                   )}
-                                  <div className="w-48 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[14px] print:w-48 print:pt-2 print:text-xl print:border-t-2">মুহতামিম</div>
+                                  <div className="w-40 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[12px] print:w-40 print:pt-2 print:text-lg print:border-t-2">মুহতামিম</div>
                                 </div>
                               </div>
                             </td>
@@ -6402,7 +6542,11 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
         <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
           <h3 className="text-xl font-bold text-slate-900 mb-6">অনলাইন পেমেন্ট হিস্টোরি</h3>
           {loadingPending ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+            <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
           ) : pendingPayments.length === 0 ? (
             <p className="text-center text-slate-400 py-12 font-bold">কোনো অনলাইন পেমেন্ট নেই</p>
           ) : (
@@ -6876,7 +7020,11 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                 <div className="space-y-4 mb-8">
                   <h3 className="font-black text-slate-900 text-lg">অন্যান্য বকেয়া ফিস</h3>
                   {loading ? (
-                    <div className="py-8 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
+                    <div className="py-8 flex justify-center"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
                   ) : studentFees.filter(f => f.status === 'unpaid' && f.category !== 'মাসিক বেতন' && !f.category.startsWith('মাসিক বেতন -')).length > 0 ? (
                     <div className="space-y-3">
                       {studentFees.filter(f => f.status === 'unpaid' && f.category !== 'মাসিক বেতন' && !f.category.startsWith('মাসিক বেতন -')).map(fee => (
@@ -7250,7 +7398,11 @@ function TransactionHistory({ settings }: { settings: any }) {
   );
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>;
+    return <div className="flex justify-center py-20"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>;
   }
 
   return (
@@ -7298,7 +7450,11 @@ function TransactionHistory({ settings }: { settings: any }) {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
+        <div className="flex justify-center py-20"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
       ) : (
         <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden print:shadow-none print:border-0 print:overflow-visible print:p-0">
           <div className="overflow-x-auto print:overflow-visible">
@@ -7755,7 +7911,11 @@ function DeleteHistory() {
       </div>
 
       {loading && history.length === 0 ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-emerald-600" /></div>
+        <div className="flex justify-center py-20"><div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {history.map((h) => {
@@ -8303,7 +8463,10 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
                 <History className="w-5 h-5 text-emerald-600" /> সাম্প্রতিক ডিভাইস লগ
               </h3>
               <button onClick={fetchHistory} className="p-2 text-slate-400 hover:text-emerald-600 transition-all">
-                <Loader2 className={cn("w-5 h-5", loading && "animate-spin")} />
+                <div className="relative flex justify-center items-center w-5 h-5">
+  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
+  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
+</div>
               </button>
             </div>
 

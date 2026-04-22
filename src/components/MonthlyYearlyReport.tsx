@@ -6,6 +6,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { cn } from '../lib/utils';
+import { CountUp } from './CountUp';
 
 interface MonthlyYearlyReportProps {
   data: any;
@@ -184,6 +185,50 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl border border-indigo-500 shadow-xl shadow-indigo-600/20 relative overflow-hidden group text-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/20 transition-all duration-500"></div>
+          <div className="relative z-10 flex flex-col h-full">
+            <span className="text-xs font-black text-indigo-200 uppercase tracking-widest mb-2 inline-block">পূর্বের জের</span>
+            <div className="flex items-end gap-2 mt-auto">
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={data.prevBalance || 0} startColor="#ffffff" endColor="#ffffff" /></span>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-6 rounded-3xl border border-emerald-500 shadow-xl shadow-emerald-600/20 relative overflow-hidden group text-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/20 transition-all duration-500"></div>
+          <div className="relative z-10 flex flex-col h-full">
+            <span className="text-xs font-black text-emerald-200 uppercase tracking-widest mb-2 inline-block">মোট আয়</span>
+            <div className="flex items-end gap-2 mt-auto">
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={Object.values(groupedByCategory.income).reduce((sum: number, cat: any) => sum + cat.total, 0)} startColor="#ffffff" endColor="#34d399" /></span>
+              <TrendingUp className="w-6 h-6 text-emerald-300 mb-1" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-rose-600 to-rose-800 p-6 rounded-3xl border border-rose-500 shadow-xl shadow-rose-600/20 relative overflow-hidden group text-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/20 transition-all duration-500"></div>
+          <div className="relative z-10 flex flex-col h-full">
+            <span className="text-xs font-black text-rose-200 uppercase tracking-widest mb-2 inline-block">মোট ব্যয়</span>
+            <div className="flex items-end gap-2 mt-auto">
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={Object.values(groupedByCategory.expenses).reduce((sum: number, cat: any) => sum + cat.total, 0)} startColor="#ffffff" endColor="#fb7185" /></span>
+              <TrendingDown className="w-6 h-6 text-rose-300 mb-1" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl shadow-slate-900/20 relative overflow-hidden group text-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -translate-y-12 translate-x-12 group-hover:bg-white/10 transition-all duration-500"></div>
+          <div className="relative z-10 flex flex-col h-full">
+            <span className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2 inline-block">বর্তমান স্থিতি</span>
+            <div className="flex items-end gap-2 mt-auto">
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={(data.prevBalance || 0) + Object.values(groupedByCategory.income).reduce((sum: number, cat: any) => sum + cat.total, 0) - Object.values(groupedByCategory.expenses).reduce((sum: number, cat: any) => sum + cat.total, 0)} startColor="#ffffff" endColor="#10b981" /></span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 print:hidden bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl mb-8">
         <div className="flex flex-wrap items-end gap-6 flex-1">
           <div className="flex items-center gap-3 mb-auto pt-2">

@@ -75,7 +75,11 @@ export default function StudentSearch() {
             disabled={loading}
             className="px-8 py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "অনুসন্ধান"}
+            {loading ? <div className="relative flex items-center justify-center w-12 h-12">
+  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
+  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
+  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
+</div> : "অনুসন্ধান"}
           </button>
         </form>
         {error && <p className="text-rose-500 text-sm mt-3 text-center font-medium">{error}</p>}
