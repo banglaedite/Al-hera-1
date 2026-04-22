@@ -66,7 +66,8 @@ import {
   Eye,
   EyeOff,
   LogOut,
-  Globe
+  Globe,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import jsPDF from "jspdf";
@@ -417,7 +418,8 @@ export default function AdminPanel() {
       ]).finally(() => {
         setLoading(false);
       });
-      const interval = setInterval(fetchPendingCounts, 30000);
+      // Reduced polling from 30s to 5m to drastically cut down read quotas
+      const interval = setInterval(fetchPendingCounts, 300000);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
@@ -655,6 +657,19 @@ export default function AdminPanel() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar */}
         <aside className="w-full md:w-64 space-y-2 print:hidden">
+          <button
+            onClick={() => {
+              if (window.clearAppCache) window.clearAppCache();
+              window.location.reload();
+            }}
+            className="w-full flex items-center justify-between px-6 py-4 rounded-2xl font-bold transition-all bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 mb-6 shadow-sm group"
+          >
+            <div className="flex items-center gap-3">
+              <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+              ডাটা রিফ্রেশ করুন
+            </div>
+          </button>
+
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -3956,17 +3971,17 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
 
                     <div className="flex justify-between items-end pt-10 print:pt-28 px-4">
                       <div className="text-left">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 print:text-2xl print:mb-3">ইস্যুর তারিখ</p>
-                        <p className="text-sm font-black text-slate-900 print:text-4xl">{toBn(new Date().getDate())}/{toBn(new Date().getMonth() + 1)}/{toBn(new Date().getFullYear())}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 print:text-[12px] print:mb-1">ইস্যুর তারিখ</p>
+                        <p className="text-sm font-black text-slate-900 print:text-lg">{toBn(new Date().getDate())}/{toBn(new Date().getMonth() + 1)}/{toBn(new Date().getFullYear())}</p>
                       </div>
                       <div className="text-center">
-                        <div className="w-24 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[10px] print:w-48 print:pt-4 print:text-3xl">শ্রেণী শিক্ষক</div>
+                        <div className="w-24 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[10px] print:w-32 print:pt-2 print:text-[14px]">শ্রেণী শিক্ষক</div>
                       </div>
                       <div className="text-center">
                         {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
-                          <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-18px] relative z-10 print:h-22 print:mb-[-30px]" alt="Sig" referrerPolicy="no-referrer" />
+                          <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-18px] relative z-10 print:h-12 print:mb-[-18px]" alt="Sig" referrerPolicy="no-referrer" />
                         )}
-                        <div className="w-24 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[10px] print:w-48 print:pt-4 print:text-3xl">মুহতামিম</div>
+                        <div className="w-24 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[10px] print:w-32 print:pt-2 print:text-[14px]">মুহতামিম</div>
                       </div>
                     </div>
                   </div>
@@ -5579,11 +5594,11 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             <td colSpan={viewMode === 'detailed' ? 7 + classSubjects.length : 7} className="pt-12 border-0!">
                             <div className="flex justify-between items-end px-16">
                               <div className="text-left">
-                                <p className="text-slate-400 font-bold text-[12px] print:text-3xl mb-2">রিপোর্ট তারিখ:</p>
-                                <p className="text-slate-900 font-black text-sm print:text-4xl">{formatDate(new Date())}</p>
+                                <p className="text-slate-400 font-bold text-[12px] print:text-lg mb-2 print:mb-1">রিপোর্ট তারিখ:</p>
+                                <p className="text-slate-900 font-black text-sm print:text-xl">{formatDate(new Date())}</p>
                               </div>
                               <div className="text-center">
-                                <div className="w-48 border-t-4 border-slate-900 pt-3 font-black text-slate-900 text-lg print:w-96 print:pt-6 print:text-6xl print:border-t-[10px]">মুহতামিম</div>
+                                <div className="w-48 border-t-2 border-slate-900 pt-3 font-black text-slate-900 text-lg print:w-48 print:pt-3 print:text-xl print:border-t-2">মুহতামিম</div>
                               </div>
                             </div>
                           </td>
@@ -5678,14 +5693,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                           <td colSpan={printType === 'detailed' ? 6 + classSubjects.length : 6} className="pt-8 border-0!">
                             <div className="flex justify-between items-end px-12 border-none">
                               <div className="text-left">
-                                <p className="text-slate-400 font-bold text-[10px] print:text-2xl mb-1">রিপোর্ট তারিখ:</p>
-                                <p className="text-slate-900 font-black text-[12px] print:text-3xl">{formatDate(new Date())}</p>
+                                <p className="text-slate-400 font-bold text-[10px] print:text-lg mb-1">রিপোর্ট তারিখ:</p>
+                                <p className="text-slate-900 font-black text-[12px] print:text-xl">{formatDate(new Date())}</p>
                               </div>
                               <div className="text-center">
                                 {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
-                                  <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-20" alt="Sig" referrerPolicy="no-referrer" />
+                                  <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-12" alt="Sig" referrerPolicy="no-referrer" />
                                 )}
-                                <div className="w-32 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[12px] print:w-64 print:pt-4 print:text-4xl print:border-t-4">মুহতামিম</div>
+                                <div className="w-32 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[12px] print:w-48 print:pt-2 print:text-xl print:border-t-2">মুহতামিম</div>
                               </div>
                             </div>
                           </td>
@@ -5773,14 +5788,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             <td colSpan={4} className="pt-8 border-0!">
                               <div className="flex justify-between items-end px-12 mt-12 border-none bg-white">
                                 <div className="text-left">
-                                  <p className="text-slate-400 font-bold text-[14px] print:text-2xl mb-1">প্রিন্ট তারিখ:</p>
-                                  <p className="text-slate-900 font-black text-[16px] print:text-3xl">{formatDate(new Date())}</p>
+                                  <p className="text-slate-400 font-bold text-[14px] print:text-lg mb-1">প্রিন্ট তারিখ:</p>
+                                  <p className="text-slate-900 font-black text-[16px] print:text-xl">{formatDate(new Date())}</p>
                                 </div>
                                 <div className="text-center">
                                   {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
-                                    <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-20" alt="Sig" referrerPolicy="no-referrer" />
+                                    <img src={settings.muhtamim_signature_url} className="h-10 mx-auto mb-[-15px] relative z-10 print:h-12" alt="Sig" referrerPolicy="no-referrer" />
                                   )}
-                                  <div className="w-48 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[14px] print:w-64 print:pt-4 print:text-4xl print:border-t-4">মুহতামিম</div>
+                                  <div className="w-48 border-t-2 border-slate-900 pt-2 font-black text-slate-900 text-[14px] print:w-48 print:pt-2 print:text-xl print:border-t-2">মুহতামিম</div>
                                 </div>
                               </div>
                             </td>
@@ -8173,7 +8188,8 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
 
   useEffect(() => {
     fetchHistory();
-    const interval = setInterval(fetchHistory, 10000); // Refresh every 10 seconds
+    // Replaced 10 seconds auto-refresh with 10 minutes to save read quotas.
+    const interval = setInterval(fetchHistory, 600000);
     return () => clearInterval(interval);
   }, []);
 

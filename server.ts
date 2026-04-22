@@ -483,15 +483,15 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       yesterday.setDate(yesterday.getDate() - 1);
       
       const [payments, applications, notices] = await Promise.all([
-        db.collection("pending_payments").where("status", "==", "pending").get(),
-        db.collection("admissions").where("status", "==", "pending").get(),
-        db.collection("notices").where("created_at", ">=", yesterday.toISOString()).get()
+        db.collection("pending_payments").where("status", "==", "pending").count().get(),
+        db.collection("admissions").where("status", "==", "pending").count().get(),
+        db.collection("notices").where("created_at", ">=", yesterday.toISOString()).count().get()
       ]);
       
       res.json({
-        payments: payments.size,
-        applications: applications.size,
-        newNotices: notices.size
+        payments: payments.data().count,
+        applications: applications.data().count,
+        newNotices: notices.data().count
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch pending counts" });
