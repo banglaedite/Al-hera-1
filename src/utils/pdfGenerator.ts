@@ -2,6 +2,27 @@ import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import html2canvas from "html2canvas";
 
+// Helper to add signature
+const addSignature = async (doc: any, settings: any, y: number, pageWidth: number) => {
+    if (settings?.show_muhtamim_signature === 1 && settings?.muhtamim_signature_url) {
+        try {
+            const sigImg = new Image();
+            sigImg.crossOrigin = "Anonymous";
+            sigImg.src = settings.muhtamim_signature_url;
+            await new Promise((resolve, reject) => {
+                sigImg.onload = resolve;
+                sigImg.onerror = reject;
+            });
+            // Make signature bigger and explicitly positioned
+            doc.addImage(sigImg, 'PNG', pageWidth - 45, y, 30, 15);
+            doc.setFontSize(8);
+            doc.text("মুহতামিম", pageWidth - 30, y + 20, { align: "center" });
+        } catch (e) {
+            console.error("Failed to add signature to PDF", e);
+        }
+    }
+};
+
 export const generateMonthlyReceipt = async (data: any, student: any, sendEmail: any, addToast: any, settings?: any) => {
     const doc = new jsPDF('p', 'mm', 'a5');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -56,17 +77,14 @@ export const generateMonthlyReceipt = async (data: any, student: any, sendEmail:
           qrImg.onload = resolve;
           qrImg.onerror = reject;
         });
-        doc.addImage(qrImg, 'PNG', pageWidth - margin - 25, finalY + 10, 25, 25);
-        doc.setFontSize(6);
-        doc.text("Scan to Verify", pageWidth - margin - 12.5, finalY + 38, { align: "center" });
+        doc.addImage(qrImg, 'PNG', margin, finalY + 10, 25, 25);
       } catch (e) {
         console.error("Failed to add QR code to PDF", e);
       }
     }
-
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text("This is a computer-generated receipt. No signature required.", pageWidth / 2, 190, { align: "center" });
+    
+    // Add Signature
+    await addSignature(doc, settings, finalY + 10, pageWidth - margin);
     
     const pdfData = doc.output('datauristring');
     const filename = `Receipt_${student.id}_${data.transaction_id}.pdf`;
@@ -136,17 +154,14 @@ export const generateReceipt = async (fee: any, student: any, sendEmail: any, ad
           qrImg.onload = resolve;
           qrImg.onerror = reject;
         });
-        doc.addImage(qrImg, 'PNG', pageWidth - margin - 25, finalY + 10, 25, 25);
-        doc.setFontSize(6);
-        doc.text("Scan to Verify", pageWidth - margin - 12.5, finalY + 38, { align: "center" });
+        doc.addImage(qrImg, 'PNG', margin, finalY + 10, 25, 25);
       } catch (e) {
         console.error("Failed to add QR code to PDF", e);
       }
     }
-
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text("This is a computer-generated receipt. No signature required.", pageWidth / 2, 190, { align: "center" });
+    
+    // Add Signature
+    await addSignature(doc, settings, finalY + 10, pageWidth - margin);
     
     const pdfData = doc.output('datauristring');
     const filename = `Receipt_${student.id}_${fee.id}.pdf`;
@@ -166,12 +181,29 @@ export const generateResultPDF = async (elementId: string) => {
   const element = document.getElementById(elementId);
   if (!element) return null;
 
-  const canvas = await html2canvas(element);
+  // Use a temporary container to style for PDF
+  const canvas = await html2canvas(element, { useCORS: true, scale: 2 });
   const imgData = canvas.toDataURL('image/png');
+  
+  // A4 size: 210mm x 297mm
   const pdf = new jsPDF('p', 'mm', 'a4');
-  const imgProps = pdf.getImageProperties(imgData);
   const pdfWidth = pdf.internal.pageSize.getWidth();
-  const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-  pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+  const pdfHeight = pdf.internal.pageSize.getHeight();
+  
+  // Maintain aspect ratio and fit to A4
+  const imgProps = pdf.getImageProperties(imgData);
+  const ratio = imgProps.width / imgProps.height;
+  
+  const finalWidth = pdfWidth - 20; // 10mm margin
+  const finalHeight = finalWidth / ratio;
+  
+  // If too tall, scale down
+  if (finalHeight > pdfHeight - 20) {
+      const scale = (pdfHeight - 20) / finalHeight;
+      pdf.addImage(imgData, 'PNG', 10, 10, finalWidth * scale, finalHeight * scale);
+  } else {
+      pdf.addImage(imgData, 'PNG', 10, 10, finalWidth, finalHeight);
+  }
+  
   return pdf.output('datauristring');
 };

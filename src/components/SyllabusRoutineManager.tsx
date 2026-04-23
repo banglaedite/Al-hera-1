@@ -34,7 +34,7 @@ export default function SyllabusRoutineManager() {
       }
     } catch (err) {
       console.error("Failed to fetch syllabus/routines:", err);
-      addToast("সাজেশন বা রুটিন লোড করতে সমস্যা হয়েছে", "error");
+      addToast("সিলেবাস বা রুটিন লোড করতে সমস্যা হয়েছে", "error");
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function SyllabusRoutineManager() {
   };
 
   const handleDelete = async (id: string) => {
-    const pwd = prompt("সাজেশন বা রুটিনটি ডিলিট করতে পাসওয়ার্ড দিন:");
+    const pwd = prompt("সিলেবাস বা রুটিনটি ডিলিট করতে পাসওয়ার্ড দিন:");
     if (!pwd) return;
     try {
       const res = await fetch(`/api/admin/syllabus-routines/${id}`, {
@@ -86,8 +86,8 @@ export default function SyllabusRoutineManager() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900">সাজেশন ও রুটিন</h2>
-          <p className="text-slate-500 font-bold">মাদরাসার সব রুটিন ও সাজেশন এখান থেকে ম্যানেজ করুন</p>
+          <h2 className="text-2xl font-black text-slate-900">সিলেবাস ও রুটিন</h2>
+          <p className="text-slate-500 font-bold">মাদরাসার সব রুটিন ও সিলেবাস এখান থেকে ম্যানেজ করুন</p>
         </div>
         <button
           onClick={() => setIsAdding(true)}
@@ -211,7 +211,7 @@ export default function SyllabusRoutineManager() {
           {items.length === 0 && (
             <div className="col-span-full text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
               <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500 font-bold">কোন সাজেশন বা রুটিন যোগ করা হয়নি</p>
+              <p className="text-slate-500 font-bold">কোন সিলেবাস বা রুটিন যোগ করা হয়নি</p>
             </div>
           )}
         </div>

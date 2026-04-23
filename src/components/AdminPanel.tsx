@@ -67,7 +67,8 @@ import {
   EyeOff,
   LogOut,
   Globe,
-  RefreshCw
+  RefreshCw,
+  ArrowRightLeft
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import jsPDF from "jspdf";
@@ -392,6 +393,35 @@ export default function AdminPanel() {
   const [sidebarPasswordModal, setSidebarPasswordModal] = useState<{isOpen: boolean, targetTab: string}>({isOpen: false, targetTab: ""});
   const [sidebarPasswordInput, setSidebarPasswordInput] = useState("");
   const [verifyingSidebarAccess, setVerifyingSidebarAccess] = useState(false);
+  // A5 Receipt Template Component
+  const A5Receipt = ({ transaction }: { transaction: any }) => (
+    <div id="a5-receipt-print" className="hidden print:block w-[148mm] h-[210mm] p-10 bg-white font-sans text-slate-900 border-4 border-slate-900">
+        <div className="text-center border-b-2 border-slate-900 pb-4 mb-4">
+            <h1 className="text-3xl font-black">{settings?.title || "মাদ্রাসা"}</h1>
+            <p className="text-sm font-bold">{settings?.address || ""}</p>
+            <h2 className="text-xl font-bold mt-2 uppercase underline">মানি রিসিট</h2>
+        </div>
+        <div className="flex justify-between font-bold text-sm mb-6">
+            <p>রিসিট নং: #{transaction.id}</p>
+            <p>তারিখ: {new Date(transaction.paid_date || transaction.date).toLocaleDateString('bn-BD')}</p>
+        </div>
+        <div className="space-y-4 mb-8">
+            <div className="border-b border-slate-300 pb-2"><span className="font-bold">নাম:</span> {transaction.student_name || "অন্যান্য"}</div>
+            <div className="border-b border-slate-300 pb-2"><span className="font-bold">ক্যাটাগরি:</span> {transaction.category}</div>
+            <div className="border-b border-slate-300 pb-2"><span className="font-bold">বিবরণ:</span> {transaction.purpose || transaction.description || "-"}</div>
+        </div>
+        <div className="text-right text-2xl font-black mb-12">
+            সর্বমোট: ৳{transaction.amount}
+        </div>
+        <div className="flex justify-between mt-auto">
+            <div className="text-center border-t-2 border-slate-900 pt-2 w-32 font-bold text-xs">আদায়কারীর স্বাক্ষর</div>
+            <div className="text-center border-t-2 border-slate-900 pt-2 w-32 font-bold text-xs">মুহতামিমের স্বাক্ষর</div>
+        </div>
+    </div>
+  );
+
+  const [activeAccountingSubTab, setActiveAccountingSubTab] = useState<"income" | "expense" | null>(null);
+
 
   const isDataLoaded = isAuthenticated && !loading;
 
@@ -410,7 +440,7 @@ export default function AdminPanel() {
     localStorage.setItem("adminRole", adminRole);
     localStorage.setItem("adminPermissions", JSON.stringify(adminPermissions));
     if (isAuthenticated) {
-      Promise.allSettled([
+      Promise.all([
         fetchStats(),
         fetchStudents(),
         fetchTeachers(),
@@ -592,7 +622,7 @@ export default function AdminPanel() {
     { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
     { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "device_attendance" },
     { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "biometric" },
-    { id: "accounting", label: "হিসাব-নিকাশ", icon: CreditCard, permission: "accounting" },
+    { id: "accounting", label: "আয়-ব্যয়", icon: ArrowRightLeft, permission: "accounting" },
     { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fees" },
     { id: "history", label: "হিস্টোরি", icon: Clock, permission: "history" },
     { id: "recruitment", label: "নিয়োগ", icon: UserPlus, permission: "recruitment" },
@@ -704,11 +734,18 @@ export default function AdminPanel() {
                 <tab.icon className="w-5 h-5" />
                 {tab.label}
               </div>
+              {tab.id === "accounting" && activeTab === "accounting" && (
+                <div className="flex flex-col gap-1 w-full mt-2 pl-4 border-l-2 border-emerald-100">
+                  <div role="button" onClick={(e) => { e.stopPropagation(); setActiveAccountingSubTab("income"); setActiveTab("accounting"); }} className="px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 rounded-xl text-left cursor-pointer transition-all">আয় করুন</div>
+                  <div role="button" onClick={(e) => { e.stopPropagation(); setActiveAccountingSubTab("expense"); setActiveTab("accounting"); }} className="px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 rounded-xl text-left cursor-pointer transition-all">ব্যয় করুন</div>
+                </div>
+              )}
               {tab.id === "fees" && pendingCounts.payments > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-black text-white shadow-sm border-2 border-white z-10">
                   {pendingCounts.payments}
                 </span>
               )}
+
               {tab.id === "admissions" && pendingCounts.applications > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-black text-white shadow-sm border-2 border-white z-10">
                   {pendingCounts.applications}
@@ -748,7 +785,7 @@ export default function AdminPanel() {
             <AnimatePresence mode="wait">
               {activeTab === "hifz" && (
                 <motion.div key="hifz" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <HifzManager settings={settings} classesList={classes.map(c => c.name)} />
+                  <HifzManager classesList={classes.map(c => c.name)} />
                 </motion.div>
               )}
               {activeTab === "dashboard" && (
@@ -1460,15 +1497,21 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
     }
   };
 
-  const handleUpdate = async (id: string, name: string, order: number, pwd: string) => {
+  const handleEditClass = async (id: string, currentName: string) => {
+    const newName = prompt("নতুন ক্লাসের নাম দিন:", currentName);
+    if (!newName || newName === currentName) return;
+    
+    const pwd = prompt("ক্লাসটি এডিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+
     try {
       const res = await fetch(`/api/classes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, order, password: pwd })
+        body: JSON.stringify({ name: newName, password: pwd })
       });
       if (res.ok) {
-        addToast("ক্লাস আপডেট করা হয়েছে।", "success");
+        addToast("ক্লাস এডিট করা হয়েছে। সংশ্লিষ্ট সব ডেটা আপডেট হচ্ছে।", "success");
         fetchClasses();
       } else {
         const err = await res.json();
@@ -1477,19 +1520,6 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
     } catch (error) {
       addToast("সমস্যা হয়েছে", "error");
     }
-  };
-
-  const handleEditClass = async (id: string, currentName: string, currentOrder: number) => {
-    const newName = prompt("নতুন ক্লাসের নাম দিন:", currentName);
-    if (newName === null) return;
-    
-    const newOrder = prompt("নতুন সিরিয়াল নম্বর দিন (অঙ্কে):", (currentOrder || 0).toString());
-    if (newOrder === null) return;
-
-    const pwd = prompt("ক্লাসটি এডিট করতে পাসওয়ার্ড দিন:");
-    if (!pwd) return;
-
-    await handleUpdate(id, newName || currentName, Number(newOrder), pwd);
   };
 
   const handleMoveClass = async (id: string, dir: number, currentIndex: number) => {
@@ -1621,7 +1651,7 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
                 >
                   {c.is_active ? 'সক্রিয়' : 'হাইড'}
                 </button>
-                <button onClick={() => handleEditClass(c.id, c.name, c.order !== undefined ? c.order : index)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-xl transition-colors"><Edit2 className="w-5 h-5" /></button>
+                <button onClick={() => handleEditClass(c.id, c.name)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-xl transition-colors"><Edit2 className="w-5 h-5" /></button>
                 <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 className="w-5 h-5" /></button>
               </div>
             </div>
@@ -2089,8 +2119,16 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <input type="checkbox" checked={!!settings.show_showcase_directly} onChange={(e) => setSettings({...settings, show_showcase_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">সাজেশন ও রুটিন সরাসরি হোমপেজে দেখান</label>
+            <label className="text-sm font-bold text-slate-700">সিলেবাস ও রুটিন সরাসরি হোমপেজে দেখান</label>
             <input type="checkbox" checked={!!settings.show_routines_directly} onChange={(e) => setSettings({...settings, show_routines_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">সাধারণ নিয়মাবলী সরাসরি হোমপেজে দেখান</label>
+            <input type="checkbox" checked={!!settings.show_general_rules} onChange={(e) => setSettings({...settings, show_general_rules: e.target.checked ? 1 : 0})} className="w-6 h-6" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">ভর্তির নিয়মাবলী সরাসরি হোমপেজে দেখান</label>
+            <input type="checkbox" checked={!!settings.show_admission_rules} onChange={(e) => setSettings({...settings, show_admission_rules: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">নোটিশ বোর্ড সরাসরি হোমপেজে দেখান</label>
@@ -2697,7 +2735,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [isDeletingStudent, setIsDeletingStudent] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
-  const [interviewPermissions, setInterviewPermissions] = useState<any[]>([{ name: "", phone: "", relation: "", nid: "", photo: "" }]);
+  const [interviewPermissions, setInterviewPermissions] = useState<any[]>([{ name: "", phone: "", relation: "", nid: "" }]);
   const [hasMoreStudents, setHasMoreStudents] = useState(false);
   const [offset, setOffset] = useState(0);
 
@@ -2707,19 +2745,8 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
     setInterviewPermissions(newList);
   };
 
-  const handleVisitorPhoto = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleInterviewPermissionChange(index, 'photo', reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const addInterviewPermission = () => {
-    setInterviewPermissions([...interviewPermissions, { name: "", phone: "", relation: "", nid: "", photo: "" }]);
+    setInterviewPermissions([...interviewPermissions, { name: "", phone: "", relation: "", nid: "" }]);
   };
 
   const removeInterviewPermission = (index: number) => {
@@ -2729,10 +2756,10 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
 
   useEffect(() => {
     if (isEditing && selectedStudent) {
-      setInterviewPermissions(selectedStudent.interview_permissions || [{ name: "", phone: "", relation: "", nid: "", photo: "" }]);
+      setInterviewPermissions(selectedStudent.interview_permissions || [{ name: "", phone: "", relation: "", nid: "" }]);
     }
     if (isAdding) {
-      setInterviewPermissions([{ name: "", phone: "", relation: "", nid: "", photo: "" }]);
+      setInterviewPermissions([{ name: "", phone: "", relation: "", nid: "" }]);
     }
   }, [isEditing, isAdding, selectedStudent]);
   
@@ -3287,24 +3314,11 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             <div className="space-y-2">
                               <label className="text-xs font-bold text-slate-500 uppercase">এনআইডি নম্বর</label>
                               <input 
+                                required 
                                 value={person.nid} 
                                 onChange={(e) => handleInterviewPermissionChange(index, 'nid', e.target.value)} 
                                 className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
                               />
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                              <label className="text-xs font-bold text-slate-500 uppercase">দর্শনার্থীর ছবি</label>
-                              <div className="flex items-center gap-4">
-                                {person.photo && (
-                                  <img src={person.photo} alt="Visitor" className="w-16 h-16 rounded-xl object-cover border border-slate-200" />
-                                )}
-                                <input 
-                                  type="file" 
-                                  accept="image/*"
-                                  onChange={(e) => handleVisitorPhoto(index, e)}
-                                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs" 
-                                />
-                              </div>
                             </div>
                           </div>
                         </div>
@@ -3939,10 +3953,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
                         <p className="font-bold text-xl uppercase tracking-widest text-slate-800">শিক্ষকের স্বাক্ষর</p>
                       </div>
-                      <div className="text-center relative">
-                        {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
-                          <img src={settings.muhtamim_signature_url} className="h-16 mx-auto mb-[-25px] relative z-10" alt="Sig" referrerPolicy="no-referrer" />
-                        )}
+                      <div className="text-center">
                         <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
                         <p className="font-bold text-xl uppercase tracking-widest text-slate-800">অধ্যক্ষের স্বাক্ষর</p>
                       </div>
@@ -4014,12 +4025,6 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>রক্তের গ্রুপ: <span className="text-rose-600" style={{ color: '#e11d48' }}>{fullProfile.student.blood_group}</span></p>
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>ফোন: <span className="text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.student.phone}</span></p>
                 </div>
-                {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
-                  <div className="flex flex-col items-center mt-4">
-                    <img src={settings.muhtamim_signature_url} className="h-10 mb-[-15px] relative z-20" alt="Sig" referrerPolicy="no-referrer" />
-                    <div className="w-32 border-t-2 border-slate-900 pt-1 font-black text-slate-900 text-[10px]">অধ্যক্ষ / মুহতামিম</div>
-                  </div>
-                )}
               </div>
 
               {/* Profile Card Overlay */}
@@ -5216,66 +5221,76 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
             <h2 className="text-3xl font-black text-slate-900 uppercase tracking-widest border-b-4 border-slate-900 inline-block pb-2 mb-4">একাডেমিক ট্রান্সক্রিপ্ট</h2>
             <p className="text-xl font-bold text-slate-600">{selectedExam}</p>
           </div>
-          <div className="grid grid-cols-2 gap-12 mb-12 bg-slate-50 p-8 rounded-3xl border-2 border-slate-200">
-            <div className="space-y-4">
-              <div className="flex justify-between border-b border-slate-200 pb-2">
-                <span className="font-bold text-slate-500">ছাত্রের নাম:</span>
+          <div className="grid grid-cols-2 gap-4 mb-8 bg-slate-50 p-6 rounded-3xl border-2 border-slate-200">
+            <div className="space-y-1">
+              <div className="flex justify-between border-b pb-1">
+                <span className="font-bold text-slate-500">নাম:</span>
                 <span className="font-black text-slate-900">{fullProfile.student?.name || fullProfile.name}</span>
               </div>
-              <div className="flex justify-between border-b border-slate-200 pb-2">
-                <span className="font-bold text-slate-500">আইডি নম্বর:</span>
+              <div className="flex justify-between border-b pb-1">
+                <span className="font-bold text-slate-500">আইডি:</span>
                 <span className="font-black text-slate-900">{fullProfile.student?.studentId || fullProfile.student?.id || fullProfile.studentId || fullProfile.id}</span>
               </div>
             </div>
-            <div className="space-y-4">
-              <div className="flex justify-between border-b border-slate-200 pb-2">
+            <div className="space-y-1">
+              <div className="flex justify-between border-b pb-1">
                 <span className="font-bold text-slate-500">শ্রেণী:</span>
                 <span className="font-black text-slate-900">{selectedClass || fullProfile.student?.class}</span>
               </div>
-              <div className="flex justify-between border-b border-slate-200 pb-2">
-                <span className="font-bold text-slate-500">রোল নম্বর:</span>
+              <div className="flex justify-between border-b pb-1">
+                <span className="font-bold text-slate-500">রোল:</span>
                 <span className="font-black text-slate-900">{fullProfile.student?.roll || fullProfile.roll}</span>
               </div>
             </div>
+            
+            {/* Moved Totals and Grade next to name components to save space */}
+            <div className="col-span-2 grid grid-cols-2 gap-4 mt-2 bg-white/50 p-4 rounded-xl border border-slate-200">
+                <div className="text-center">
+                    <p className="text-xs font-bold text-slate-500 uppercase">সর্বমোট নম্বর</p>
+                    <p className="text-2xl font-black text-emerald-700">
+                      {fullProfile.totalMarks || (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).reduce((sum: number, r: any) => sum + r.marks, 0))}
+                    </p>
+                </div>
+                <div className="text-center">
+                    <p className="text-xs font-bold text-slate-500 uppercase">মেধা স্থান ও গ্রেড</p>
+                    <p className="text-lg font-black text-slate-900">
+                        {fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).length > 0 ? (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).reduce((sum: number, r: any) => sum + r.marks, 0) / fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).length).toFixed(2) : 0}
+                    </p>
+                </div>
+            </div>
           </div>
-          <table className="w-full border-collapse mb-12">
+          <table className="w-full border-collapse mb-8 text-sm">
             <thead>
               <tr className="bg-slate-900 text-white">
-                <th className="p-4 text-left border border-slate-900">বিষয়</th>
-                <th className="p-4 text-center border border-slate-900">পূর্ণমান</th>
-                <th className="p-4 text-center border border-slate-900">প্রাপ্ত নম্বর</th>
-                <th className="p-4 text-center border border-slate-900">গ্রেড</th>
+                <th className="p-2 text-left border border-slate-900">বিষয়</th>
+                <th className="p-2 text-center border border-slate-900">পূর্ণমান</th>
+                <th className="p-2 text-center border border-slate-900">প্রাপ্ত নম্বর</th>
+                <th className="p-2 text-center border border-slate-900">গ্রেড</th>
               </tr>
             </thead>
             <tbody>
               {(fullProfile.subjects || fullProfile.results?.filter((r: any) => r.exam_name === selectedExam) || []).map((s: any, i: number) => (
                 <tr key={i} className="border-b border-slate-200">
-                  <td className="p-4 font-bold border border-slate-200">{s.subject}</td>
-                  <td className="p-4 text-center border border-slate-200">১০০</td>
-                  <td className="p-4 text-center font-black border border-slate-200">{s.marks}</td>
-                  <td className="p-4 text-center font-black border border-slate-200">{s.grade}</td>
+                  <td className="p-2 font-bold border border-slate-200">{s.subject}</td>
+                  <td className="p-2 text-center border border-slate-200">১০০</td>
+                  <td className="p-2 text-center font-black border border-slate-200">{s.marks}</td>
+                  <td className="p-2 text-center font-black border border-slate-200">{s.grade}</td>
                 </tr>
               ))}
-              <tr className="bg-slate-50 font-black">
-                <td colSpan={2} className="p-4 text-right border border-slate-200">সর্বমোট নম্বর:</td>
-                <td className="p-4 text-center border border-slate-200">
-                  {fullProfile.totalMarks || (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).reduce((sum: number, r: any) => sum + r.marks, 0))}
-                </td>
-                <td className="p-4 text-center border border-slate-200">
-                  গড়: {(fullProfile.avgMarks || (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).length > 0 ? (fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).reduce((sum: number, r: any) => sum + r.marks, 0) / fullProfile.results?.filter((r: any) => r.exam_name === selectedExam).length) : 0)).toFixed(2)}
-                </td>
-              </tr>
             </tbody>
           </table>
-          <div className="flex justify-between mt-24">
+          
+          <div className="flex justify-between items-end mt-12 gap-8">
             <div className="text-center">
-              <div className="border-t-2 border-slate-900 w-48 pt-2">শ্রেণী শিক্ষকের স্বাক্ষর</div>
+              <div className="border-t-2 border-slate-900 w-32 pt-1 text-xs">শ্রেণী শিক্ষক</div>
             </div>
-            <div className="text-center">
-              <div className="border-t-2 border-slate-900 w-48 pt-2">প্রধান শিক্ষকের স্বাক্ষর</div>
-            </div>
-            <div className="text-center">
-              <div className="border-t-2 border-slate-900 w-48 pt-2">মুহতামিমের স্বাক্ষর</div>
+            
+            {/* Muhtamim Signature */}
+            <div className="text-center flex flex-col items-center">
+               {settings.show_muhtamim_signature === 1 && settings.muhtamim_signature_url && (
+                    <img src={settings.muhtamim_signature_url} alt="Signature" className="w-32 h-16 object-contain mb-1" />
+               )}
+              <div className="border-t-2 border-slate-900 w-32 pt-1 text-xs">মুহতামিম</div>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, createContext, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
 import { db } from "./firebase";
 import { 
@@ -14,45 +14,27 @@ import {
   BookOpen,
   Bell,
   Heart,
-  ShieldCheck,
-  Loader2
+  ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { ToastProvider, useToast } from "./components/ToastContext";
+import AdmissionForm from "./components/AdmissionForm";
+import StudentSearch from "./components/StudentSearch";
+import FeeManagement from "./components/FeeManagement";
+import ParentPortal from "./components/ParentPortal";
+import TeacherPortal from "./components/TeacherPortal";
+import DashboardHome from "./components/DashboardHome";
+import AdminPanel from "./components/AdminPanel";
+import LandingPage from "./components/LandingPage";
+import FloatingContact from "./components/FloatingContact";
+import { NoticeBoard } from "./components/NoticeBoard";
+import { ToastProvider } from "./components/ToastContext";
 import { cn } from "./lib/utils";
 
-// Lazy Load Major Components
-const AdmissionForm = lazy(() => import("./components/AdmissionForm"));
-const StudentSearch = lazy(() => import("./components/StudentSearch"));
-const FeeManagement = lazy(() => import("./components/FeeManagement"));
-const ParentPortal = lazy(() => import("./components/ParentPortal"));
-const TeacherPortal = lazy(() => import("./components/TeacherPortal"));
-const AdminPanel = lazy(() => import("./components/AdminPanel"));
-const LandingPage = lazy(() => import("./components/LandingPage"));
-const FloatingContact = lazy(() => import("./components/FloatingContact"));
-const NoticeBoard = lazy(() => import("./components/NoticeBoard").then(m => ({ default: m.NoticeBoard })));
-
-// Settings Context
-const SettingsContext = createContext<{ settings: any; loading: boolean }>({ settings: null, loading: true });
-const useSettings = () => useContext(SettingsContext);
-
-const LoadingOverlay = () => (
-  <div className="min-h-screen flex items-center justify-center bg-[#fdfcf8]">
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative">
-        <Loader2 className="w-12 h-12 text-emerald-600 animate-spin" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <GraduationCap className="w-5 h-5 text-emerald-600" />
-        </div>
-      </div>
-      <p className="text-emerald-900 font-black tracking-widest animate-pulse">লোড হচ্ছে...</p>
-    </div>
-  </div>
-);
+import { useToast } from "./components/ToastContext";
 
 const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
+  const { addToast } = useToast();
   const [settings, setSettings] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -62,7 +44,11 @@ const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
           const data = await res.json();
           if (data && typeof data === 'object' && Object.keys(data).length > 0) {
             setSettings(data);
-            if (data.title) document.title = data.title;
+            
+            // Apply Site Title & Favicon Globally
+            if (data.title) {
+              document.title = data.title;
+            }
             if (data.logo_url) {
               let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
               if (!link) {
@@ -71,35 +57,40 @@ const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
                 document.head.appendChild(link);
               }
               link.href = data.logo_url;
+
+              let appleLink = document.querySelector("link[rel~='apple-touch-icon']") as HTMLLinkElement;
+              if (!appleLink) {
+                appleLink = document.createElement('link');
+                appleLink.rel = 'apple-touch-icon';
+                document.head.appendChild(appleLink);
+              }
+              appleLink.href = data.logo_url;
             }
           }
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
-      } finally {
-        setLoading(false);
       }
     };
     fetchSettings();
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ settings, loading }}>
-      <Navbar />
+    <>
+      <Navbar settings={settings} />
       {children}
-    </SettingsContext.Provider>
+    </>
   );
 };
 
-const Navbar = () => {
-  const { settings } = useSettings();
+const Navbar = ({ settings }: { settings: any }) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
   if (location.pathname === "/") return null;
 
   const navItems = [
-    { name: "হোম", path: "/", icon: Home },
+    { name: "হোম", path: "/dashboard", icon: Home },
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
     { name: "রেজাল্ট", path: "/parent?tab=results", icon: BookOpen },
     { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
@@ -190,24 +181,41 @@ const Navbar = () => {
 };
 
 const GlobalPopup = () => {
-  const { settings, loading } = useSettings();
+  const [settings, setSettings] = useState<any>(null);
   const [show, setShow] = useState(false);
   const [hasShown, setHasShown] = useState(false);
 
   useEffect(() => {
-    if (!loading && settings?.popup_enabled && !hasShown) {
-      const timer = setTimeout(() => {
-        setShow(true);
-        setHasShown(true);
-      }, 1500);
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch("/api/site-settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.popup_enabled) {
+            setSettings(data);
+            // Show popup once per session/initial load
+            if (!hasShown) {
+              setTimeout(() => {
+                setShow(true);
+                setHasShown(true);
+              }, 1500); // Small delay for better UX
 
-      const duration = (settings.popup_duration || 0) * 1000;
-      if (duration > 0) {
-        setTimeout(() => setShow(false), duration + 1500);
+              // Auto hide if duration is set
+              const duration = (data.popup_duration || 0) * 1000;
+              if (duration > 0) {
+                setTimeout(() => {
+                  setShow(false);
+                }, duration + 1500);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load popup settings:", err);
       }
-      return () => clearTimeout(timer);
-    }
-  }, [settings, loading, hasShown]);
+    };
+    fetchSettings();
+  }, [hasShown]);
 
   if (!settings || !show) return null;
 
@@ -290,21 +298,20 @@ export default function App() {
         <SiteSettingsProvider>
           <div className="min-h-screen bg-[#fdfcf8] font-sans text-slate-900">
             <GlobalPopup />
-            <Suspense fallback={<LoadingOverlay />}>
-              <NoticeBoard />
-              <main>
-                <Routes>
-                  <Route path="/" element={<LandingPage />} />
-                  <Route path="/admission" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdmissionForm /></div>} />
-                  <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
-                  <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
-                  <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
-                  <Route path="/teacher" element={<TeacherPortal />} />
-                  <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
-                </Routes>
-              </main>
-              <FloatingContact />
-            </Suspense>
+            <NoticeBoard />
+            <main>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/admission" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdmissionForm /></div>} />
+                <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
+                <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
+                <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
+                <Route path="/teacher" element={<TeacherPortal />} />
+                <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
+              </Routes>
+            </main>
+            
+            <FloatingContact />
             
             <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
               <div className="max-w-7xl mx-auto px-4 text-center">

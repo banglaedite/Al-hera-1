@@ -30,8 +30,8 @@ export function RoutineManager() {
     const formData = new FormData(e.target as HTMLFormElement);
     const data: any = Object.fromEntries(formData.entries());
     
-    if (selectedTitle === "অন্যান্য") {
-      data.title = customTitle || "";
+    if (selectedTitle === "অন্যান্য" && customTitle) {
+      data.title = customTitle;
     } else {
       data.title = selectedTitle;
     }
@@ -84,8 +84,8 @@ export function RoutineManager() {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-black text-slate-900">সাজেশন ও রুটিন</h2>
-          <p className="text-slate-500 font-bold">মাদরাসার বিভিন্ন রুটিন ও সাজেশন ম্যানেজমেন্ট</p>
+          <h2 className="text-3xl font-black text-slate-900">সিলেবাস ও রুটিন</h2>
+          <p className="text-slate-500 font-bold">মাদরাসার বিভিন্ন রুটিন ও সিলেবাস ম্যানেজমেন্ট</p>
         </div>
         <button 
           onClick={() => { setEditingItem(null); setIsAdding(true); setSelectedTitle("বাসায় পড়ার রুটিন"); setCustomTitle(""); }}
@@ -203,7 +203,7 @@ export function RoutineManager() {
         {routines.length === 0 && (
           <div className="col-span-full text-center py-12 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
             <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-bold">কোন রুটিন বা সাজেশন যোগ করা হয়নি</p>
+            <p className="text-slate-500 font-bold">কোন রুটিন বা সিলেবাস যোগ করা হয়নি</p>
           </div>
         )}
       </div>

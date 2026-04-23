@@ -112,6 +112,15 @@ const LandingPage = () => {
   }, [leaderboardType]);
 
   useEffect(() => {
+    // Check if user is already logged in and redirect
+    if (localStorage.getItem("isAdmin") === "true") {
+      navigate("/secret-admin-access");
+      return;
+    } else if (localStorage.getItem("guardianPhone")) {
+      navigate("/parent");
+      return;
+    }
+
     const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
@@ -133,28 +142,20 @@ const LandingPage = () => {
       }
     };
 
-    const fetchData = async () => {
-      try {
-        const res = await fetchWithTimeout("/api/dashboard-data");
+    fetchWithTimeout("/api/site-settings")
+      .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        
-        // Ensure we got JSON
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          throw new Error("Received non-JSON response from server");
+        return res.json();
+      })
+      .then(data => {
+        if (data && data.title) {
+          setSettings(data);
+        } else {
+          throw new Error("Invalid settings data");
         }
-
-        const data = await res.json();
-        
-        if (data.settings) setSettings(data.settings);
-        if (data.features) setFeatures(data.features.filter((f: any) => f.is_active !== 0));
-        if (data.foodMenu) setFoodMenu(data.foodMenu);
-        if (data.showcaseItems) setShowcaseItems(data.showcaseItems);
-        if (data.notices) setNotices(data.notices.filter((n: any) => n.is_active !== 0));
-        if (data.routines) setRoutines(data.routines);
-      } catch (err) {
-        console.error("Failed to load dashboard data:", err);
-        // Set defaults on failure to prevent stuck loading state
+      })
+      .catch((err) => {
+        console.error("Failed to load settings:", err);
         setSettings({
           title: 'আল হেরা মাদরাসা',
           description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
@@ -165,19 +166,77 @@ const LandingPage = () => {
           announcement: 'স্বাগতম',
           logo_url: null
         });
+      });
+
+    fetchWithTimeout("/api/features")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setFeatures(data.filter((f: any) => f.is_active !== 0));
+        } else {
+          throw new Error("Invalid features data");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load features:", err);
         setFeatures([
           { id: 'f1', title: 'আধুনিক শিক্ষা', description: 'আধুনিক ও দ্বীনি শিক্ষার সমন্বয়', icon: 'BookOpen' },
           { id: 'f2', title: 'অভিজ্ঞ শিক্ষক', description: 'দক্ষ ও অভিজ্ঞ শিক্ষক মন্ডলী', icon: 'Users' },
           { id: 'f3', title: 'নিরাপদ পরিবেশ', description: 'ছাত্রদের জন্য নিরাপদ ও মনোরম পরিবেশ', icon: 'ShieldCheck' }
         ]);
+      });
+
+    fetchWithTimeout("/api/food-menu")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setFoodMenu(data);
+        } else {
+          throw new Error("Invalid food menu data");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load food menu:", err);
         setFoodMenu([
           { id: 'm1', day: 'শনিবার', breakfast: 'খিচুড়ি', lunch: 'মাছ, ডাল', dinner: 'মুরগি' },
           { id: 'm2', day: 'রবিবার', breakfast: 'রুটি, ভাজি', lunch: 'গরু, ডাল', dinner: 'সবজি' }
         ]);
-      }
-    };
+      });
 
-    fetchData();
+    fetchWithTimeout("/api/showcase-items")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setShowcaseItems(data);
+        } else {
+          throw new Error("Invalid showcase data");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load showcase items:", err);
+        setShowcaseItems([
+          { id: 's1', title: 'মাদরাসা প্রাঙ্গণ', url: 'https://picsum.photos/seed/campus/800/600', type: 'image' },
+          { id: 's2', title: 'শ্রেণীকক্ষ', url: 'https://picsum.photos/seed/class/800/600', type: 'image' }
+        ]);
+      });
+
+    fetchWithTimeout("/api/notices")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setNotices(data.filter((n: any) => n.is_active !== 0));
+        }
+      })
+      .catch(err => console.error("Failed to load notices:", err));
+
+    fetchWithTimeout("/api/routines")
+      .then((res) => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setRoutines(data);
+        }
+      })
+      .catch(err => console.error("Failed to load routines:", err));
   }, []);
 
   if (!settings) return (
@@ -460,10 +519,10 @@ const LandingPage = () => {
         </section>
       )}
 
-      {/* Quick Action Icons */}
-      <section className="py-8 bg-white relative z-20">
+      {/* Quick Action Icons - Now Top */}
+      <section className="py-12 bg-white relative z-20">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 md:gap-6">
             {[
               { id: 'food-menu', icon: Utensils, label: 'খাবার মেনু', color: 'bg-rose-50 text-rose-600 border-rose-100', hover: 'hover:bg-rose-600 hover:text-white' },
               { id: 'notices', icon: Bell, label: 'নোটিশ বোর্ড', color: 'bg-blue-50 text-blue-600 border-blue-100', hover: 'hover:bg-blue-600 hover:text-white' },
@@ -471,34 +530,26 @@ const LandingPage = () => {
               { id: 'showcase', icon: Globe, label: 'শোকেস', color: 'bg-amber-50 text-amber-600 border-amber-100', hover: 'hover:bg-amber-600 hover:text-white' },
               { id: 'leaderboard', icon: Award, label: 'সেরা ছাত্র', color: 'bg-purple-50 text-purple-600 border-purple-100', hover: 'hover:bg-purple-600 hover:text-white' },
               { id: 'rules', icon: FileText, label: 'নিয়মাবলী', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', hover: 'hover:bg-indigo-600 hover:text-white' },
-              { id: 'features', icon: Star, label: 'আমাদের বৈশিষ্ট্য', color: 'bg-emerald-50 text-emerald-900 border-emerald-200', hover: 'hover:bg-emerald-900 hover:text-white' },
-              { id: 'results', icon: BookOpen, label: 'রেজাল্ট', color: 'bg-cyan-50 text-cyan-600 border-cyan-100', hover: 'hover:bg-cyan-600 hover:text-white', isLink: true, path: '/parent?tab=results' },
             ].map((item, i) => (
               <motion.a
                 key={item.label}
-                href={item.isLink ? undefined : `#${item.id}`}
-                onClick={(e) => {
-                  if (item.isLink) {
-                    e.preventDefault();
-                    navigate(item.path!);
-                  }
-                }}
-                whileHover={{ y: -3, scale: 1.02 }}
+                href={`#${item.id}`}
+                whileHover={{ y: -5, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.05 }}
                 className={cn(
-                  "flex flex-col items-center justify-center p-3 md:p-4 rounded-[1.5rem] border transition-all duration-300 gap-2 group shadow-sm cursor-pointer",
+                  "flex flex-col items-center justify-center p-6 rounded-[2rem] border transition-all duration-300 gap-3 group shadow-sm",
                   item.color,
                   item.hover
                 )}
               >
-                <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-sm group-hover:bg-white group-hover:scale-110 transition-all">
-                  <item.icon className="w-5 h-5" />
+                <div className="w-12 h-12 rounded-2xl bg-white/80 flex items-center justify-center shadow-sm group-hover:bg-white group-hover:scale-110 transition-all">
+                  <item.icon className="w-6 h-6" />
                 </div>
-                <span className="font-black text-[10px] md:text-sm tracking-tight text-center">{item.label}</span>
+                <span className="font-black text-sm tracking-tight text-center">{item.label}</span>
               </motion.a>
             ))}
           </div>
@@ -634,6 +685,9 @@ const LandingPage = () => {
         </section>
       )}
 
+      {/* Content Sections Toggle Buttons - REMOVED */}
+      {/* Container for Rules setting will go here later */}
+
       {/* Routine & Syllabus Section */}
       {(settings?.show_routines_directly === 1 || routines.length > 0) && (
         <section id="routines" className={`py-24 bg-indigo-50/30 relative overflow-hidden ${settings?.show_routines_directly !== 1 ? 'hidden target:block' : ''}`}>
@@ -647,7 +701,7 @@ const LandingPage = () => {
                 <FileText className="w-4 h-4" /> Academic Resources
               </motion.div>
               <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">সাজেশন ও রুটিন</h2>
-              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের সাজেশন ও রুটিন এখান থেকে ডাউনলোড করুন</p>
+              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের রুটিন এখান থেকে ডাউনলোড করুন</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -1008,46 +1062,48 @@ const LandingPage = () => {
         </section>
       )}
 
-      {/* Madrasa Rules Section */}
-      {settings?.admission_rules && (
-        <section id="rules" className="py-24 bg-slate-50 relative overflow-hidden scroll-mt-24">
-          <div className="max-w-4xl mx-auto px-4 relative z-10">
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold mb-6">
-                <FileText className="w-3 h-3" />
-                <span className="uppercase tracking-widest">মাদরাসার নিয়মাবলী</span>
-              </div>
-              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
-                ভর্তি ও <span className="text-indigo-600">সাধারণ নিয়মাবলী</span>
-              </h2>
-            </div>
-            
-            <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl shadow-indigo-100/50 border border-indigo-50">
-              <div className="space-y-6">
-                {settings.admission_rules.split('\n').filter((rule: string) => rule.trim()).map((rule: string, idx: number) => (
-                  <motion.div 
-                    key={idx}
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="flex gap-5 group"
-                  >
-                    <div className="shrink-0 w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-lg group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-sm">
-                      {toBn(idx + 1)}
-                    </div>
-                    <div className="flex-1 pt-1.5">
-                      <p className="text-lg text-slate-700 font-medium leading-relaxed">
-                        {rule}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+      {/* General & Admission Rules Section */}
+      <section id="rules" className="hidden target:block py-24 bg-slate-50 relative overflow-hidden scroll-mt-24">
+        <div className="max-w-4xl mx-auto px-4 relative z-10">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
+              নিয়মাবলী
+            </h2>
           </div>
-        </section>
-      )}
+          
+          <div className="space-y-12">
+            {/* General Rules */}
+            {settings?.show_general_rules === 1 && settings?.general_rules && (
+              <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-emerald-50">
+                <h3 className="text-2xl font-black text-emerald-900 mb-8">সাধারণ নিয়মাবলী</h3>
+                <div className="space-y-6">
+                  {settings.general_rules.split('\n').filter((rule: string) => rule.trim()).map((rule: string, idx: number) => (
+                    <div key={idx} className="flex gap-5">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-black">{toBn(idx + 1)}</div>
+                      <p className="text-lg text-slate-700 font-medium leading-relaxed pt-1.5">{rule}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Admission Rules */}
+            {settings?.show_admission_rules === 1 && settings?.admission_rules && (
+              <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-indigo-50">
+                <h3 className="text-2xl font-black text-indigo-900 mb-8">ভর্তির নিয়মাবলী</h3>
+                <div className="space-y-6">
+                  {settings.admission_rules.split('\n').filter((rule: string) => rule.trim()).map((rule: string, idx: number) => (
+                    <div key={idx} className="flex gap-5">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black">{toBn(idx + 1)}</div>
+                      <p className="text-lg text-slate-700 font-medium leading-relaxed pt-1.5">{rule}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Floating Contact Popup */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">

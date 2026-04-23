@@ -154,26 +154,14 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Ensure Firestore is initialized for all requests
-// Middleware to check Firestore initialization
 app.use((req, res, next) => {
-  if (req.path === '/api/health') return next();
-  
-  if (req.path.startsWith('/api/')) {
-    try {
-      const db = getFirestoreInstance();
-      if (!db) {
-        console.error("Critical: Firestore failed to initialize for path:", req.path);
-        return res.status(503).json({ error: "Database not available. Please check configuration." });
-      }
-    } catch (error) {
-      console.error("Error in Firestore middleware:", error);
-      return res.status(500).json({ error: "Internal Server Error during database access." });
-    }
+  const db = getFirestoreInstance();
+  if (!db && req.path.startsWith('/api/')) {
+    console.error("Critical: Firestore failed to initialize before API request:", req.path);
+    return res.status(503).json({ error: "Database not available. Please check environment variables and Firebase Admin config." });
   }
   next();
 });
-
-// Remove the old redundant middlewares (I will do this in the TargetContent selection)
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -252,9 +240,33 @@ app.post("/api/admin/update-firebase-config", async (req, res) => {
   }
 });
 
-// Global app config for body parsing
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Middleware to check Firestore
+app.use((req, res, next) => {
+  // Use req.url for cleaner path matching in middleware if needed, but req.path is fine
+  const path = req.path || "";
+  if (path.startsWith('/api/') && path !== '/api/health') {
+    try {
+      const db = getFirestoreInstance();
+      if (!db) {
+        console.error("Firestore initialization yielded null for path:", path);
+        return res.status(503).json({ 
+          error: "Service Unavailable", 
+          details: "Firestore initialization failed. The server may still be starting or configuration is invalid.",
+          path: path
+        });
+      }
+    } catch (err: any) {
+      console.error("Firestore middleware error for path:", path, err);
+      return res.status(500).json({ 
+        error: "Internal Server Error", 
+        details: "An error occurred while initializing Firestore.",
+        message: err.message,
+        path: path
+      });
+    }
+  }
+  next();
+});
 
 // Health check removed (consolidated above)
 
@@ -900,40 +912,6 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to delete showcase item" });
-    }
-  });
-
-  // --- Dashboard Data Combined ---
-  app.get("/api/dashboard-data", async (req, res) => {
-    try {
-      const db = getFirestoreInstance();
-      const [settingsDoc, featuresSnap, foodSnap, showcaseSnap, noticesSnap, routineSnap] = await Promise.all([
-        db.collection("site_settings").doc("1").get(),
-        db.collection("features").get(),
-        db.collection("food_menu").get(),
-        db.collection("showcase_items").get(),
-        db.collection("notices").orderBy("createdAt", "desc").limit(5).get(),
-        db.collection("routines").get()
-      ]);
-
-      const settings = settingsDoc.exists ? { id: settingsDoc.id, ...settingsDoc.data() } : {};
-      const features = featuresSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const foodMenu = foodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const showcaseItems = showcaseSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const notices = noticesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const routines = routineSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      res.json({
-        settings,
-        features,
-        foodMenu,
-        showcaseItems,
-        notices,
-        routines
-      });
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      res.status(500).json({ error: "Failed to fetch dashboard data" });
     }
   });
 
@@ -5047,14 +5025,13 @@ process.on('uncaughtException', (err) => {
 
 const PORT = 3000;
 
-// API 404 handler - MUST ALWAYS RETURN JSON
+// API 404 handler (must be after all actual API routes)
 app.all("/api/*", (req, res) => {
   console.log(`404 for API route: ${req.method} ${req.path}`);
   res.status(404).json({ 
     error: "API route not found", 
     method: req.method, 
-    path: req.path,
-    suggestion: "Check if the API path is correctly defined in server.ts"
+    path: req.path 
   });
 });
 

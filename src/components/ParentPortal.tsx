@@ -1288,14 +1288,14 @@ export default function ParentPortal() {
           >
             <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
               <div className="mb-8">
-                <h3 className="text-2xl font-black text-slate-900 mb-1">সাজেশন ও রুটিন</h3>
-                <p className="text-slate-500 font-bold">আপনার প্রয়োজনীয় সব রুটিন ও সাজেশন এখানে পাবেন</p>
+                <h3 className="text-2xl font-black text-slate-900 mb-1">সিলেবাস ও রুটিন</h3>
+                <p className="text-slate-500 font-bold">আপনার প্রয়োজনীয় সব রুটিন ও সিলেবাস এখানে পাবেন</p>
               </div>
 
               {syllabusRoutines.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
                   <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500 font-bold">কোন সাজেশন বা রুটিন পাওয়া যায়নি</p>
+                  <p className="text-slate-500 font-bold">কোন সিলেবাস বা রুটিন পাওয়া যায়নি</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -2,16 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Users, X as CloseIcon, Download, Printer, FileText } from "lucide-react";
 
-const toBn = (n: any) => n ? n.toString().replace(/\d/g, (d: any) => "০১২৩৪৫৬৭৮৯"[d]) : n;
-
-const ProfileField = ({ label, value, subValue }: { label: string, value: any, subValue?: string }) => (
-  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-center">
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-    <p className="font-bold text-slate-900 leading-tight">{value || '-'}</p>
-    {subValue && <p className="text-xs text-slate-500 mt-1 font-medium">{subValue}</p>}
-  </div>
-);
-
 export function AllStudentsManager({ settings, classesList }: { settings: any, classesList: string[] }) {
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -196,108 +186,44 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
                       এই ছাত্রটি বর্তমানে তালিকাভুক্ত নয় (বাতিলকৃত)।
                     </div>
                   )}
-                  <div className="flex flex-col md:flex-row gap-8 items-start mb-8 pb-8 border-b border-slate-100">
-                    <img 
-                      src={fullProfile.student.photo_url || `https://picsum.photos/seed/${fullProfile.student.id}/200`} 
-                      className="w-48 h-48 rounded-3xl object-cover shadow-lg border-4 border-white bg-slate-100" 
-                      alt={fullProfile.student.name}
-                      referrerPolicy="no-referrer"
-                    />
+                  <div className="flex flex-col md:flex-row gap-8 items-start">
+                    <img src={fullProfile.student.photo_url || `https://picsum.photos/seed/${fullProfile.student.id}/200`} className="w-40 h-40 rounded-3xl object-cover shadow-lg border-4 border-white" />
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-4xl font-black text-slate-900 mb-1">{fullProfile.student.name}</h3>
-                          <p className="text-xl font-bold text-slate-500 mb-4">{fullProfile.student.name_en}</p>
-                          <div className="flex flex-wrap gap-4">
-                            <span className="px-4 py-1.5 bg-emerald-100 text-emerald-700 rounded-xl font-black text-sm">শ্রেণী: {fullProfile.student.class}</span>
-                            <span className="px-4 py-1.5 bg-blue-100 text-blue-700 rounded-xl font-black text-sm">রোল: {fullProfile.student.roll}</span>
-                            <span className="px-4 py-1.5 bg-purple-100 text-purple-700 rounded-xl font-black text-sm">ID: {fullProfile.student.studentId || fullProfile.student.id}</span>
-                          </div>
+                          <h3 className="text-3xl font-black text-slate-900">{fullProfile.student.name}</h3>
+                          <p className="text-slate-500 font-bold text-lg mt-1">শ্রেণী: {fullProfile.student.class} | রোল: {fullProfile.student.roll}</p>
                         </div>
-                        <div className="hidden md:block">
-                          {fullProfile.student.blood_group && (
-                            <div className="w-16 h-16 rounded-2xl bg-rose-50 border-2 border-rose-100 flex flex-col items-center justify-center">
-                              <span className="text-[10px] font-black text-rose-400 uppercase leading-none mb-1">Blood</span>
-                              <span className="text-xl font-black text-rose-600 leading-none">{fullProfile.student.blood_group}</span>
-                            </div>
-                          )}
+                        <div className="text-right">
+                          <div className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-black tracking-widest">
+                            ID: {fullProfile.student.studentId || fullProfile.student.id}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Comprehensive Profile Sections */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Basic Info */}
-                    <div className="space-y-4">
-                      <h4 className="text-lg font-black text-slate-900 border-l-4 border-emerald-500 pl-3 mb-4">প্রাথমিক তথ্য</h4>
-                      <ProfileField label="জেন্ডার" value={fullProfile.student.gender} />
-                      <ProfileField label="জন্ম তারিখ" value={fullProfile.student.dob ? new Date(fullProfile.student.dob).toLocaleDateString('bn-BD') : '-'} />
-                      <ProfileField label="জন্ম নিবন্ধন নং" value={fullProfile.student.birth_cert_no} />
-                      <ProfileField label="ধর্ম ও জাতীয়তা" value={`${fullProfile.student.religion || 'ইসলাম'}, ${fullProfile.student.nationality || 'বাংলাদেশী'}`} />
-                    </div>
-
-                    {/* Parents Info */}
-                    <div className="space-y-4">
-                      <h4 className="text-lg font-black text-slate-900 border-l-4 border-blue-500 pl-3 mb-4">পিতা ও মাতার তথ্য</h4>
-                      <ProfileField label="পিতার নাম" value={fullProfile.student.father_name} subValue={fullProfile.student.father_occupation} />
-                      <ProfileField label="পিতার এনআইডি" value={fullProfile.student.father_nid} />
-                      <ProfileField label="মাতার নাম" value={fullProfile.student.mother_name} subValue={fullProfile.student.mother_occupation} />
-                      <ProfileField label="মাতার এনআইডি" value={fullProfile.student.mother_nid} />
-                    </div>
-
-                    {/* Contact & Address */}
-                    <div className="space-y-4">
-                      <h4 className="text-lg font-black text-slate-900 border-l-4 border-purple-500 pl-3 mb-4">যোগাযোগ ও ঠিকানা</h4>
-                      <ProfileField label="ফোন নম্বর" value={fullProfile.student.phone} subValue={fullProfile.student.whatsapp ? `WhatsApp: ${fullProfile.student.whatsapp}` : ''} />
-                      <ProfileField label="ইমেইল" value={fullProfile.student.email} />
-                      <ProfileField label="বর্তমান ঠিকানা" value={fullProfile.student.present_address} />
-                      <ProfileField label="স্থায়ী ঠিকানা" value={fullProfile.student.permanent_address} />
-                    </div>
-                  </div>
-
-                  {/* Interview Permissions / Visitors */}
-                  <div className="mt-12 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
-                    <h4 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-                      <Users className="w-8 h-8 text-emerald-600" />
-                      সাক্ষাৎকারের অনুমতিপ্রাপ্ত ব্যক্তিবর্গ (ভিজিটর)
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                      {fullProfile.student.interview_permissions && fullProfile.student.interview_permissions.length > 0 ? (
-                        fullProfile.student.interview_permissions.map((visitor: any, idx: number) => (
-                          <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex gap-4 transition-all hover:shadow-md hover:border-emerald-200 group">
-                            <div className="relative">
-                              <img 
-                                src={visitor.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(visitor.name)}&background=random`} 
-                                className="w-20 h-20 rounded-2xl object-cover bg-slate-50 border-2 border-slate-100 group-hover:border-emerald-100" 
-                                alt={visitor.name}
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-black text-slate-900 text-lg truncate mb-1">{visitor.name}</p>
-                              <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">{visitor.relation}</p>
-                              <div className="space-y-1">
-                                <p className="text-xs font-bold text-slate-500 flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                                  {visitor.phone}
-                                </p>
-                                {visitor.nid && (
-                                  <p className="text-[10px] font-bold text-slate-400 flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                                    NID: {visitor.nid}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                        <div className="space-y-4">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">পিতার নাম</p>
+                            <p className="font-bold text-slate-900">{fullProfile.student.father_name}</p>
                           </div>
-                        ))
-                      ) : (
-                        <div className="col-span-full py-12 text-center">
-                          <p className="text-slate-400 font-bold">কোন সাক্ষাৎকার অনুমতি দেওয়া হয়নি।</p>
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">মাতার নাম</p>
+                            <p className="font-bold text-slate-900">{fullProfile.student.mother_name}</p>
+                          </div>
                         </div>
-                      )}
+                        <div className="space-y-4">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">যোগাযোগ</p>
+                            <p className="font-bold text-slate-900">{fullProfile.student.phone}</p>
+                            {fullProfile.student.whatsapp && <p className="font-bold text-emerald-600 text-sm mt-1">WA: {fullProfile.student.whatsapp}</p>}
+                          </div>
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">ঠিকানা</p>
+                            <p className="font-bold text-slate-900">{fullProfile.student.address}</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
