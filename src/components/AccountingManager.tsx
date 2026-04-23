@@ -513,7 +513,10 @@ export function AccountingManager({ settings, addToast, classesList }: { setting
           
           <div class="footer">
             <div class="signature">হিসাবরক্ষকের স্বাক্ষর</div>
-            <div class="signature">মুহতামিমের স্বাক্ষর</div>
+            <div class="signature">
+              ${settings.show_muhtamim_signature && settings.muhtamim_signature_url ? `<img src="${settings.muhtamim_signature_url}" style="height: 50px; margin-bottom: -10px; display: block; margin-left: auto; margin-right: auto;" referrerPolicy="no-referrer">` : ''}
+              মুহতামিমের স্বাক্ষর
+            </div>
           </div>
           
           <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: bold;">

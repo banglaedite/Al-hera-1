@@ -9,7 +9,7 @@ import "jspdf-autotable";
 
 const toBn = (n: any) => n ? n.toString().replace(/\d/g, (d: any) => "০১২৩৪৫৬৭৮৯"[d]) : n;
 
-export function HifzManager({ classesList }: { classesList: string[] }) {
+export function HifzManager({ settings, classesList }: { settings: any, classesList: string[] }) {
   const { addToast } = useToast();
   const [students, setStudents] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -553,6 +553,20 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       headStyles: { fillColor: [30, 41, 59] },
       styles: { fontSize: 9, cellPadding: 3 }
     });
+
+    // Signature
+    const finalY = (doc as any).lastAutoTable.finalY + 30;
+    if (settings?.muhtamim_signature_url && settings?.show_muhtamim_signature) {
+      try {
+        doc.addImage(settings.muhtamim_signature_url, 'PNG', 140, finalY - 15, 40, 15);
+      } catch (err) {
+        console.error("Failed to add signature to Hifz PDF", err);
+      }
+    }
+    doc.setFontSize(12);
+    doc.setTextColor(30);
+    doc.line(135, finalY, 185, finalY);
+    doc.text("Muhtamim Signature", 160, finalY + 7, { align: "center" });
 
     doc.save(`Hifz_Report_${selectedStudent?.name}_${startDate}.pdf`);
     addToast("PDF ডাউনলোড শুরু হয়েছে", "success");

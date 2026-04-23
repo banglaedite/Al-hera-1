@@ -20,6 +20,7 @@ export default function AdmissionForm() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
+  const [classes, setClasses] = useState<any[]>([]);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
@@ -27,7 +28,7 @@ export default function AdmissionForm() {
     address: "",
     phone: "",
     previous_school: "",
-    className: "১ম",
+    className: "",
   });
 
   useEffect(() => {
@@ -38,7 +39,30 @@ export default function AdmissionForm() {
       })
       .then(data => setSettings(data))
       .catch(err => console.error("Failed to load settings:", err));
+
+    fetch("/api/classes")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const activeClasses = data.filter((c: any) => c.is_active !== 0);
+          setClasses(activeClasses);
+          if (activeClasses.length > 0) {
+            setFormData(prev => ({ ...prev, className: activeClasses[0].name }));
+          }
+        }
+      })
+      .catch(err => console.error("Failed to load classes:", err));
   }, []);
+
+  const getClassLabel = (className: string) => {
+    if (className === "৪র্থ শ্রেণী" || className === "৪র্থ শ্রেণি" || className === "৪র্থ" || className === "চতুর্থ শ্রেণি" || className === "চতুর্থ শ্রেণী") {
+      return "চতুর্থ শ্রেণি ও হিফজ বিভাগ";
+    }
+    if (className === "৫ম শ্রেণী" || className === "৫ম শ্রেণি" || className === "৫ম" || className === "পঞ্চম শ্রেণি" || className === "পঞ্চম শ্রেণী") {
+      return "পঞ্চম শ্রেণি ও হিফজ বিভাগ";
+    }
+    return className;
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -162,20 +186,12 @@ export default function AdmissionForm() {
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">কোন ক্লাসে ভর্তি হতে ইচ্ছুক *</label>
                 <select name="className" value={formData.className} onChange={handleChange} className="w-full px-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500">
-                  <option value="প্লে">প্লে</option>
-                  <option value="নার্সারি">নার্সারি</option>
-                  <option value="১ম">১ম শ্রেণী</option>
-                  <option value="২য়">২য় শ্রেণী</option>
-                  <option value="৩য়">৩য় শ্রেণী</option>
-                  <option value="৪র্থ">৪র্থ শ্রেণী</option>
-                  <option value="৫ম">৫ম শ্রেণী</option>
-                  <option value="৬ষ্ঠ">৬ষ্ঠ শ্রেণী</option>
-                  <option value="৭ম">৭ম শ্রেণী</option>
-                  <option value="৮ম">৮ম শ্রেণী</option>
-                  <option value="৯ম">৯ম শ্রেণী</option>
-                  <option value="১০ম">১০ম শ্রেণী</option>
-                  <option value="হিফজ">হিফজ</option>
-                  <option value="মক্তব">মক্তব</option>
+                  {classes.map((cls) => (
+                    <option key={cls.id} value={cls.name}>
+                      {getClassLabel(cls.name)}
+                    </option>
+                  ))}
+                  {classes.length === 0 && <option value="">লোড হচ্ছে...</option>}
                 </select>
               </div>
             </div>

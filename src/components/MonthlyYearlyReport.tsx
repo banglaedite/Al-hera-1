@@ -49,7 +49,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
         acc[cat].months[month].items.push(item);
         
         return acc;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, { total: number; items: any[]; months: any }>);
     };
 
     return {
@@ -183,6 +183,11 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
     ));
   };
 
+  const totalIncome: number = Object.values(groupedByCategory.income).reduce((sum: number, cat: any) => sum + (Number(cat.total) || 0), 0) as number;
+  const totalExpenses: number = Object.values(groupedByCategory.expenses).reduce((sum: number, cat: any) => sum + (Number(cat.total) || 0), 0) as number;
+  const prevBalance: number = Number(data.prevBalance) || 0;
+  const currentBalance: number = prevBalance + totalIncome - totalExpenses;
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -191,7 +196,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
           <div className="relative z-10 flex flex-col h-full">
             <span className="text-xs font-black text-indigo-200 uppercase tracking-widest mb-2 inline-block">পূর্বের জের</span>
             <div className="flex items-end gap-2 mt-auto">
-              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={data.prevBalance || 0} startColor="#ffffff" endColor="#ffffff" /></span>
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={prevBalance} startColor="#ffffff" endColor="#ffffff" /></span>
             </div>
           </div>
         </motion.div>
@@ -201,7 +206,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
           <div className="relative z-10 flex flex-col h-full">
             <span className="text-xs font-black text-emerald-200 uppercase tracking-widest mb-2 inline-block">মোট আয়</span>
             <div className="flex items-end gap-2 mt-auto">
-              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={Object.values(groupedByCategory.income).reduce((sum: number, cat: any) => sum + cat.total, 0)} startColor="#ffffff" endColor="#34d399" /></span>
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={totalIncome} startColor="#ffffff" endColor="#34d399" /></span>
               <TrendingUp className="w-6 h-6 text-emerald-300 mb-1" />
             </div>
           </div>
@@ -212,7 +217,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
           <div className="relative z-10 flex flex-col h-full">
             <span className="text-xs font-black text-rose-200 uppercase tracking-widest mb-2 inline-block">মোট ব্যয়</span>
             <div className="flex items-end gap-2 mt-auto">
-              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={Object.values(groupedByCategory.expenses).reduce((sum: number, cat: any) => sum + cat.total, 0)} startColor="#ffffff" endColor="#fb7185" /></span>
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={totalExpenses} startColor="#ffffff" endColor="#fb7185" /></span>
               <TrendingDown className="w-6 h-6 text-rose-300 mb-1" />
             </div>
           </div>
@@ -223,7 +228,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
           <div className="relative z-10 flex flex-col h-full">
             <span className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2 inline-block">বর্তমান স্থিতি</span>
             <div className="flex items-end gap-2 mt-auto">
-              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={(data.prevBalance || 0) + Object.values(groupedByCategory.income).reduce((sum: number, cat: any) => sum + cat.total, 0) - Object.values(groupedByCategory.expenses).reduce((sum: number, cat: any) => sum + cat.total, 0)} startColor="#ffffff" endColor="#10b981" /></span>
+              <span className="text-4xl font-black tracking-tight" style={{ color: '#fff' }}>৳<CountUp end={currentBalance} startColor="#ffffff" endColor="#10b981" /></span>
             </div>
           </div>
         </motion.div>

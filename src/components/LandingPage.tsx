@@ -133,20 +133,28 @@ const LandingPage = () => {
       }
     };
 
-    fetchWithTimeout("/api/site-settings")
-      .then((res) => {
+    const fetchData = async () => {
+      try {
+        const res = await fetchWithTimeout("/api/dashboard-data");
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-        if (data && data.title) {
-          setSettings(data);
-        } else {
-          throw new Error("Invalid settings data");
+        
+        // Ensure we got JSON
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Received non-JSON response from server");
         }
-      })
-      .catch((err) => {
-        console.error("Failed to load settings:", err);
+
+        const data = await res.json();
+        
+        if (data.settings) setSettings(data.settings);
+        if (data.features) setFeatures(data.features.filter((f: any) => f.is_active !== 0));
+        if (data.foodMenu) setFoodMenu(data.foodMenu);
+        if (data.showcaseItems) setShowcaseItems(data.showcaseItems);
+        if (data.notices) setNotices(data.notices.filter((n: any) => n.is_active !== 0));
+        if (data.routines) setRoutines(data.routines);
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+        // Set defaults on failure to prevent stuck loading state
         setSettings({
           title: 'আল হেরা মাদরাসা',
           description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
@@ -157,77 +165,19 @@ const LandingPage = () => {
           announcement: 'স্বাগতম',
           logo_url: null
         });
-      });
-
-    fetchWithTimeout("/api/features")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setFeatures(data.filter((f: any) => f.is_active !== 0));
-        } else {
-          throw new Error("Invalid features data");
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load features:", err);
         setFeatures([
           { id: 'f1', title: 'আধুনিক শিক্ষা', description: 'আধুনিক ও দ্বীনি শিক্ষার সমন্বয়', icon: 'BookOpen' },
           { id: 'f2', title: 'অভিজ্ঞ শিক্ষক', description: 'দক্ষ ও অভিজ্ঞ শিক্ষক মন্ডলী', icon: 'Users' },
           { id: 'f3', title: 'নিরাপদ পরিবেশ', description: 'ছাত্রদের জন্য নিরাপদ ও মনোরম পরিবেশ', icon: 'ShieldCheck' }
         ]);
-      });
-
-    fetchWithTimeout("/api/food-menu")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setFoodMenu(data);
-        } else {
-          throw new Error("Invalid food menu data");
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load food menu:", err);
         setFoodMenu([
           { id: 'm1', day: 'শনিবার', breakfast: 'খিচুড়ি', lunch: 'মাছ, ডাল', dinner: 'মুরগি' },
           { id: 'm2', day: 'রবিবার', breakfast: 'রুটি, ভাজি', lunch: 'গরু, ডাল', dinner: 'সবজি' }
         ]);
-      });
+      }
+    };
 
-    fetchWithTimeout("/api/showcase-items")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setShowcaseItems(data);
-        } else {
-          throw new Error("Invalid showcase data");
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load showcase items:", err);
-        setShowcaseItems([
-          { id: 's1', title: 'মাদরাসা প্রাঙ্গণ', url: 'https://picsum.photos/seed/campus/800/600', type: 'image' },
-          { id: 's2', title: 'শ্রেণীকক্ষ', url: 'https://picsum.photos/seed/class/800/600', type: 'image' }
-        ]);
-      });
-
-    fetchWithTimeout("/api/notices")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setNotices(data.filter((n: any) => n.is_active !== 0));
-        }
-      })
-      .catch(err => console.error("Failed to load notices:", err));
-
-    fetchWithTimeout("/api/routines")
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setRoutines(data);
-        }
-      })
-      .catch(err => console.error("Failed to load routines:", err));
+    fetchData();
   }, []);
 
   if (!settings) return (
@@ -517,7 +467,7 @@ const LandingPage = () => {
             {[
               { id: 'food-menu', icon: Utensils, label: 'খাবার মেনু', color: 'bg-rose-50 text-rose-600 border-rose-100', hover: 'hover:bg-rose-600 hover:text-white' },
               { id: 'notices', icon: Bell, label: 'নোটিশ বোর্ড', color: 'bg-blue-50 text-blue-600 border-blue-100', hover: 'hover:bg-blue-600 hover:text-white' },
-              { id: 'routines', icon: Calendar, label: 'রুটিন-সিলেবাস', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', hover: 'hover:bg-emerald-600 hover:text-white' },
+              { id: 'routines', icon: Calendar, label: 'সাজেশন ও রুটিন', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', hover: 'hover:bg-emerald-600 hover:text-white' },
               { id: 'showcase', icon: Globe, label: 'শোকেস', color: 'bg-amber-50 text-amber-600 border-amber-100', hover: 'hover:bg-amber-600 hover:text-white' },
               { id: 'leaderboard', icon: Award, label: 'সেরা ছাত্র', color: 'bg-purple-50 text-purple-600 border-purple-100', hover: 'hover:bg-purple-600 hover:text-white' },
               { id: 'rules', icon: FileText, label: 'নিয়মাবলী', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', hover: 'hover:bg-indigo-600 hover:text-white' },
@@ -696,8 +646,8 @@ const LandingPage = () => {
               >
                 <FileText className="w-4 h-4" /> Academic Resources
               </motion.div>
-              <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">রুটিন</h2>
-              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের রুটিন এখান থেকে ডাউনলোড করুন</p>
+              <h2 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">সাজেশন ও রুটিন</h2>
+              <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto">মাদরাসার সকল ক্লাসের সাজেশন ও রুটিন এখান থেকে ডাউনলোড করুন</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

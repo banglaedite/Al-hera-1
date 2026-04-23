@@ -29,12 +29,13 @@ export function FoodMenuManager() {
     if (submitting) return;
     setSubmitting(true);
     const formData = new FormData(e.target as HTMLFormElement);
-    const data: any = Object.fromEntries(formData.entries());
-    data.is_active = formData.get("is_active") ? 1 : 0;
-    
-    if (selectedTitle === "অন্যান্য" && customTitle) {
-      data.title = customTitle;
-    }
+    const data: any = {
+      title: selectedTitle === "অন্যান্য" ? (customTitle || "") : selectedTitle,
+      description: formData.get("description"),
+      image_url: formData.get("image_url"),
+      serial: Number(formData.get("serial") || 0),
+      is_active: formData.get("is_active") ? 1 : 0
+    };
     
     if (editingItem) {
       await fetch(`/api/admin/food-menu/${editingItem.id}`, {
@@ -123,7 +124,7 @@ export function FoodMenuManager() {
                     <option value="সকালের নাস্তা">সকালের নাস্তা</option>
                     <option value="দুপুরের খাবার">দুপুরের খাবার</option>
                     <option value="রাতের খাবার">রাতের খাবার</option>
-                    <option value="অন্যান্য">অন্যান্য</option>
+                    <option value="অন্যান্য">অন্যান্য (+ নতুন নাম)</option>
                   </select>
                 </div>
 

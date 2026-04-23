@@ -410,7 +410,7 @@ export default function AdminPanel() {
     localStorage.setItem("adminRole", adminRole);
     localStorage.setItem("adminPermissions", JSON.stringify(adminPermissions));
     if (isAuthenticated) {
-      Promise.all([
+      Promise.allSettled([
         fetchStats(),
         fetchStudents(),
         fetchTeachers(),
@@ -748,7 +748,7 @@ export default function AdminPanel() {
             <AnimatePresence mode="wait">
               {activeTab === "hifz" && (
                 <motion.div key="hifz" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <HifzManager classesList={classes.map(c => c.name)} />
+                  <HifzManager settings={settings} classesList={classes.map(c => c.name)} />
                 </motion.div>
               )}
               {activeTab === "dashboard" && (
@@ -1460,21 +1460,15 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
     }
   };
 
-  const handleEditClass = async (id: string, currentName: string) => {
-    const newName = prompt("নতুন ক্লাসের নাম দিন:", currentName);
-    if (!newName || newName === currentName) return;
-    
-    const pwd = prompt("ক্লাসটি এডিট করতে পাসওয়ার্ড দিন:");
-    if (!pwd) return;
-
+  const handleUpdate = async (id: string, name: string, order: number, pwd: string) => {
     try {
       const res = await fetch(`/api/classes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, password: pwd })
+        body: JSON.stringify({ name, order, password: pwd })
       });
       if (res.ok) {
-        addToast("ক্লাস এডিট করা হয়েছে। সংশ্লিষ্ট সব ডেটা আপডেট হচ্ছে।", "success");
+        addToast("ক্লাস আপডেট করা হয়েছে।", "success");
         fetchClasses();
       } else {
         const err = await res.json();
@@ -1483,6 +1477,19 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
     } catch (error) {
       addToast("সমস্যা হয়েছে", "error");
     }
+  };
+
+  const handleEditClass = async (id: string, currentName: string, currentOrder: number) => {
+    const newName = prompt("নতুন ক্লাসের নাম দিন:", currentName);
+    if (newName === null) return;
+    
+    const newOrder = prompt("নতুন সিরিয়াল নম্বর দিন (অঙ্কে):", (currentOrder || 0).toString());
+    if (newOrder === null) return;
+
+    const pwd = prompt("ক্লাসটি এডিট করতে পাসওয়ার্ড দিন:");
+    if (!pwd) return;
+
+    await handleUpdate(id, newName || currentName, Number(newOrder), pwd);
   };
 
   const handleMoveClass = async (id: string, dir: number, currentIndex: number) => {
@@ -1614,7 +1621,7 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
                 >
                   {c.is_active ? 'সক্রিয়' : 'হাইড'}
                 </button>
-                <button onClick={() => handleEditClass(c.id, c.name)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-xl transition-colors"><Edit2 className="w-5 h-5" /></button>
+                <button onClick={() => handleEditClass(c.id, c.name, c.order !== undefined ? c.order : index)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-xl transition-colors"><Edit2 className="w-5 h-5" /></button>
                 <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 className="w-5 h-5" /></button>
               </div>
             </div>
@@ -2082,7 +2089,7 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <input type="checkbox" checked={!!settings.show_showcase_directly} onChange={(e) => setSettings({...settings, show_showcase_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">সিলেবাস ও রুটিন সরাসরি হোমপেজে দেখান</label>
+            <label className="text-sm font-bold text-slate-700">সাজেশন ও রুটিন সরাসরি হোমপেজে দেখান</label>
             <input type="checkbox" checked={!!settings.show_routines_directly} onChange={(e) => setSettings({...settings, show_routines_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
@@ -2690,7 +2697,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [isDeletingStudent, setIsDeletingStudent] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
-  const [interviewPermissions, setInterviewPermissions] = useState<any[]>([{ name: "", phone: "", relation: "", nid: "" }]);
+  const [interviewPermissions, setInterviewPermissions] = useState<any[]>([{ name: "", phone: "", relation: "", nid: "", photo: "" }]);
   const [hasMoreStudents, setHasMoreStudents] = useState(false);
   const [offset, setOffset] = useState(0);
 
@@ -2700,8 +2707,19 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
     setInterviewPermissions(newList);
   };
 
+  const handleVisitorPhoto = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        handleInterviewPermissionChange(index, 'photo', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const addInterviewPermission = () => {
-    setInterviewPermissions([...interviewPermissions, { name: "", phone: "", relation: "", nid: "" }]);
+    setInterviewPermissions([...interviewPermissions, { name: "", phone: "", relation: "", nid: "", photo: "" }]);
   };
 
   const removeInterviewPermission = (index: number) => {
@@ -2711,10 +2729,10 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
 
   useEffect(() => {
     if (isEditing && selectedStudent) {
-      setInterviewPermissions(selectedStudent.interview_permissions || [{ name: "", phone: "", relation: "", nid: "" }]);
+      setInterviewPermissions(selectedStudent.interview_permissions || [{ name: "", phone: "", relation: "", nid: "", photo: "" }]);
     }
     if (isAdding) {
-      setInterviewPermissions([{ name: "", phone: "", relation: "", nid: "" }]);
+      setInterviewPermissions([{ name: "", phone: "", relation: "", nid: "", photo: "" }]);
     }
   }, [isEditing, isAdding, selectedStudent]);
   
@@ -3269,11 +3287,24 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             <div className="space-y-2">
                               <label className="text-xs font-bold text-slate-500 uppercase">এনআইডি নম্বর</label>
                               <input 
-                                required 
                                 value={person.nid} 
                                 onChange={(e) => handleInterviewPermissionChange(index, 'nid', e.target.value)} 
                                 className="w-full p-3 bg-white border border-slate-200 rounded-xl" 
                               />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase">দর্শনার্থীর ছবি</label>
+                              <div className="flex items-center gap-4">
+                                {person.photo && (
+                                  <img src={person.photo} alt="Visitor" className="w-16 h-16 rounded-xl object-cover border border-slate-200" />
+                                )}
+                                <input 
+                                  type="file" 
+                                  accept="image/*"
+                                  onChange={(e) => handleVisitorPhoto(index, e)}
+                                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs" 
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -3908,7 +3939,10 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
                         <p className="font-bold text-xl uppercase tracking-widest text-slate-800">শিক্ষকের স্বাক্ষর</p>
                       </div>
-                      <div className="text-center">
+                      <div className="text-center relative">
+                        {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
+                          <img src={settings.muhtamim_signature_url} className="h-16 mx-auto mb-[-25px] relative z-10" alt="Sig" referrerPolicy="no-referrer" />
+                        )}
                         <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
                         <p className="font-bold text-xl uppercase tracking-widest text-slate-800">অধ্যক্ষের স্বাক্ষর</p>
                       </div>
@@ -3980,6 +4014,12 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>রক্তের গ্রুপ: <span className="text-rose-600" style={{ color: '#e11d48' }}>{fullProfile.student.blood_group}</span></p>
                   <p className="text-sm font-bold text-slate-600" style={{ color: '#475569' }}>ফোন: <span className="text-slate-900" style={{ color: '#0f172a' }}>{fullProfile.student.phone}</span></p>
                 </div>
+                {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
+                  <div className="flex flex-col items-center mt-4">
+                    <img src={settings.muhtamim_signature_url} className="h-10 mb-[-15px] relative z-20" alt="Sig" referrerPolicy="no-referrer" />
+                    <div className="w-32 border-t-2 border-slate-900 pt-1 font-black text-slate-900 text-[10px]">অধ্যক্ষ / মুহতামিম</div>
+                  </div>
+                )}
               </div>
 
               {/* Profile Card Overlay */}
