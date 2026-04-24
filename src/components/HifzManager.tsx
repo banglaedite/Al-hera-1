@@ -564,15 +564,15 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
     if (para === "30") return 25;
     return 20;
   };
-  const toBn = (n: number | string) => n.toString().replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d as any] as any);
+  const toBnInner = (n: any) => n ? n.toString().replace(/\d/g, (d:any) => '০১২৩৪৫৬৭৮৯'[d as any] as any) : n;
   
   const formatDateBn = (dateStr: string) => {
     const d = new Date(dateStr);
-    const day = toBn(d.getDate().toString().padStart(2, '0'));
+    const day = toBnInner(d.getDate().toString().padStart(2, '0'));
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
-    const bMonth = toBn(month);
-    const bDay = toBn(d.getDate().toString().padStart(2, '0'));
-    const year = toBn(d.getFullYear().toString());
+    const bMonth = toBnInner(month);
+    const bDay = toBnInner(d.getDate().toString().padStart(2, '0'));
+    const year = toBnInner(d.getFullYear().toString());
     return `${bDay}-${bMonth}-${year}`;
   };
 
@@ -680,74 +680,52 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       )}
 
       {(activeTab === "add" || activeTab === "reports") && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Student List Sidebar - Hide on mobile if student selected to avoid scrolling */}
-          <div className={cn(
-            "lg:col-span-1 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden flex flex-col h-[800px]",
-            selectedStudent && "hidden lg:flex" 
-          )}>
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="ছাত্র খুঁজুন..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl focus:border-emerald-500 focus:ring-0 transition-colors"
-                />
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {filteredStudents.map(student => (
-                <button
-                  key={student.id}
-                  onClick={() => setSelectedStudent(student)}
-                  className={cn(
-                    "w-full text-left p-4 rounded-2xl transition-all border-2 flex items-center gap-4",
-                    selectedStudent?.id === student.id 
-                      ? "bg-emerald-50 border-emerald-200 shadow-md transform scale-[1.02]" 
-                      : "bg-white border-transparent hover:border-slate-100 hover:bg-slate-50"
-                  )}
-                >
-                  <div className="w-12 h-12 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm">
-                    {student.photo ? (
-                      <img 
-                        src={student.photo} 
-                        alt={student.name} 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-700 font-bold text-xs">
-                        {student.roll || "N/A"}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="font-bold text-slate-900 truncate">{student.name}</div>
-                    <div className="text-xs text-slate-500 mt-1 flex justify-between items-center">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded-md">{student.class}</span>
-                      <span className="font-bold text-emerald-600">রোল: {student.roll}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {filteredStudents.length === 0 && (
-                <div className="text-center py-10 text-slate-500 flex flex-col items-center">
-                  <User className="w-10 h-10 mb-2 opacity-20" />
-                  <p>কোনো ছাত্র পাওয়া যায়নি</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="lg:col-span-3">
+        <div className="space-y-8">
             {!selectedStudent ? (
-              <div className="bg-white h-[800px] rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center justify-center text-slate-400">
-                <Search className="w-16 h-16 mb-4 text-slate-200" />
-                <p className="text-xl font-bold">তালিকা থেকে একজন ছাত্র নির্বাচন করুন</p>
+              <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8">
+                <div className="max-w-2xl mx-auto relative mb-8">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="ছাত্র খুঁজুন..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 focus:ring-0 transition-colors font-bold text-lg"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                  {filteredStudents.map(student => (
+                    <button
+                      key={student.id}
+                      onClick={() => setSelectedStudent(student)}
+                      className="group p-6 rounded-[2rem] border-2 border-slate-100 hover:border-emerald-200 bg-white hover:bg-emerald-50 transition-all text-center flex flex-col items-center gap-4 shadow-sm hover:shadow-xl"
+                    >
+                      <div className="w-24 h-24 rounded-full bg-slate-100 overflow-hidden border-4 border-white shadow-lg group-hover:scale-105 transition-transform">
+                        <img 
+                          src={student.photo_url || student.photo || `https://picsum.photos/seed/${student.id}/200`} 
+                          alt={student.name} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div className="w-full">
+                        <div className="font-black text-slate-900 text-lg truncate mb-1">{student.name}</div>
+                        <div className="flex justify-center items-center gap-2 text-xs font-bold">
+                          <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full">{student.class}</span>
+                          <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">রোল: {toBn(student.roll)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                
+                {filteredStudents.length === 0 && (
+                  <div className="text-center py-20 text-slate-500 flex flex-col items-center">
+                    <User className="w-16 h-16 mb-4 opacity-20" />
+                    <p className="text-xl font-bold">কোনো ছাত্র পাওয়া যায়নি</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-6">
@@ -755,39 +733,41 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                 <motion.div 
                   initial={{ opacity: 0, y: -20 }} 
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col md:flex-row items-center gap-6"
+                  className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col md:flex-row items-center gap-6 relative"
                 >
+                  <button 
+                    onClick={() => setSelectedStudent(null)}
+                    className="absolute top-6 right-6 px-4 py-2 bg-rose-50 text-rose-600 rounded-xl font-bold text-sm hover:bg-rose-100 transition-all flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" /> বাতিল করুন
+                  </button>
+                  
                   <div className="w-24 h-24 rounded-full bg-slate-100 overflow-hidden border-4 border-emerald-50 shadow-lg">
-                    {selectedStudent.photo ? (
+                    {selectedStudent.photo_url || selectedStudent.photo ? (
                       <img 
-                        src={selectedStudent.photo} 
+                        src={selectedStudent.photo_url || selectedStudent.photo} 
                         alt={selectedStudent.name} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-700 text-2xl font-black">
-                        {selectedStudent.roll}
+                        {toBn(selectedStudent.roll)}
                       </div>
                     )}
                   </div>
                   <div className="flex-1 text-center md:text-left">
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
-                      <h2 className="text-3xl font-black text-slate-900">{selectedStudent.name}</h2>
-                      <button 
-                        onClick={() => setSelectedStudent(null)}
-                        className="lg:hidden px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all w-fit mx-auto md:mx-0"
-                      >
-                        ← ছাত্র লিস্টে ফিরুন
-                      </button>
+                      <h2 className="text-3xl font-black text-slate-900 pr-24">{selectedStudent.name}</h2>
                     </div>
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-3">
                       <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2">
-                        <User className="w-4 h-4" /> রোল: {selectedStudent.roll}
+                        <User className="w-4 h-4" /> রোল: {toBn(selectedStudent.roll)}
                       </span>
                       <span className="bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2">
                         <BookOpen className="w-4 h-4" /> {selectedStudent.class}
                       </span>
+
                       <span className="bg-purple-100 text-purple-700 px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2">
                         ID: {selectedStudent.studentId || "N/A"}
                       </span>
@@ -1293,7 +1273,6 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
               </div>
             )}
           </div>
-        </div>
       )}
 
       {activeTab === "overview" && (
@@ -1344,14 +1323,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                           <td className="px-6 py-5 rounded-l-2xl border-y border-l border-slate-100">
                             <div className="flex items-center gap-4">
                               <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-lg overflow-hidden border-2 border-emerald-50 shadow-inner">
-                                {student.photo_url ? (
-                                  <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                ) : (
-                                  <div className="flex flex-col items-center leading-none">
-                                    <span className="text-[10px] uppercase opacity-50">Roll</span>
-                                    <span>{toBn(student.roll)}</span>
-                                  </div>
-                                )}
+                                <img src={student.photo_url || student.photo || `https://picsum.photos/seed/${student.id}/100`} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               </div>
                               <div className="font-black text-xl text-slate-900 tracking-tight">{student.name}</div>
                             </div>

@@ -2448,7 +2448,19 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const attendance = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
       const resultsSnapshot = await firestore.collection("results").where("student_id", "==", studentId).get();
-      const results = resultsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      let results = resultsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      // Deduplicate results per exam out of the student's results
+      results.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+      const uniqueResults = [];
+      const seenSubjectExam = new Set();
+      results.forEach(r => {
+        const key = `${r.exam_name}_${r.year || new Date().getFullYear().toString()}_${r.subject}`;
+        if (!seenSubjectExam.has(key)) {
+          seenSubjectExam.add(key);
+          uniqueResults.push(r);
+        }
+      });
+      results = uniqueResults;
 
       const hifzSnapshot = await firestore.collection("hifz_records").where("student_id", "==", studentId).get();
       const hifz = hifzSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -2466,9 +2478,18 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
             .get();
           const allExamResults = allExamResultsSnapshot.docs.map(doc => doc.data() as any);
 
+          // Sort by updated_at or created_at descending to take the latest result for duplicates
+          allExamResults.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+
           const studentTotals: any = {};
+          const processedSubjects: any = {};
           allExamResults.forEach(r => {
-            studentTotals[r.student_id] = (studentTotals[r.student_id] || 0) + r.marks;
+            const sid = r.student_id;
+            if (!processedSubjects[sid]) processedSubjects[sid] = new Set();
+            if (!processedSubjects[sid].has(r.subject)) {
+               processedSubjects[sid].add(r.subject);
+               studentTotals[sid] = (studentTotals[sid] || 0) + r.marks;
+            }
           });
 
           const sortedTotals = Object.entries(studentTotals).map(([id, total]) => ({ student_id: id, total })).sort((a: any, b: any) => b.total - a.total);
@@ -3652,16 +3673,28 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       console.log(`Found ${students.length} students for class ${className}`);
       
-      let resultsQuery = db.collection("results")
-        .where("exam_name", "==", exam_name || "")
-        .where("class_name", "==", className);
+      const resultsSnapshot = await db.collection("results").where("class_name", "==", className).get();
+      let results = resultsSnapshot.docs.map(doc => doc.data() as any);
       
+      if (exam_name) {
+        results = results.filter((r: any) => r.exam_name === exam_name);
+      }
       if (year) {
-        resultsQuery = resultsQuery.where("year", "==", year);
+        results = results.filter((r: any) => String(r.year) === String(year));
       }
 
-      const resultsSnapshot = await resultsQuery.get();
-      const results = resultsSnapshot.docs.map(doc => doc.data() as any);
+      // Deduplicate results per student and subject
+      results.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+      const uniqueResults = [];
+      const seenKey = new Set();
+      results.forEach(r => {
+        const key = `${r.student_id}_${r.subject}`;
+        if (!seenKey.has(key)) {
+          seenKey.add(key);
+          uniqueResults.push(r);
+        }
+      });
+      results = uniqueResults;
       
       // Fetch current active subjects for this class
       const subjectsSnapshot = await db.collection("subjects").where("class", "==", className).get();
@@ -3765,21 +3798,56 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.post("/api/results", async (req, res) => {
-    const { student_id, exam_name, subject, marks, grade, date } = req.body;
+    const { student_id, exam_name, subject, marks, grade, date, year, class_name } = req.body;
     try {
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
-      await db.collection("results").add({
-        student_id,
-        exam_name,
-        subject,
-        marks: Number(marks),
-        grade,
-        date,
-        created_at: new Date().toISOString()
+
+      const existingSnapshot = await db.collection("results")
+        .where("student_id", "==", student_id)
+        .where("exam_name", "==", exam_name)
+        .where("subject", "==", subject)
+        .get();
+
+      // Check year as well, in memory if needed, but above query might return multiple years.
+      const exactMatches = existingSnapshot.docs.filter(d => {
+         const data = d.data();
+         return (data.year || new Date().getFullYear().toString()) === (year || new Date().getFullYear().toString());
       });
+
+      if (exactMatches.length > 0) {
+        // Update the first matching document
+        const docId = exactMatches[0].id;
+        await db.collection("results").doc(docId).update({
+          marks: Number(marks),
+          grade,
+          date,
+          class_name: class_name || "",
+          updated_at: new Date().toISOString()
+        });
+        
+        // Clean up any remaining duplicates
+        if (exactMatches.length > 1) {
+          const deletePromises = exactMatches.slice(1).map(doc => db.collection("results").doc(doc.id).delete());
+          await Promise.all(deletePromises);
+        }
+      } else {
+        await db.collection("results").add({
+          student_id,
+          exam_name,
+          subject,
+          marks: Number(marks),
+          grade,
+          date,
+          class_name: class_name || "",
+          year: year || new Date().getFullYear().toString(),
+          created_at: new Date().toISOString()
+        });
+      }
+
       res.json({ success: true });
     } catch (error) {
+      console.error(error);
       res.status(500).json({ error: "Failed to save result" });
     }
   });
@@ -3789,7 +3857,20 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
       const snapshot = await db.collection("results").where("student_id", "==", req.params.studentId).get();
-      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      
+      results.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+      const uniqueResults = [];
+      const seenKey = new Set();
+      results.forEach(r => {
+        const key = `${r.exam_name}_${r.year || new Date().getFullYear().toString()}_${r.subject}`;
+        if (!seenKey.has(key)) {
+          seenKey.add(key);
+          uniqueResults.push(r);
+        }
+      });
+      results = uniqueResults;
+      
       res.json(results);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch results" });
@@ -4278,9 +4359,18 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
   // --- Subjects ---
   app.get("/api/subjects/:className", async (req, res) => {
-    console.log(`Fetching subjects for class: ${req.params.className}`);
+    console.log(`Fetching subjects for class: ${req.params.className}, exam: ${req.query.exam}, year: ${req.query.year}`);
     try {
-      const snapshot = await firestore.collection("subjects").where("class", "==", req.params.className).get();
+      let query = firestore.collection("subjects").where("class", "==", req.params.className);
+      
+      if (req.query.exam) {
+        query = query.where("exam_name", "==", req.query.exam as string);
+      }
+      if (req.query.year) {
+        query = query.where("year", "==", req.query.year as string);
+      }
+
+      const snapshot = await query.get();
       let subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       // Sort subjects by order, then by creation date or name
       subjects.sort((a, b) => {
@@ -4297,12 +4387,14 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.post("/api/subjects", async (req, res) => {
-    const { class_name: className, name, full_marks, order } = req.body;
+    const { class_name: className, exam_name, year, name, full_marks, order } = req.body;
     try {
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
       await db.collection("subjects").add({
         class: className || "Unknown",
+        exam_name: exam_name || "",
+        year: year || new Date().getFullYear().toString(),
         name,
         full_marks: full_marks || 100,
         order: order || 0,

@@ -3747,7 +3747,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             fetch("/api/results", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ student_id: fullProfile.student.id, exam_name: exam, year, subject, marks: Number(marks), grade, date: new Date().toISOString() })
+                              body: JSON.stringify({ student_id: fullProfile.student.id, exam_name: exam, year, subject, marks: Number(marks), grade, date: new Date().toISOString(), class_name: fullProfile.student.class })
                             }).then(() => fetchFullProfile(fullProfile.student.id));
                           }
                         }}
@@ -3788,26 +3788,21 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         <p className="text-2xl font-black text-slate-900">{fullProfile.examStats[selectedResultExam].highestMarks}</p>
                       </div>
                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
-                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">উপস্থিতি</p>
-                        <p className="text-2xl font-black text-slate-900">
-                          {fullProfile.attendance.length > 0 
-                            ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
-                            : 0}%
-                        </p>
-                      </div>
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
-                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">ফলাফল</p>
-                        <p className={cn("text-2xl font-black", 
-                          (() => {
+                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">গ্রেড</p>
+                        <p className={cn("text-2xl font-black", (() => {
+                            const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
                             const [exam, year] = selectedResultExam.split('|');
-                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
-                              ? "text-rose-600" 
-                              : "text-emerald-600"
-                          })()
-                        )}>
+                            const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
+                            const avg = total / numSubjects;
+                            const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                            return grade === 'F' ? "text-rose-600" : "text-emerald-600";
+                          })())}>
                           {(() => {
+                            const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
                             const [exam, year] = selectedResultExam.split('|');
-                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "পাস"
+                            const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
+                            const avg = total / numSubjects;
+                            return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
                           })()}
                         </p>
                       </div>
@@ -4074,7 +4069,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                          <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 print:text-2xl">লেটার গ্রেড (Grade)</p>
                          <p className="text-3xl font-black text-white print:text-[100pt] leading-none">
                            {(() => {
-                             const avg = fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
+                             const avg = (fullProfile?.examStats?.[selectedResultExam]?.myTotal || 0) / (fullProfile.results.filter((r: any) => {
                                const [exam, year] = selectedResultExam.split('|');
                                return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
                              }).length || 1);
@@ -4127,16 +4122,16 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                       <div className="space-y-4 print:space-y-6">
                         <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
                            <span className="text-sm font-bold text-slate-500 print:text-3xl">মোট নম্বর:</span>
-                           <span className="text-xl font-black text-emerald-900 print:text-5xl">{toBn(fullProfile.examStats[selectedResultExam].myTotal)}</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
-                           <span className="text-sm font-bold text-slate-500 print:text-3xl">গড় নম্বর:</span>
-                           <span className="text-xl font-black text-emerald-900 print:text-5xl">
-                             {toBn((fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
-                               const [exam, year] = selectedResultExam.split('|');
-                               return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
-                             }).length || 1)).toFixed(1))}
-                           </span>
+                            <span className="text-xl font-black text-emerald-900 print:text-5xl">{toBn(fullProfile?.examStats?.[selectedResultExam]?.myTotal || 0)}</span>
+                         </div>
+                         <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
+                            <span className="text-sm font-bold text-slate-500 print:text-3xl">গড় নম্বর:</span>
+                            <span className="text-xl font-black text-emerald-900 print:text-5xl">
+                              {toBn(((fullProfile?.examStats?.[selectedResultExam]?.myTotal || 0) / (fullProfile.results.filter((r: any) => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
+                              }).length || 1)).toFixed(1))}
+                            </span>
                         </div>
                       </div>
                     </div>
@@ -4898,9 +4893,9 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   };
 
   const fetchClassSubjects = async () => {
-    if (!selectedClass) return;
+    if (!selectedClass || !selectedExam || !selectedYear) return;
     try {
-      const res = await fetch(`/api/subjects/${encodeURIComponent(selectedClass)}`);
+      const res = await fetch(`/api/subjects/${encodeURIComponent(selectedClass)}?exam=${encodeURIComponent(selectedExam)}&year=${encodeURIComponent(selectedYear)}`);
       if (!res.ok) throw new Error("Failed to fetch subjects");
       
       const contentType = res.headers.get("content-type");
@@ -4917,13 +4912,13 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   };
 
   const handleAddSubject = async () => {
-    if (!newSubject.name || !selectedClass) return;
+    if (!newSubject.name || !selectedClass || !selectedExam || !selectedYear) return;
     setAddingSubject(true);
     try {
       const res = await fetch("/api/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newSubject, class_name: selectedClass, full_marks: newSubject.total_marks })
+        body: JSON.stringify({ ...newSubject, class_name: selectedClass, exam_name: selectedExam, year: selectedYear, full_marks: newSubject.total_marks })
       });
       if (!res.ok) throw new Error("Failed to add subject");
       setNewSubject({ name: "", total_marks: 100, order: 0 });
@@ -5325,6 +5320,15 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
         {selectedClass ? (
           <>
+             <div className="flex gap-4 mb-8">
+               <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold">
+                 {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+               </select>
+               <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold min-w-[200px]">
+                 <option value="">পরীক্ষা নির্বাচন করুন</option>
+                 {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+               </select>
+             </div>
              <div className="flex gap-4 mb-8 border-b border-slate-100 pb-1">
               <button 
                 onClick={() => setActiveTab("results")}
@@ -5466,28 +5470,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
             {activeTab === "result-entry" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                  <h4 className="text-lg font-black text-slate-900 mb-6 font-display">পরীক্ষা ও শ্রেণী নির্বাচন করুন</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
-                      {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                    <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
-                      <option value="">পরীক্ষা নির্বাচন করুন</option>
-                      {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
-                    </select>
-                    <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
-                      <option value="">শ্রেণী নির্বাচন করুন</option>
-                      {classes.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <button 
-                    onClick={fetchClassResults}
-                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all font-display"
-                  >
-                    রেজাল্ট লোড করুন
-                  </button>
-                </div>
+
 
                 {classResults.length > 0 && (
                   <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">

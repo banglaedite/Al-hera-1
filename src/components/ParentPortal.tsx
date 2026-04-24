@@ -1417,31 +1417,22 @@ export default function ParentPortal() {
                             <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>সর্বোচ্চ নম্বর</p>
                             <p className="text-2xl font-black" style={{ color: '#1e293b' }}>{fullProfile.examStats[selectedResultExam].highestMarks}</p>
                           </div>
-                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #06b6d4' }}>
-                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>উপস্থিতি</p>
-                            <p className="text-2xl font-black" style={{ color: '#1e293b' }}>
-                              {fullProfile.attendance.length > 0 
-                                ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
-                                : 0}%
-                            </p>
-                          </div>
                           <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #ec4899' }}>
-                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>ফলাফল</p>
-                            <p className={cn("text-2xl font-black", 
-                              (() => {
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>গ্রেড</p>
+                            <p className="text-3xl font-black" style={(() => {
+                                const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
                                 const [exam, year] = selectedResultExam.split('|');
-                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
-                                  ? "text-rose-600" 
-                                  : "text-emerald-600"
-                              })()
-                            )} style={(() => {
-                                const [exam, year] = selectedResultExam.split('|');
-                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
-                                  ? { color: '#e11d48' } : { color: '#059669' };
+                                const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
+                                const avg = total / numSubjects;
+                                const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                                return grade === 'F' ? { color: '#e11d48' } : { color: '#059669' };
                               })()}>
                               {(() => {
+                                const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
                                 const [exam, year] = selectedResultExam.split('|');
-                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') ? "ফেইল" : "উত্তীর্ণ"
+                                const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
+                                const avg = total / numSubjects;
+                                return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
                               })()}
                             </p>
                           </div>
