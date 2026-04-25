@@ -132,7 +132,10 @@
         "id": { "type": "string" },
         "class": { "type": "string" },
         "name": { "type": "string" },
-        "full_marks": { "type": "number" }
+        "full_marks": { "type": "number" },
+        "year": { "type": "string" },
+        "exam_name": { "type": "string" },
+        "order": { "type": "number" }
       },
       "required": ["id", "class", "name"]
     },

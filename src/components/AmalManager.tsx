@@ -32,7 +32,9 @@ export function AmalManager() {
     try {
       const res = await fetch("/api/admin/amal-tasks");
       const data = await res.json();
-      if (Array.isArray(data)) setTasks(data);
+      if (Array.isArray(data)) {
+        setTasks(data.sort((a, b) => (a.serial || 0) - (b.serial || 0)));
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -87,6 +89,7 @@ export function AmalManager() {
     const data = {
       title: formData.get("title"),
       target: formData.get("target"),
+      serial: parseInt(formData.get("serial") as string) || 0,
       is_active: true
     };
 
@@ -462,15 +465,28 @@ export function AmalManager() {
                 </button>
               </div>
               <form onSubmit={handleSubmit} className="p-8 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">আমলের নাম (যেমন: ৫ ওয়াক্ত নামাজ, জিকির)</label>
-                  <input 
-                    name="title"
-                    required
-                    defaultValue={editingItem?.title || ""}
-                    placeholder="আমলের নাম লিখুন" 
-                    className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500" 
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">আমলের নাম</label>
+                    <input 
+                      name="title"
+                      required
+                      defaultValue={editingItem?.title || ""}
+                      placeholder="আমলের নাম লিখুন" 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">সিরিয়াল নম্বর</label>
+                    <input 
+                      name="serial"
+                      type="number"
+                      required
+                      defaultValue={editingItem?.serial || 0}
+                      placeholder="সিরিয়াল নম্বর" 
+                      className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500" 
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">

@@ -22,6 +22,7 @@ import {
   TrendingUp, 
   TrendingDown,
   Plus,
+  PlusCircle,
   Search,
   Loader2,
   GraduationCap,
@@ -386,7 +387,7 @@ export default function AdminPanel() {
   const [adminRole, setAdminRole] = useState(() => localStorage.getItem("adminRole") || "admin");
   const [adminPermissions, setAdminPermissions] = useState<string[]>(() => {
     const perms = localStorage.getItem("adminPermissions");
-    return perms ? JSON.parse(perms) : ["all"];
+    return perms ? JSON.parse(perms) : [];
   });
   const [password, setPassword] = useState("");
   const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
@@ -1675,6 +1676,12 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [teacherSearch, setTeacherSearch] = useState("");
+  const [showTeacherDropdown, setShowTeacherDropdown] = useState(false);
+
+  const filteredTeachers = teachers.filter(t => 
+    t.name.toLowerCase().includes(teacherSearch.toLowerCase()) || 
+    (t.email && t.email.toLowerCase().includes(teacherSearch.toLowerCase()))
+  );
 
   useEffect(() => {
     if (formData.teacherId) {
@@ -1784,13 +1791,16 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
       teacherId: admin.teacherId || "",
       permissions: admin.permissions || []
     });
+    addToast("এডিট মোড চালু হয়েছে", "info");
   };
 
   const handleDeleteSubAdmin = async (id: string) => {
     const pwd = prompt("সাব-এডমিন মুছে ফেলতে পাসওয়ার্ড দিন:");
     if (!pwd) return;
+    
+    setLoading(true);
     try {
-      const res = await fetch(`/api/admin/sub-admins/${id}`, { 
+      const res = await fetch(`/api/sub-admins/${id}`, { 
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pwd })
@@ -1799,10 +1809,14 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
         addToast("সাব-এডমিন মুছে ফেলা হয়েছে", "success");
         fetchSubAdmins();
       } else {
-        addToast("ভুল পাসওয়ার্ড বা সমস্যা হয়েছে", "error");
+        const err = await res.json();
+        addToast(err.error || "ভুল পাসওয়ার্ড বা সমস্যা হয়েছে", "error");
       }
     } catch (error) {
-      addToast("সমস্যা হয়েছে", "error");
+      console.error(error);
+      addToast("সার্ভার সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1829,40 +1843,59 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
           <form onSubmit={handleAddSubAdmin} className="space-y-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
             <div className="grid grid-cols-1 gap-4">
               <div className="relative">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">শিক্ষক নির্বাচন করুন (সার্চ করুন)</label>
-                <input 
-                  type="text"
-                  placeholder="শিক্ষকের নাম বা ইমেইল লিখে খুঁজুন..."
-                  value={teacherSearch}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setTeacherSearch(val);
-                    const teacher = teachers.find(t => `${t.name} (${t.email})`.toLowerCase().includes(val.toLowerCase()));
-                    if (teacher) {
-                      setFormData({ ...formData, teacherId: teacher.id, email: teacher.email || formData.email });
-                    } else {
-                      setFormData({ ...formData, teacherId: "" });
-                    }
-                  }}
-                  list="teachers-datalist"
-                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-white font-medium text-slate-700"
-                />
-                <datalist id="teachers-datalist">
-                  {teachers.map(t => (
-                    <option key={t.id} value={`${t.name} (${t.email})`} />
-                  ))}
-                </datalist>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">জিমেইল এড্রেস</label>
-                <input 
-                  type="email"
-                  placeholder="এক্সেস এর জন্য জিমেইল দিন"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-white font-medium text-slate-700"
-                />
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">শিক্ষক নির্বাচন করুন</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    placeholder="শিক্ষকের নাম বা ইমেইল লিখে খুঁজুন..."
+                    value={teacherSearch}
+                    onChange={(e) => {
+                      setTeacherSearch(e.target.value);
+                      setShowTeacherDropdown(true);
+                      setFormData({ ...formData, teacherId: "", email: "" });
+                    }}
+                    onFocus={() => setShowTeacherDropdown(true)}
+                    className="w-full px-5 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all bg-white font-medium text-slate-700"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowTeacherDropdown(!showTeacherDropdown)}
+                    className="p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-colors"
+                  >
+                     <Search className="w-6 h-6 text-slate-500" />
+                  </button>
+                </div>
+                
+                {showTeacherDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-3xl shadow-xl max-h-60 overflow-y-auto z-10 p-2 custom-scrollbar">
+                    {filteredTeachers.length > 0 ? (
+                      filteredTeachers.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, teacherId: t.id, email: t.email || "" });
+                            setTeacherSearch(`${t.name} (${t.email})`);
+                            setShowTeacherDropdown(false);
+                          }}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-emerald-50 rounded-2xl transition-colors"
+                        >
+                          <img src={t.photo_url || "/placeholder-teacher.png"} alt={t.name} className="w-10 h-10 rounded-full object-cover" />
+                          <div className="text-left">
+                            <p className="font-bold text-slate-900">{t.name}</p>
+                            <p className="text-xs text-slate-500">{t.email}</p>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="p-4 text-center text-slate-400">কোন শিক্ষক পাওয়া যায় নি</p>
+                    )}
+                  </div>
+                )}
+                
+                {formData.email && (
+                  <p className="mt-2 text-xs font-bold text-emerald-600 ml-1">নির্বাচিত ইমেইল: {formData.email}</p>
+                )}
               </div>
             </div>
 
@@ -1944,7 +1977,7 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-2 transition-opacity">
                       <button 
                         onClick={() => handleEdit(admin)}
                         className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
@@ -2859,9 +2892,9 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
       
       setFullProfile(safeData);
       
-      // Set default selected exam to the latest one
+      // Set default selected exam to the latest one (using exam|year format)
       if (safeData.results && safeData.results.length > 0) {
-        const exams = [...new Set(safeData.results.map((r: any) => r.exam_name))];
+        const exams = [...new Set(safeData.results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))];
         setSelectedResultExam(exams[exams.length - 1] as string);
       }
     } catch (error) {
@@ -3747,7 +3780,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             fetch("/api/results", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ student_id: fullProfile.student.id, exam_name: exam, year, subject, marks: Number(marks), grade, date: new Date().toISOString(), class_name: fullProfile.student.class })
+                              body: JSON.stringify({ student_id: fullProfile.student.id, exam_name: exam, year, subject, marks: Number(marks), grade, date: new Date().toISOString() })
                             }).then(() => fetchFullProfile(fullProfile.student.id));
                           }
                         }}
@@ -3788,21 +3821,29 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         <p className="text-2xl font-black text-slate-900">{fullProfile.examStats[selectedResultExam].highestMarks}</p>
                       </div>
                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
-                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">গ্রেড</p>
-                        <p className={cn("text-2xl font-black", (() => {
-                            const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
+                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">উপস্থিতি</p>
+                        <p className="text-2xl font-black text-slate-900">
+                          {fullProfile.attendance.length > 0 
+                            ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
+                            : 0}%
+                        </p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
+                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">ফলাফল</p>
+                        <p className={cn("text-2xl font-black", 
+                          (() => {
                             const [exam, year] = selectedResultExam.split('|');
-                            const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
-                            const avg = total / numSubjects;
-                            const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
-                            return grade === 'F' ? "text-rose-600" : "text-emerald-600";
-                          })())}>
+                            return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                              ? "text-rose-600" 
+                              : "text-emerald-600"
+                          })()
+                        )}>
                           {(() => {
-                            const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
                             const [exam, year] = selectedResultExam.split('|');
-                            const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
-                            const avg = total / numSubjects;
-                            return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                            const results = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                            if (results.length === 0) return "-";
+                            const avg = fullProfile.examStats[selectedResultExam].myTotal / results.length;
+                            return results.some((r: any) => r.grade === 'F') ? "F" : (avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F");
                           })()}
                         </p>
                       </div>
@@ -3950,7 +3991,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                       </div>
                       <div className="text-center">
                         <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
-                        <p className="font-bold text-xl uppercase tracking-widest text-slate-800">অধ্যক্ষের স্বাক্ষর</p>
+                        <p className="font-bold text-xl uppercase tracking-widest text-slate-800">মুহতামিমের স্বাক্ষর</p>
                       </div>
                     </div>
                   </div>
@@ -4069,11 +4110,13 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                          <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 print:text-2xl">লেটার গ্রেড (Grade)</p>
                          <p className="text-3xl font-black text-white print:text-[100pt] leading-none">
                            {(() => {
-                             const avg = (fullProfile?.examStats?.[selectedResultExam]?.myTotal || 0) / (fullProfile.results.filter((r: any) => {
-                               const [exam, year] = selectedResultExam.split('|');
-                               return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
-                             }).length || 1);
-                             return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                             const [exam, year] = selectedResultExam.split('|');
+                             const results = fullProfile.results.filter((r: any) => 
+                               r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year
+                             );
+                             if (results.length === 0) return "-";
+                             const avg = fullProfile.examStats[selectedResultExam].myTotal / results.length;
+                             return results.some((r: any) => r.grade === 'F') ? "F" : (avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F");
                            })()}
                          </p>
                        </div>
@@ -4117,24 +4160,26 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                   </table>
 
                   <div className="space-y-6 print:space-y-12">
-                    <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-4 border-emerald-100 print:p-12 print:rounded-[3rem] print:border-[8px]">
-                      <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-4 print:text-2xl print:mb-6 text-center">ফলাফল সারসংক্ষেপ</h4>
-                      <div className="space-y-4 print:space-y-6">
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
-                           <span className="text-sm font-bold text-slate-500 print:text-3xl">মোট নম্বর:</span>
-                            <span className="text-xl font-black text-emerald-900 print:text-5xl">{toBn(fullProfile?.examStats?.[selectedResultExam]?.myTotal || 0)}</span>
-                         </div>
-                         <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
-                            <span className="text-sm font-bold text-slate-500 print:text-3xl">গড় নম্বর:</span>
-                            <span className="text-xl font-black text-emerald-900 print:text-5xl">
-                              {toBn(((fullProfile?.examStats?.[selectedResultExam]?.myTotal || 0) / (fullProfile.results.filter((r: any) => {
-                                const [exam, year] = selectedResultExam.split('|');
-                                return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
-                              }).length || 1)).toFixed(1))}
-                            </span>
+                      {selectedResultExam && fullProfile && fullProfile.examStats && fullProfile.examStats[selectedResultExam] && (
+                        <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-4 border-emerald-100 print:p-12 print:rounded-[3rem] print:border-[8px]">
+                          <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-4 print:text-2xl print:mb-6 text-center">ফলাফল সারসংক্ষেপ</h4>
+                          <div className="space-y-4 print:space-y-6">
+                            <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
+                               <span className="text-sm font-bold text-slate-500 print:text-3xl">মোট নম্বর:</span>
+                               <span className="text-xl font-black text-emerald-900 print:text-5xl">{toBn(fullProfile.examStats[selectedResultExam].myTotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-white p-4 rounded-2xl print:p-6 print:rounded-[2rem]">
+                               <span className="text-sm font-bold text-slate-500 print:text-3xl">গড় নম্বর:</span>
+                               <span className="text-xl font-black text-emerald-900 print:text-5xl">
+                                 {toBn((fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
+                                   const [exam, year] = selectedResultExam.split('|');
+                                   return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
+                                 }).length || 1)).toFixed(1))}
+                               </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      )}
 
                     <div className="flex justify-between items-end pt-10 print:pt-16 px-4">
                       <div className="text-left">
@@ -4735,6 +4780,8 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [newExamName, setNewExamName] = useState("");
   const [isAddingExam, setIsAddingExam] = useState(false);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
+  const [editExamName, setEditExamName] = useState("");
 
   const classes = classesList;
 
@@ -4742,7 +4789,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     try {
       const res = await fetch("/api/exams");
       if (!res.ok) throw new Error("Failed to fetch exams");
-      const contentType = res.headers.get("content-type");
+      const contentType = res.headers ? res.headers.get("content-type") : "";
       if (!contentType || !contentType.includes("application/json")) {
         const errorText = await res.text();
         console.error("Non-JSON or error response:", errorText);
@@ -4793,11 +4840,71 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     await fetch("/api/exams", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newExamName, year: selectedYear })
+      body: JSON.stringify({ 
+        name: newExamName, 
+        year: selectedYear,
+        className: selectedClass
+      })
     });
     setNewExamName("");
     setIsAddingExam(false);
     fetchExams();
+  };
+
+  const handleEditExam = async (id: string) => {
+    if (!editExamName) return;
+    const password = prompt("এডিট করতে পাসওয়ার্ড দিন:");
+    if (!password) return;
+
+    try {
+      const res = await fetch(`/api/exams/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editExamName, year: selectedYear, password })
+      });
+      if (res.ok) {
+        addToast("পরীক্ষা আপডেট করা হয়েছে", "success");
+        setEditingExamId(null);
+        fetchExams();
+      } else {
+        const data = await res.json();
+        addToast(data.error || "আপডেট করতে সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("নেটওয়ার্ক সমস্যা", "error");
+    }
+  };
+
+  const [examToDelete, setExamToDelete] = useState<{id: string, name: string} | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+
+  const handleDeleteExam = async (id: string, name: string) => {
+    setExamToDelete({ id, name });
+  };
+
+  const confirmDeleteExam = async (password: string) => {
+    if (!examToDelete || !password) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/exams/${examToDelete.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      });
+      if (res.ok) {
+        addToast("পরীক্ষা এবং সংশ্লিষ্ট সকল রেজাল্ট মুছে ফেলা হয়েছে", "success");
+        setExamToDelete(null);
+        fetchExams();
+      } else {
+        const data = await res.json();
+        addToast(data.error || "মুছতে সমস্যা হয়েছে", "error");
+      }
+    } catch (error) {
+      addToast("নেটওয়ার্ক সমস্যা", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const topScorersPerSubject = React.useMemo(() => {
@@ -4825,7 +4932,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
       console.log("Fetching results from:", url);
       const res = await fetch(url);
       
-      const contentType = res.headers.get("content-type");
+      const contentType = res.headers ? res.headers.get("content-type") : "";
       if (!res.ok || !contentType || !contentType.includes("application/json")) {
         const errorText = await res.text();
         console.error("Non-JSON or error response:", errorText);
@@ -4893,12 +5000,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   };
 
   const fetchClassSubjects = async () => {
-    if (!selectedClass || !selectedExam || !selectedYear) return;
+    if (!selectedClass) return;
     try {
-      const res = await fetch(`/api/subjects/${encodeURIComponent(selectedClass)}?exam=${encodeURIComponent(selectedExam)}&year=${encodeURIComponent(selectedYear)}`);
+      const res = await fetch(`/api/subjects/${encodeURIComponent(selectedClass)}?year=${selectedYear}&exam_name=${selectedExam}`);
       if (!res.ok) throw new Error("Failed to fetch subjects");
       
-      const contentType = res.headers.get("content-type");
+      const contentType = res.headers ? res.headers.get("content-type") : "";
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error("Invalid content type from server: expected JSON");
       }
@@ -4912,13 +5019,19 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   };
 
   const handleAddSubject = async () => {
-    if (!newSubject.name || !selectedClass || !selectedExam || !selectedYear) return;
+    if (!newSubject.name || !selectedClass) return;
     setAddingSubject(true);
     try {
       const res = await fetch("/api/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newSubject, class_name: selectedClass, exam_name: selectedExam, year: selectedYear, full_marks: newSubject.total_marks })
+        body: JSON.stringify({ 
+          ...newSubject, 
+          class_name: selectedClass, 
+          full_marks: newSubject.total_marks,
+          year: selectedYear,
+          exam_name: selectedExam
+        })
       });
       if (!res.ok) throw new Error("Failed to add subject");
       setNewSubject({ name: "", total_marks: 100, order: 0 });
@@ -5096,16 +5209,21 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
         const existing = existingSubjects.find((es: any) => es.subject === cs.name);
         return {
           name: cs.name,
-          marks: existing ? existing.marks.toString() : ""
+          marks: existing ? existing.marks.toString() : "",
+          full_marks: cs.full_marks
         };
       });
       setStudentSubjects(initialSubjects);
     } else {
       // Fallback to existing subjects or empty
       if (existingSubjects.length > 0) {
-        setStudentSubjects(existingSubjects.map((s: any) => ({ name: s.subject, marks: s.marks.toString() })));
+        setStudentSubjects(existingSubjects.map((s: any) => ({ 
+          name: s.subject, 
+          marks: s.marks.toString(),
+          full_marks: s.full_marks || 100
+        })));
       } else {
-        setStudentSubjects([{ name: "", marks: "" }]);
+        setStudentSubjects([{ name: "", marks: "", full_marks: 100 }]);
       }
     }
     
@@ -5320,15 +5438,6 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
         {selectedClass ? (
           <>
-             <div className="flex gap-4 mb-8">
-               <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold">
-                 {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-               </select>
-               <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold min-w-[200px]">
-                 <option value="">পরীক্ষা নির্বাচন করুন</option>
-                 {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
-               </select>
-             </div>
              <div className="flex gap-4 mb-8 border-b border-slate-100 pb-1">
               <button 
                 onClick={() => setActiveTab("results")}
@@ -5357,12 +5466,45 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
               >
                 রেজাল্ট তৈরি করুন
               </button>
+              <button 
+                onClick={() => setActiveTab("exams")}
+                className={cn(
+                  "px-6 py-3 font-black text-sm transition-all border-b-2",
+                  activeTab === "exams" ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                )}
+              >
+                পরীক্ষা ব্যবস্থাপনা
+              </button>
             </div>
 
             {activeTab === "subjects" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                  <h4 className="text-lg font-black text-slate-900 mb-6 font-display">বছর ও পরীক্ষা নির্বাচন করুন</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">বছর</label>
+                      <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">পরীক্ষা</label>
+                      <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                        <option value="">পরীক্ষা নির্বাচন করুন</option>
+                        {exams.filter(e => 
+                          (e.year || new Date().getFullYear().toString()) === selectedYear && 
+                          (!e.className || e.className === selectedClass)
+                        ).map((e, idx) => <option key={`${e.id || idx}`} value={e.name}>{e.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100">
-                  <h4 className="text-lg font-black text-slate-900 mb-6 font-display">নতুন বিষয় যুক্ত করুন</h4>
+                  <div className="flex justify-between items-center mb-6">
+                    <h4 className="text-lg font-black text-slate-900 font-display">নতুন বিষয় যুক্ত করুন ({selectedClass} - {selectedExam || "পরীক্ষা নেই"})</h4>
+                  </div>
                   <div className="flex flex-wrap gap-4">
                     <input 
                       value={newSubject.name}
@@ -5370,29 +5512,37 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       placeholder="বিষয় নাম (উদা: বাংলা)"
                       className="flex-1 min-w-[200px] p-4 bg-white border border-slate-200 rounded-2xl font-bold"
                     />
-                    <input 
-                      type="number"
-                      value={newSubject.total_marks}
-                      onChange={(e) => setNewSubject({...newSubject, total_marks: Number(e.target.value)})}
-                      placeholder="পূর্ণমান"
-                      className="w-32 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
-                    />
-                    <input 
-                      type="number"
-                      value={newSubject.order}
-                      onChange={(e) => setNewSubject({...newSubject, order: Number(e.target.value)})}
-                      placeholder="সিরিয়াল"
-                      className="w-28 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
-                      title="কত নম্বর সিরিয়ালে থাকবে"
-                    />
+                    <div className="flex flex-col gap-1">
+                       <label className="text-[10px] font-black text-slate-400 uppercase pl-2">পূর্ণমান</label>
+                       <input 
+                        type="number"
+                        value={newSubject.total_marks}
+                        onChange={(e) => setNewSubject({...newSubject, total_marks: Number(e.target.value)})}
+                        placeholder="পূর্ণমান"
+                        className="w-32 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase pl-2">সিরিয়াল</label>
+                      <input 
+                        type="number"
+                        value={newSubject.order}
+                        onChange={(e) => setNewSubject({...newSubject, order: Number(e.target.value)})}
+                        placeholder="সিরিয়াল"
+                        className="w-28 p-4 bg-white border border-slate-200 rounded-2xl font-bold"
+                        title="কত নম্বর সিরিয়ালে থাকবে"
+                      />
+                    </div>
                     <LoadingButton 
                       loading={addingSubject}
+                      disabled={!selectedExam}
                       onClick={handleAddSubject}
-                      className="px-8 bg-emerald-900 text-white rounded-2xl font-black font-display"
+                      className="px-8 bg-emerald-900 text-white rounded-2xl font-black font-display disabled:opacity-50 mt-auto h-[58px]"
                     >
                       যুক্ত করুন
                     </LoadingButton>
                   </div>
+                  {!selectedExam && <p className="text-rose-500 text-xs font-bold mt-2 pl-2">বিষয় যুক্ত করার আগে একটি পরীক্ষা নির্বাচন করুন।</p>}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -5470,7 +5620,25 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
             {activeTab === "result-entry" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
+                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                  <h4 className="text-lg font-black text-slate-900 mb-6 font-display">পরীক্ষা ও শ্রেণী নির্বাচন করুন</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                      {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                      <option value="">পরীক্ষা নির্বাচন করুন</option>
+                      {exams.filter(e => 
+                        (e.year || new Date().getFullYear().toString()) === selectedYear && 
+                        (!e.className || e.className === selectedClass)
+                      ).map((e, idx) => <option key={e.id || idx} value={e.name}>{e.name}</option>)}
+                    </select>
+                    <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="p-4 bg-slate-50 border rounded-2xl font-bold">
+                      <option value="">শ্রেণী নির্বাচন করুন</option>
+                      {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
 
                 {classResults.length > 0 && (
                   <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -5512,6 +5680,131 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === "exams" && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-100/50">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <div>
+                      <h4 className="text-2xl font-black text-slate-900 font-display">পরীক্ষা ব্যবস্থাপনা</h4>
+                      <p className="text-sm font-bold text-slate-400 mt-1">সব পরীক্ষার তালিকা ও তথ্য আপডেট করুন</p>
+                    </div>
+                    <div className="flex gap-2">
+                       <select 
+                        value={selectedYear} 
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                      >
+                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 mb-10">
+                    <div className="flex items-center gap-3 mb-6">
+                       <div className="w-10 h-10 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600">
+                          <PlusCircle className="w-6 h-6" />
+                       </div>
+                       <h5 className="font-black text-slate-800 font-display">নতুন পরীক্ষা যুক্ত করুন</h5>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      <div className="md:col-span-5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 mb-2 block">পরীক্ষার নাম</label>
+                        <input 
+                          value={newExamName}
+                          onChange={(e) => setNewExamName(e.target.value)}
+                          placeholder="উদা: বার্ষিক পরীক্ষা"
+                          className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                        />
+                      </div>
+                      <div className="md:col-span-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 mb-2 block">শ্রেণী (ঐচ্ছিক)</label>
+                        <select 
+                          value={selectedClass} 
+                          onChange={(e) => setSelectedClass(e.target.value)}
+                          className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                        >
+                          <option value="">সকল শ্রেণী</option>
+                          {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="md:col-span-3 flex items-end">
+                        <LoadingButton 
+                          loading={loading}
+                          onClick={handleAddExam}
+                          className="w-full h-[58px] bg-emerald-600 text-white rounded-2xl font-black font-display shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                        >
+                          পরীক্ষা যুক্ত করুন
+                        </LoadingButton>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map((e, idx) => (
+                      <div key={e.id || idx} className="group p-8 bg-white border border-slate-100 rounded-[2rem] shadow-sm hover:shadow-xl hover:shadow-emerald-100/30 transition-all relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-2 h-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-all"></div>
+                        {editingExamId === e.id ? (
+                          <div className="flex flex-col gap-4">
+                            <input 
+                              value={editExamName}
+                              onChange={(e) => setEditExamName(e.target.value)}
+                              className="p-4 border-2 border-emerald-500 rounded-2xl font-bold outline-none"
+                              autoFocus
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setEditingExamId(null)} className="px-6 py-2 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-all">বাতিল</button>
+                              <button onClick={() => handleEditExam(e.id)} className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200">সেভ করুন</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <span className="text-2xl font-black text-slate-900 leading-tight block">{e.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg uppercase tracking-wider">{e.year || selectedYear}</span>
+                                {e.className && (
+                                  <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                                    {e.className}
+                                  </span>
+                                )}
+                                {!e.className && (
+                                  <span className="text-xs font-black text-slate-400 bg-slate-50 px-2 py-1 rounded-lg">
+                                    সকল শ্রেণী
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <button 
+                                onClick={() => { setEditingExamId(e.id); setEditExamName(e.name); }}
+                                className="p-3 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-2xl transition-all"
+                                title="এডিট করুন"
+                              >
+                                <Edit2 className="w-5 h-5" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteExam(e.id, e.name)}
+                                className="p-3 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-2xl transition-all"
+                                title="ডিলিট করুন"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).length === 0 && (
+                      <div className="col-span-full py-20 text-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                        <GraduationCap className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">এই বছরের জন্য কোন পরীক্ষা যুক্ত করা হয়নি</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -5557,33 +5850,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                         onChange={(e) => setSelectedExam(e.target.value)}
                         className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold appearance-none pr-10"
                       >
-                        {exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear).map(e => <option key={e.id || e.name || e} value={e.name || e}>{e.name || e}</option>)}
+                        {exams.filter(e => 
+                          (e.year || new Date().getFullYear().toString()) === selectedYear && 
+                          (!e.className || e.className === selectedClass)
+                        ).map((e, idx) => <option key={`${e.id || idx}`} value={e.name || e}>{e.name || e}</option>)}
                       </select>
-                      <ChevronDown className="absolute right-14 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-                      <button 
-                        onClick={() => setIsAddingExam(!isAddingExam)}
-                        className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl hover:bg-emerald-200 transition-all font-black text-xs"
-                        title="নতুন পরীক্ষা যোগ করুন"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                      {isAddingExam && (
-                        <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 animate-in slide-in-from-top-2 w-64">
-                          <input 
-                            autoFocus
-                            placeholder="পরীক্ষার নাম লিখুন" 
-                            value={newExamName}
-                            onChange={(e) => setNewExamName(e.target.value)}
-                            className="w-full p-3 bg-slate-50 border rounded-xl mb-2 text-sm font-bold"
-                          />
-                          <button 
-                            onClick={handleAddExam}
-                            className="w-full py-2 bg-emerald-600 text-white rounded-xl text-sm font-black"
-                          >
-                            যোগ করুন
-                          </button>
-                        </div>
-                      )}
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                     </div>
                   </div>
                 </div>
@@ -5716,7 +5988,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                                     <td className="p-4 font-black text-slate-700 text-center text-lg print:p-8 print:text-5xl">{toBn(r.roll)}</td>
                                     <td className="p-4 font-black text-slate-900 text-xl print:p-8 print:text-5xl">{r.name}</td>
                                     {viewMode === 'detailed' && classSubjects.map(sub => {
-                                      const marks = r.subjects?.find((s: any) => s.subject === sub.name)?.marks;
+                                      const marks = r.subjects?.find((s: any) => String(s.subject || "").trim().toLowerCase() === String(sub.name || "").trim().toLowerCase())?.marks;
                                       return (
                                         <td key={sub.id} className="p-4 text-center font-black text-lg print:p-8 print:text-5xl">
                                           <span className={cn(
@@ -5849,7 +6121,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                                  <td className="p-2 text-center border border-slate-300 font-bold print:p-4">{toBn(student.roll)}</td>
                                  <td className="p-2 font-bold border border-slate-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] text-[12px] print:text-xl print:p-4 print:max-w-[200px]">{student.name}</td>
                                  {printType === 'detailed' && classSubjects.map(sub => {
-                                   const subjMark = student.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
+                                   const subjMark = student.subjects?.find((s: any) => String(s.subject || "").trim().toLowerCase() === String(sub.name || "").trim().toLowerCase())?.marks || "-";
                                    return (
                                      <td key={sub.id} className={cn(
                                        "p-2 text-center border border-slate-300 font-bold print:p-4",
@@ -5944,7 +6216,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                         </thead>
                         <tbody>
                           {classSubjects.map((sub: any, idx: number, arr: any[]) => {
-                            const subjectMark = individualPrintData.subjects?.find((s: any) => s.subject === sub.name)?.marks || "-";
+                            const subjectMark = individualPrintData.subjects?.find((s: any) => String(s.subject || "").trim().toLowerCase() === String(sub.name || "").trim().toLowerCase())?.marks || "-";
                             const highestMark = topScorersPerSubject[sub.name]?.marks || "-";
                             const mk = Number(subjectMark) || 0;
                             let markColor = '#0f172a';
@@ -5998,9 +6270,12 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 </div>
                 <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
                   {studentSubjects.map((sub, i) => (
-                    <div key={i} className="flex gap-4 items-center">
+                    <div key={i} className="flex gap-4 items-center bg-slate-50/50 p-3 rounded-2xl border border-slate-100/50">
                       <div className="flex-1">
-                        <p className="font-bold text-slate-700 mb-1">{sub.name}</p>
+                        <p className="font-bold text-slate-700">{sub.name}</p>
+                        {((sub as any).full_marks) && (
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">পূর্ণমান: {(sub as any).full_marks}</p>
+                        )}
                       </div>
                       <div className="w-32">
                         <input 
@@ -6012,7 +6287,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             setStudentSubjects(newSubs);
                           }}
                           placeholder="নম্বর" 
-                          className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-center" 
+                          className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-center text-emerald-600 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all" 
                         />
                       </div>
                     </div>
@@ -6040,6 +6315,60 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
             </motion.div>
           )}
         </AnimatePresence>
+
+        {examToDelete && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-bounce">
+                <Trash2 className="w-10 h-10" />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 text-center mb-3 font-display">পরীক্ষা ডিলিট করুন?</h3>
+              <p className="text-slate-500 text-center text-sm font-bold mb-8 leading-relaxed">
+                আপনি কি নিশ্চিত যে আপনি <span className="text-rose-600 font-black">"{examToDelete.name}"</span> পরীক্ষাটি মুছতে চান? এর সাথে যুক্ত সকল শিক্ষার্থীর রেজাল্ট এবং যাবতীয় তথ্য স্থায়ীভাবে মুছে যাবে।
+              </p>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">নিশ্চিত করতে পাসওয়ার্ড দিন</label>
+                  <div className="relative">
+                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input 
+                      type="password"
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      placeholder="অ্যাডমিন পাসওয়ার্ড"
+                      className="w-full p-5 pl-14 bg-slate-50 border border-slate-200 rounded-[1.5rem] font-bold focus:ring-4 focus:ring-rose-500/10 outline-none transition-all"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => {
+                      setExamToDelete(null);
+                      setDeletePassword("");
+                    }}
+                    className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-[1.5rem] font-black hover:bg-slate-200 transition-all font-display"
+                  >
+                    বাতিল
+                  </button>
+                  <LoadingButton 
+                    loading={loading}
+                    onClick={() => confirmDeleteExam(deletePassword)}
+                    className="flex-1 py-5 bg-rose-600 text-white rounded-[1.5rem] font-black hover:bg-rose-700 transition-all font-display shadow-xl shadow-rose-200"
+                  >
+                    ডিলিট করুন
+                  </LoadingButton>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     );
 };

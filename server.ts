@@ -392,28 +392,98 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/exams", async (req, res) => {
     try {
       const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
       const examsSnapshot = await db.collection("exams").orderBy("date", "desc").get();
       const exams = examsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(exams);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to fetch exams" });
+      console.error("Error fetching exams:", error);
+      res.status(500).json({ error: "Failed to fetch exams", details: String(error) });
     }
   });
 
   app.post("/api/exams", async (req, res) => {
-    const { name, year } = req.body;
+    const { name, year, className } = req.body;
     try {
       const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
       await db.collection("exams").add({ 
         name, 
         year: year || new Date().getFullYear().toString(),
+        className: className || null,
         date: new Date().toISOString() 
       });
       res.json({ success: true });
     } catch (error) {
+      console.error("Error adding exam:", error);
+      res.status(500).json({ error: "Failed to add exam", details: String(error) });
+    }
+  });
+
+  app.put("/api/exams/:id", async (req, res) => {
+    const { password, name, year, className } = req.body;
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
+    try {
+      const db = getFirestoreInstance();
+      await db.collection("exams").doc(req.params.id).update({
+        name,
+        year: year || new Date().getFullYear().toString(),
+        className: className || null,
+        updated_at: new Date().toISOString()
+      });
+      res.json({ success: true });
+    } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Failed to add exam" });
+      res.status(500).json({ error: "Failed to update exam" });
+    }
+  });
+
+  app.delete("/api/exams/:id", async (req, res) => {
+    const { password } = req.body;
+    const { id } = req.params;
+    
+    if (!(await verifyAdminOrSubAdmin(password, "all"))) { 
+      return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); 
+    }
+    
+    try {
+      const db = getFirestoreInstance();
+      
+      // Get the exam details first to know what results to delete
+      const examDoc = await db.collection("exams").doc(id).get();
+      if (!examDoc.exists) {
+        return res.status(404).json({ error: "Exam not found" });
+      }
+      
+      const examData = examDoc.data();
+      const examName = examData?.name;
+      const examYear = examData?.year;
+
+      const batch = db.batch();
+      
+      // 1. Delete the exam itself
+      batch.delete(db.collection("exams").doc(id));
+      
+      // 2. Find and delete all results matching this exam
+      if (examName) {
+        let resultsQuery = db.collection("results").where("exam_name", "==", examName);
+        if (examYear) {
+          resultsQuery = resultsQuery.where("year", "==", examYear);
+        }
+        
+        const resultsSnapshot = await resultsQuery.get();
+        resultsSnapshot.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        
+        console.log(`Deleting exam ${examName} and ${resultsSnapshot.size} associated results`);
+      }
+
+      await batch.commit();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting exam and results:", error);
+      res.status(500).json({ error: "Failed to delete exam" });
     }
   });
 
@@ -1190,7 +1260,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   // --- Classes ---
   app.get("/api/classes", async (req, res) => {
     try {
-      const snapshot = await firestore.collection("classes").orderBy("order").get();
+      const db = getFirestoreInstance();
+      const snapshot = await db.collection("classes").orderBy("order").get();
       const classes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(classes);
     } catch (error) {
@@ -1202,7 +1273,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { name, order, password } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("classes").add({ name, order: order || 0 });
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("classes").add({ name, order: order || 0 });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to add class" });
@@ -1218,7 +1291,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     }
 
     try {
-      const classRef = firestore.collection("classes").doc(req.params.id);
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const classRef = db.collection("classes").doc(req.params.id);
       const classDoc = await classRef.get();
       if (!classDoc.exists) {
         return res.status(404).json({ error: "Class not found" });
@@ -1234,7 +1309,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
       // If name changed, update related records
       if (name !== undefined && oldName && name !== oldName) {
-        let batch = firestore.batch();
+        let batch = db.batch();
         let count = 0;
 
         const addUpdate = async (ref: any, data: any) => {
@@ -1242,21 +1317,21 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
           count++;
           if (count >= 400) {
             await batch.commit();
-            batch = firestore.batch();
+            batch = db.batch();
             count = 0;
           }
         };
 
-        const studentsSnap = await firestore.collection("students").where("class", "==", oldName).get();
+        const studentsSnap = await db.collection("students").where("class", "==", oldName).get();
         for (const doc of studentsSnap.docs) await addUpdate(doc.ref, { class: name });
 
-        const subjectsSnap = await firestore.collection("subjects").where("class", "==", oldName).get();
+        const subjectsSnap = await db.collection("subjects").where("class", "==", oldName).get();
         for (const doc of subjectsSnap.docs) await addUpdate(doc.ref, { class: name });
 
-        const incomeSnap = await firestore.collection("income").where("class_name", "==", oldName).get();
+        const incomeSnap = await db.collection("income").where("class_name", "==", oldName).get();
         for (const doc of incomeSnap.docs) await addUpdate(doc.ref, { class_name: name });
 
-        const expensesSnap = await firestore.collection("expenses").where("class_name", "==", oldName).get();
+        const expensesSnap = await db.collection("expenses").where("class_name", "==", oldName).get();
         for (const doc of expensesSnap.docs) await addUpdate(doc.ref, { class_name: name });
         
         if (count > 0) {
@@ -1275,7 +1350,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { password } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("classes").doc(req.params.id).delete();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("classes").doc(req.params.id).delete();
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete class" });
@@ -1285,7 +1362,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   // --- Sub Admins ---
   app.get("/api/sub-admins", async (req, res) => {
     try {
-      const snapshot = await firestore.collection("sub_admins").get();
+      const db = getFirestoreInstance();
+      const snapshot = await db.collection("sub_admins").get();
       const subAdmins = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(subAdmins);
     } catch (error) {
@@ -1297,7 +1375,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { email, permissions, password, subAdminPassword } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("sub_admins").add({ email, permissions, password: subAdminPassword });
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("sub_admins").add({ email, permissions, password: subAdminPassword });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to add sub-admin" });
@@ -1308,9 +1388,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { email, permissions, password, subAdminPassword } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
       const updateData: any = { email, permissions };
       if (subAdminPassword) updateData.password = subAdminPassword;
-      await firestore.collection("sub_admins").doc(req.params.id).update(updateData);
+      await db.collection("sub_admins").doc(req.params.id).update(updateData);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to update sub-admin" });
@@ -1321,7 +1403,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { password } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("sub_admins").doc(req.params.id).delete();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("sub_admins").doc(req.params.id).delete();
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete sub-admin" });
@@ -1337,7 +1421,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     }
 
     try {
-      const snapshot = await firestore.collection("sub_admins").where("email", "==", identifier).get();
+      const db = getFirestoreInstance();
+      const snapshot = await db.collection("sub_admins").where("email", "==", identifier).get();
       if (!snapshot.empty) {
         const subAdmin = snapshot.docs[0].data();
         return res.json({ success: true, role: "sub_admin", permissions: subAdmin.permissions });
@@ -1437,10 +1522,12 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/admin/teacher-attendance", async (req, res) => {
     const { date } = req.query;
     try {
-      const teachersSnapshot = await firestore.collection("teachers").get();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const teachersSnapshot = await db.collection("teachers").get();
       const teachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
       
-      const attendanceSnapshot = await firestore.collection("teacher_attendance").where("date", "==", date).get();
+      const attendanceSnapshot = await db.collection("teacher_attendance").where("date", "==", date).get();
       const attendance = attendanceSnapshot.docs.map(doc => doc.data());
       
       const result = teachers.map((t: any) => ({
@@ -1450,6 +1537,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       
       res.json(result);
     } catch (error) {
+      console.error(error);
       res.status(500).json({ error: "Failed to fetch teacher attendance" });
     }
   });
@@ -1457,9 +1545,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.post("/api/admin/teacher-attendance/bulk", async (req, res) => {
     const { date, records } = req.body;
     try {
-      const batch = firestore.batch();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const batch = db.batch();
       for (const record of records) {
-        const docRef = firestore.collection("teacher_attendance").doc(`${record.teacher_id}_${date}`);
+        const docRef = db.collection("teacher_attendance").doc(`${record.teacher_id}_${date}`);
         if (record.status) {
           batch.set(docRef, { teacher_id: record.teacher_id, date, status: record.status });
         } else {
@@ -1477,7 +1567,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { password } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      const teacherDoc = await firestore.collection("teachers").doc(req.params.id).get();
+      const db = getFirestoreInstance();
+      const teacherDoc = await db.collection("teachers").doc(req.params.id).get();
       if (teacherDoc.exists) {
         await firestore.collection("delete_history").add({
           type: 'teacher',
@@ -2435,34 +2526,25 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/students/:id/full-profile", async (req, res) => {
     const studentId = req.params.id;
     try {
-      const studentDoc = await firestore.collection("students").doc(studentId).get();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
+      const studentDoc = await db.collection("students").doc(studentId).get();
       if (!studentDoc.exists) {
         return res.status(404).json({ error: "Student not found" });
       }
       const student = { id: studentDoc.id, ...studentDoc.data() } as any;
 
-      const feesSnapshot = await firestore.collection("fees").where("student_id", "==", studentId).get();
+      const feesSnapshot = await db.collection("fees").where("student_id", "==", studentId).get();
       const fees = feesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-      const attendanceSnapshot = await firestore.collection("attendance").where("student_id", "==", studentId).get();
+      const attendanceSnapshot = await db.collection("attendance").where("student_id", "==", studentId).get();
       const attendance = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-      const resultsSnapshot = await firestore.collection("results").where("student_id", "==", studentId).get();
-      let results = resultsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      // Deduplicate results per exam out of the student's results
-      results.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
-      const uniqueResults = [];
-      const seenSubjectExam = new Set();
-      results.forEach(r => {
-        const key = `${r.exam_name}_${r.year || new Date().getFullYear().toString()}_${r.subject}`;
-        if (!seenSubjectExam.has(key)) {
-          seenSubjectExam.add(key);
-          uniqueResults.push(r);
-        }
-      });
-      results = uniqueResults;
+      const resultsSnapshot = await db.collection("results").where("student_id", "==", studentId).get();
+      const results = resultsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-      const hifzSnapshot = await firestore.collection("hifz_records").where("student_id", "==", studentId).get();
+      const hifzSnapshot = await db.collection("hifz_records").where("student_id", "==", studentId).get();
       const hifz = hifzSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
       // Calculate Rank
@@ -2471,25 +2553,16 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         const exams = [...new Set(results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))];
         for (const examKey of (exams as string[])) {
           const [exam, year] = examKey.split('|');
-          const allExamResultsSnapshot = await firestore.collection("results")
+          const allExamResultsSnapshot = await db.collection("results")
             .where("exam_name", "==", exam)
             .where("class_name", "==", student.class)
             .where("year", "==", year)
             .get();
           const allExamResults = allExamResultsSnapshot.docs.map(doc => doc.data() as any);
 
-          // Sort by updated_at or created_at descending to take the latest result for duplicates
-          allExamResults.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
-
           const studentTotals: any = {};
-          const processedSubjects: any = {};
           allExamResults.forEach(r => {
-            const sid = r.student_id;
-            if (!processedSubjects[sid]) processedSubjects[sid] = new Set();
-            if (!processedSubjects[sid].has(r.subject)) {
-               processedSubjects[sid].add(r.subject);
-               studentTotals[sid] = (studentTotals[sid] || 0) + r.marks;
-            }
+            studentTotals[r.student_id] = (studentTotals[r.student_id] || 0) + r.marks;
           });
 
           const sortedTotals = Object.entries(studentTotals).map(([id, total]) => ({ student_id: id, total })).sort((a: any, b: any) => b.total - a.total);
@@ -2842,9 +2915,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/amal-tasks", async (req, res) => {
     const { target } = req.query;
     try {
-      const snapshot = await firestore.collection("amal_tasks")
-        .where("target", "==", target)
-        .get();
+      let query = firestore.collection("amal_tasks");
+      if (target) {
+        query = query.where("target", "==", target);
+      }
+      const snapshot = await query.get();
       const tasks = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter((task: any) => task.is_active === true);
@@ -3677,41 +3752,40 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       let results = resultsSnapshot.docs.map(doc => doc.data() as any);
       
       if (exam_name) {
-        results = results.filter((r: any) => r.exam_name === exam_name);
+        results = results.filter((r: any) => String(r.exam_name || "").trim() === String(exam_name || "").trim());
       }
       if (year) {
-        results = results.filter((r: any) => String(r.year) === String(year));
+        results = results.filter((r: any) => String(r.year || "").trim() === String(year || "").trim());
       }
-
-      // Deduplicate results per student and subject
-      results.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
-      const uniqueResults = [];
-      const seenKey = new Set();
-      results.forEach(r => {
-        const key = `${r.student_id}_${r.subject}`;
-        if (!seenKey.has(key)) {
-          seenKey.add(key);
-          uniqueResults.push(r);
-        }
-      });
-      results = uniqueResults;
       
-      // Fetch current active subjects for this class
-      const subjectsSnapshot = await db.collection("subjects").where("class", "==", className).get();
-      const validSubjectNames = new Set(subjectsSnapshot.docs.map(doc => doc.data().name));
+      // Fetch current active subjects for this class to define the "Valid" subjects for the result sheet
+      let subjectsQuery: any = db.collection("subjects").where("class", "==", className);
+      if (year) subjectsQuery = subjectsQuery.where("year", "==", String(year));
+      if (exam_name) subjectsQuery = subjectsQuery.where("exam_name", "==", String(exam_name));
+      
+      const subjectsSnapshot = await subjectsQuery.get();
+      const validSubjectNames = new Set(subjectsSnapshot.docs.map(doc => String(doc.data().name || "").trim().toLowerCase()));
       
       const data = students.map((s: any) => {
         const rawStudentResults = results.filter((r: any) => r.student_id === s.id);
         const uniqueSubjectsMap = new Map();
+        
         rawStudentResults.forEach((r: any) => {
-          if (validSubjectNames.has(r.subject)) {
-            uniqueSubjectsMap.set(r.subject, r);
+          const subjectName = String(r.subject || "").trim().toLowerCase();
+          // If subjects were found for this exam/year, enforce they stay within them.
+          // Otherwise, if no subjects defined, display what's in the results.
+          if (validSubjectNames.size === 0 || validSubjectNames.has(subjectName)) {
+            uniqueSubjectsMap.set(subjectName, r);
           }
         });
         
         const studentResults = Array.from(uniqueSubjectsMap.values());
         const totalMarks = studentResults.reduce((sum: number, r: any) => sum + (Number(r.marks) || 0), 0);
-        const avgMarks = validSubjectNames.size > 0 ? totalMarks / validSubjectNames.size : (studentResults.length > 0 ? totalMarks / studentResults.length : 0);
+        
+        // Calculate average using the number of valid subjects if available, otherwise based on results count
+        const divisor = validSubjectNames.size > 0 ? validSubjectNames.size : (studentResults.length > 0 ? studentResults.length : 1);
+        const avgMarks = totalMarks / divisor;
+        
         return {
           ...s,
           subjects: studentResults,
@@ -3798,56 +3872,21 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.post("/api/results", async (req, res) => {
-    const { student_id, exam_name, subject, marks, grade, date, year, class_name } = req.body;
+    const { student_id, exam_name, subject, marks, grade, date } = req.body;
     try {
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
-
-      const existingSnapshot = await db.collection("results")
-        .where("student_id", "==", student_id)
-        .where("exam_name", "==", exam_name)
-        .where("subject", "==", subject)
-        .get();
-
-      // Check year as well, in memory if needed, but above query might return multiple years.
-      const exactMatches = existingSnapshot.docs.filter(d => {
-         const data = d.data();
-         return (data.year || new Date().getFullYear().toString()) === (year || new Date().getFullYear().toString());
+      await db.collection("results").add({
+        student_id,
+        exam_name,
+        subject,
+        marks: Number(marks),
+        grade,
+        date,
+        created_at: new Date().toISOString()
       });
-
-      if (exactMatches.length > 0) {
-        // Update the first matching document
-        const docId = exactMatches[0].id;
-        await db.collection("results").doc(docId).update({
-          marks: Number(marks),
-          grade,
-          date,
-          class_name: class_name || "",
-          updated_at: new Date().toISOString()
-        });
-        
-        // Clean up any remaining duplicates
-        if (exactMatches.length > 1) {
-          const deletePromises = exactMatches.slice(1).map(doc => db.collection("results").doc(doc.id).delete());
-          await Promise.all(deletePromises);
-        }
-      } else {
-        await db.collection("results").add({
-          student_id,
-          exam_name,
-          subject,
-          marks: Number(marks),
-          grade,
-          date,
-          class_name: class_name || "",
-          year: year || new Date().getFullYear().toString(),
-          created_at: new Date().toISOString()
-        });
-      }
-
       res.json({ success: true });
     } catch (error) {
-      console.error(error);
       res.status(500).json({ error: "Failed to save result" });
     }
   });
@@ -3857,23 +3896,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
       const snapshot = await db.collection("results").where("student_id", "==", req.params.studentId).get();
-      let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      
-      results.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
-      const uniqueResults = [];
-      const seenKey = new Set();
-      results.forEach(r => {
-        const key = `${r.exam_name}_${r.year || new Date().getFullYear().toString()}_${r.subject}`;
-        if (!seenKey.has(key)) {
-          seenKey.add(key);
-          uniqueResults.push(r);
-        }
-      });
-      results = uniqueResults;
-      
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       res.json(results);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch results" });
+      console.error("Error fetching results:", error);
+      res.status(500).json({ error: "Failed to fetch results", details: String(error) });
     }
   });
 
@@ -3976,7 +4003,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
   app.get("/api/notices/:id/votes", async (req, res) => {
     try {
-      const snapshot = await firestore.collection("notices").doc(req.params.id).collection("votes").get();
+      const db = getFirestoreInstance();
+      const snapshot = await db.collection("notices").doc(req.params.id).collection("votes").get();
       const voters = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       const yes_count = voters.filter((v: any) => v.vote === 'yes').length;
@@ -4359,15 +4387,19 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
   // --- Subjects ---
   app.get("/api/subjects/:className", async (req, res) => {
-    console.log(`Fetching subjects for class: ${req.params.className}, exam: ${req.query.exam}, year: ${req.query.year}`);
+    const { year, exam_name } = req.query;
+    console.log(`Fetching subjects for class: ${req.params.className}, year: ${year}, exam: ${exam_name}`);
     try {
-      let query = firestore.collection("subjects").where("class", "==", req.params.className);
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      let query: any = db.collection("subjects").where("class", "==", req.params.className);
       
-      if (req.query.exam) {
-        query = query.where("exam_name", "==", req.query.exam as string);
+      if (year) {
+        query = query.where("year", "==", year);
       }
-      if (req.query.year) {
-        query = query.where("year", "==", req.query.year as string);
+      
+      if (exam_name) {
+        query = query.where("exam_name", "==", exam_name);
       }
 
       const snapshot = await query.get();
@@ -4387,17 +4419,17 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.post("/api/subjects", async (req, res) => {
-    const { class_name: className, exam_name, year, name, full_marks, order } = req.body;
+    const { class_name: className, name, full_marks, order, year, exam_name } = req.body;
     try {
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
       await db.collection("subjects").add({
         class: className || "Unknown",
-        exam_name: exam_name || "",
-        year: year || new Date().getFullYear().toString(),
         name,
         full_marks: full_marks || 100,
         order: order || 0,
+        year: year || new Date().getFullYear().toString(),
+        exam_name: exam_name || "",
         created_at: new Date().toISOString()
       });
       res.json({ success: true });
@@ -4430,7 +4462,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { password } = req.body;
     if (!(await verifyAdminOrSubAdmin(password, "all"))) { return res.status(401).json({ error: "ভুল পাসওয়ার্ড বা অনুমতি নেই!" }); }
     try {
-      await firestore.collection("subjects").doc(req.params.id).delete();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      await db.collection("subjects").doc(req.params.id).delete();
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete subject" });

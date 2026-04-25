@@ -62,71 +62,8 @@ export default function TeacherPortal() {
       if (activeTab === "amal") {
         fetchAmalData();
       }
-      if (activeTab === "student-amal") {
-        fetchStudentAmalData();
-      }
     }
   }, [teacher, activeTab, amalDate, selectedClass]);
-
-  const fetchStudentAmalData = async () => {
-    setFetchingStatus(true);
-    try {
-      const [tasksRes, statusRes] = await Promise.all([
-        fetch("/api/amal-tasks?target=student"),
-        fetch(`/api/admin/amal-submission-status?target=student&date=${amalDate}`)
-      ]);
-      
-      if (!tasksRes.ok) throw new Error(`Tasks fetch failed: ${tasksRes.status}`);
-      if (!statusRes.ok) throw new Error(`Status fetch failed: ${statusRes.status}`);
-
-      setStudentTasks(await tasksRes.json());
-      let status = await statusRes.json();
-      if (selectedClass !== "সব") {
-        status = status.filter((s: any) => s.class === selectedClass);
-      }
-      setSubmissionStatus(status);
-    } catch (err) {
-      console.error("Failed to fetch student amal data:", err);
-    } finally {
-      setFetchingStatus(false);
-    }
-  };
-
-  const toggleStudentAmal = async (studentId: string, taskId: string, currentStatus: boolean) => {
-    const newStatus = !currentStatus;
-    
-    // Optimistically update
-    setSubmissionStatus(prev => prev.map(s => {
-      if (s.userId === studentId) {
-        const newLogs = [...s.logs];
-        const logIndex = newLogs.findIndex(l => l.task_id === taskId);
-        if (logIndex > -1) {
-          newLogs[logIndex] = { ...newLogs[logIndex], status: newStatus ? "completed" : "pending" };
-        } else {
-          newLogs.push({ task_id: taskId, status: newStatus ? "completed" : "pending" });
-        }
-        return { ...s, submitted: true, logs: newLogs };
-      }
-      return s;
-    }));
-
-    try {
-      await fetch("/api/amal-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: studentId,
-          user_type: "student",
-          date: amalDate,
-          logs: { [taskId]: newStatus ? "completed" : "pending" }
-        })
-      });
-    } catch (err) {
-      console.error("Failed to save student amal log:", err);
-      // Revert on error
-      fetchStudentAmalData();
-    }
-  };
 
   const fetchAmalData = async () => {
     try {
@@ -318,12 +255,28 @@ export default function TeacherPortal() {
           <div className="flex gap-2 self-start flex-wrap">
             {teacher?.isSubAdmin && (
               <button 
-                onClick={() => {
-                  localStorage.setItem("isAdmin", "true");
-                  localStorage.setItem("adminRole", "sub_admin");
-                  localStorage.setItem("adminPermissions", JSON.stringify(teacher.permissions || []));
-                  localStorage.setItem("adminPassword", teacher.adminIdentifier); // This matches backend subAdmin password check
-                  window.location.href = "/secret-admin-access";
+                onClick={async () => {
+                  try {
+                    // Try to log in as admin to initialize the session/permissions properly
+                    const res = await fetch("/api/admin-login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ identifier: teacher.adminIdentifier })
+                    });
+                    
+                    if (res.ok) {
+                      const data = await res.json();
+                      localStorage.setItem("isAdmin", "true");
+                      localStorage.setItem("adminRole", data.role || "sub_admin");
+                      localStorage.setItem("adminPermissions", JSON.stringify(data.permissions || []));
+                      window.open("/secret-admin-access", "_blank");
+                    } else {
+                      alert("এডমিন প্যানেলে প্রবেশাধিকার নেই।");
+                    }
+                  } catch (e) {
+                      console.error(e);
+                      alert("প্যানেলে প্রবেশে সমস্যা হয়েছে।");
+                  }
                 }}
                 className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-sm border border-emerald-700 whitespace-nowrap"
               >
@@ -344,7 +297,6 @@ export default function TeacherPortal() {
           {[
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "amal", label: "দৈনিক আমল", icon: Heart },
-            { id: "student-amal", label: "ছাত্রের আমল", icon: Users },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "salary", label: "বেতন", icon: History },
             { id: "notices", label: "নোটিশ", icon: Bell },
@@ -551,95 +503,6 @@ export default function TeacherPortal() {
                 </motion.div>
               )}
 
-              {activeTab === "student-amal" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                      <div>
-                        <h3 className="text-2xl font-black text-slate-900 mb-1">ছাত্রদের আমল</h3>
-                        <p className="text-slate-500 font-bold">ছাত্রদের আমলগুলো দেখুন ও টিক দিন</p>
-                      </div>
-                      <div className="flex gap-4">
-                        <select 
-                          value={selectedClass}
-                          onChange={(e) => setSelectedClass(e.target.value)}
-                          className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
-                        >
-                          <option value="সব">সব শ্রেণী</option>
-                          {settings?.classes?.map((c: string) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                        <input 
-                          type="date" 
-                          value={amalDate}
-                          max={new Date().toLocaleDateString('en-CA')}
-                          onChange={(e) => setAmalDate(e.target.value)}
-                          className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-50">
-                            <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">ছাত্রের নাম</th>
-                            <th className="p-6 text-sm font-black text-slate-600 uppercase tracking-wider">আমলসমূহ</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {fetchingStatus ? (
-                            <tr>
-                              <td colSpan={2} className="p-12 text-center">
-                                <div className="relative flex items-center justify-center w-12 h-12">
-  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
-  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
-  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
-</div>
-                              </td>
-                            </tr>
-                          ) : submissionStatus.length > 0 ? submissionStatus.map((student) => (
-                            <tr key={student.userId} className="hover:bg-slate-50 transition-colors">
-                              <td className="p-6">
-                                <p className="font-black text-slate-900">{student.name}</p>
-                                <p className="text-[10px] text-slate-400 font-bold">ID: {student.userId} | {student.class}</p>
-                              </td>
-                              <td className="p-6">
-                                <div className="flex flex-wrap gap-2">
-                                  {studentTasks.map(task => {
-                                    const log = student.logs.find((l: any) => l.task_id === task.id);
-                                    const isCompleted = log?.status === "completed";
-                                    return (
-                                      <button
-                                        key={task.id}
-                                        onClick={() => toggleStudentAmal(student.userId, task.id, isCompleted)}
-                                        className={cn(
-                                          "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-2",
-                                          isCompleted 
-                                            ? "bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm" 
-                                            : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200"
-                                        )}
-                                      >
-                                        {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : <Heart className="w-3 h-3" />}
-                                        {task.title}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </td>
-                            </tr>
-                          )) : (
-                            <tr>
-                              <td colSpan={2} className="p-12 text-center text-slate-400 font-bold">কোনো ছাত্র পাওয়া যায়নি</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
               {activeTab === "attendance" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">

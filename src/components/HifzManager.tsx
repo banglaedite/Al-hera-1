@@ -120,7 +120,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
     try {
       const res = await fetch(`/api/admin/hifz-reports?student_id=${studentId}&limit=1`);
       if (res.ok) {
-        const contentType = res.headers.get("content-type");
+        const contentType = res.headers ? res.headers.get("content-type") : "";
         if (!contentType || !contentType.includes("application/json")) {
            throw new Error("Invalid response from server (non-JSON)");
         }
@@ -702,12 +702,18 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                       className="group p-6 rounded-[2rem] border-2 border-slate-100 hover:border-emerald-200 bg-white hover:bg-emerald-50 transition-all text-center flex flex-col items-center gap-4 shadow-sm hover:shadow-xl"
                     >
                       <div className="w-24 h-24 rounded-full bg-slate-100 overflow-hidden border-4 border-white shadow-lg group-hover:scale-105 transition-transform">
-                        <img 
-                          src={student.photo_url || student.photo || `https://picsum.photos/seed/${student.id}/200`} 
-                          alt={student.name} 
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
+                        {student.photo_url || student.photo ? (
+                          <img 
+                            src={student.photo_url || student.photo} 
+                            alt={student.name} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-700 text-2xl font-black">
+                            {student.roll || "N/A"}
+                          </div>
+                        )}
                       </div>
                       <div className="w-full">
                         <div className="font-black text-slate-900 text-lg truncate mb-1">{student.name}</div>
@@ -1323,7 +1329,14 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                           <td className="px-6 py-5 rounded-l-2xl border-y border-l border-slate-100">
                             <div className="flex items-center gap-4">
                               <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-lg overflow-hidden border-2 border-emerald-50 shadow-inner">
-                                <img src={student.photo_url || student.photo || `https://picsum.photos/seed/${student.id}/100`} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                {student.photo_url ? (
+                                  <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="flex flex-col items-center leading-none">
+                                    <span className="text-[10px] uppercase opacity-50">Roll</span>
+                                    <span>{toBn(student.roll)}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="font-black text-xl text-slate-900 tracking-tight">{student.name}</div>
                             </div>

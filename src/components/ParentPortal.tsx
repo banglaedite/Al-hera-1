@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 import * as htmlToImage from "html-to-image";
 import { 
+  Clock,
   LayoutDashboard, 
   Phone, 
   ArrowRight, 
@@ -25,7 +26,11 @@ import {
   Calendar,
   Download,
   FileText,
-  Star
+  Star,
+  Coffee,
+  Utensils,
+  Award,
+  Hash
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useToast } from "./ToastContext";
@@ -86,6 +91,25 @@ export default function ParentPortal() {
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [selectedResultExam, setSelectedResultExam] = useState<string>("");
   const [downloading, setDownloading] = useState(false);
+  const [foodMenu, setFoodMenu] = useState<any[]>([]);
+  const [loadingFood, setLoadingFood] = useState(false);
+
+  const fetchFoodMenu = async () => {
+    setLoadingFood(true);
+    try {
+      const res = await fetch('/api/food-menu');
+      const data = await res.json();
+      if (Array.isArray(data)) setFoodMenu(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingFood(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'food-menu') fetchFoodMenu();
+  }, [activeTab]);
 
   const monthsList = [
     "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
@@ -496,6 +520,12 @@ export default function ParentPortal() {
     }
   };
 
+  const toBn = (n: any) => {
+    if (n === null || n === undefined) return "---";
+    const banglaDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+    return n.toString().replace(/\d/g, (d: string) => banglaDigits[parseInt(d)]);
+  };
+
   const handleLogin = async (e: React.FormEvent | null, loginIdentifier: string = identifier) => {
     if (e) e.preventDefault();
     if (!loginIdentifier) return;
@@ -792,6 +822,7 @@ export default function ParentPortal() {
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
+            { id: "food-menu", label: "খাবারের তালিকা", icon: Coffee },
             { id: "results", label: "রেজাল্ট", icon: BookOpen },
             { id: "amal", label: "দৈনিক আমল", icon: Heart },
             { id: "syllabus", label: "রুটিন", icon: BookOpen },
@@ -827,53 +858,65 @@ export default function ParentPortal() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Profile Card (Left) */}
-          <div className="lg:col-span-1">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 sticky top-24"
-            >
-              <div className="flex flex-col items-center text-center">
-                <div className="w-40 h-40 rounded-[2.5rem] overflow-hidden shadow-2xl bg-slate-100 mb-8 border-4 border-emerald-50">
-                  <img 
-                    src={student.photo_url || `https://picsum.photos/seed/${student.id}/200`} 
-                    alt={student.name} 
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                <h3 className="text-3xl font-black text-slate-900 mb-2">{student.name}</h3>
-                {student.isTeacher ? (
-                  <p className="text-emerald-700 font-black text-lg mb-8 bg-emerald-50 px-6 py-2 rounded-full">{student.qualification || "শিক্ষক"}</p>
-                ) : (
-                  <p className="text-emerald-700 font-black text-lg mb-8 bg-emerald-50 px-6 py-2 rounded-full">{student.class} শ্রেণী | রোল: {student.roll}</p>
+            {/* Profile Card (Left) */}
+            <div className="lg:col-span-1">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={cn(
+                  "bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 sticky top-24",
+                  activeTab !== 'overview' && "hidden lg:block opacity-60 hover:opacity-100 transition-all"
                 )}
-                
-                <div className="w-full space-y-5 pt-8 border-t border-slate-100">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400 font-bold">{student.isTeacher ? "শিক্ষক আইডি" : "স্টুডেন্ট আইডি"}</span>
-                    <span className="font-black text-slate-900">{student.id}</span>
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-emerald-500 rounded-[2.5rem] rotate-6 scale-105 opacity-20 group-hover:rotate-12 transition-transform"></div>
+                    <div className="w-40 h-40 rounded-[2.5rem] overflow-hidden shadow-2xl bg-slate-100 mb-8 border-4 border-white relative z-10 transition-transform group-hover:scale-105">
+                      <img 
+                        src={student.photo_url || `https://picsum.photos/seed/${student.id}/200`} 
+                        alt={student.name} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
                   </div>
-                  {student.isTeacher ? (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-400 font-bold">আইডি কোড</span>
-                      <span className="font-black text-emerald-700">{student.id_code || "N/A"}</span>
+                  <h3 className="text-3xl font-black text-slate-900 mb-2">{student.name}</h3>
+                  <div className="flex flex-wrap justify-center gap-2 mb-8">
+                    {student.isTeacher ? (
+                      <span className="text-emerald-700 font-black text-sm bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-100">
+                        {student.qualification || "শিক্ষক"}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-emerald-700 font-black text-sm bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-100">
+                          {student.class} শ্রেণী
+                        </span>
+                        <span className="text-blue-700 font-black text-sm bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100">
+                          রোল: {toBn(student.roll)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  
+                  <div className="w-full space-y-4 pt-8 border-t border-slate-100 text-left">
+                    <div className="flex justify-between items-center group">
+                      <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">{student.isTeacher ? "শিক্ষক আইডি" : "স্টুডেন্ট আইডি"}</span>
+                      <span className="font-black text-slate-900 bg-slate-50 px-3 py-1 rounded-lg group-hover:bg-slate-100 transition-colors">{student.id}</span>
                     </div>
-                  ) : (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-400 font-bold">স্টুডেন্ট কোড</span>
-                      <span className="font-black text-emerald-700">{student.student_code}</span>
+                    {student.student_code && (
+                      <div className="flex justify-between items-center group">
+                        <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">ইউনিক কোড</span>
+                        <span className="font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg group-hover:bg-emerald-100 transition-colors">{student.student_code}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center group">
+                      <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">মোবাইল</span>
+                      <span className="font-black text-rose-600 bg-rose-50 px-3 py-1 rounded-lg group-hover:bg-rose-100 transition-colors">{toBn(student.phone)}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400 font-bold">মোবাইল নম্বর</span>
-                    <span className="font-black text-rose-600">{student.phone}</span>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          </div>
+              </motion.div>
+            </div>
 
           {/* Main Content Area (Right) */}
           <div className="lg:col-span-2 space-y-8">
@@ -911,6 +954,63 @@ export default function ParentPortal() {
                           {attendance.length > 0 ? Math.round((attendance.filter(a => a.status === 'present').length / attendance.length) * 100) : 0}%
                         </p>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Results Summary Section */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 mb-8">
+                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                       <BookOpen className="w-5 h-5 text-emerald-600" /> সাম্প্রতিক ফলাফল
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                       <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex flex-col items-center justify-center text-center">
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">মোট নম্বর</p>
+                          <p className="text-2xl font-black text-emerald-900">
+                             {(() => {
+                               if (!results || results.length === 0) return toBn(0);
+                               const latest = results[results.length-1];
+                               const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
+                               return toBn(latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0));
+                             })()}
+                          </p>
+                       </div>
+                       <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 flex flex-col items-center justify-center text-center">
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">গড় (Average)</p>
+                          <p className="text-2xl font-black text-blue-900">
+                             {(() => {
+                               if (!results || results.length === 0) return toBn(0);
+                               const latest = results[results.length-1];
+                               const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
+                               const total = latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0);
+                               return toBn((total / latestResults.length).toFixed(1));
+                             })()}
+                          </p>
+                       </div>
+                       <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex flex-col items-center justify-center text-center">
+                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">গ্রেড (Grade)</p>
+                          <p className="text-2xl font-black text-amber-900">
+                             {(() => {
+                               if (!results || results.length === 0) return "-";
+                               const latest = results[results.length-1];
+                               const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
+                               const total = latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0);
+                               const avg = total / latestResults.length;
+                               if (latestResults.some(r => r.grade === 'F')) return "F";
+                               return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                             })()}
+                          </p>
+                       </div>
+                       <div className="p-6 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center justify-center text-center">
+                          <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">র‍্যাঙ্ক (Rank)</p>
+                          <p className="text-2xl font-black text-rose-900">
+                             {(() => {
+                               if (!results || results.length === 0) return "-";
+                               const latest = results[results.length-1];
+                               const statKey = `${latest.exam_name}|${latest.year || new Date().getFullYear().toString()}`;
+                               return fullProfile?.examStats?.[statKey]?.rank ? toBn(fullProfile.examStats[statKey].rank) : "-";
+                             })()}
+                          </p>
+                       </div>
                     </div>
                   </div>
 
@@ -1323,29 +1423,193 @@ export default function ParentPortal() {
           </motion.div>
         )}
 
-              {activeTab === "results" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-2xl font-bold text-slate-900">পরীক্ষার ফলাফল</h3>
-                    <div className="flex gap-4">
-                      {fullProfile && selectedResultExam && (
-                        <button 
-                          onClick={() => downloadPDF('student-marksheet-template', `Marksheet_${student.name}.pdf`)}
-                          disabled={downloading}
-                          className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md shadow-emerald-900/20"
-                        >
-                          {downloading ? <div className="relative flex items-center justify-center w-12 h-12">
-  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
-  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
-  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
-</div> : <Download className="w-4 h-4" />}
-                          মার্কশিট ডাউনলোড
-                        </button>
-                      )}
-                      {settings?.enable_historical_reports ? (
-                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold shadow-sm border border-emerald-200">অফিসিয়াল মার্কশিট প্রদেয়</span>
-                      ) : null}
+        {activeTab === "food-menu" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                  <Utensils className="text-emerald-600" /> প্রতিদিনের খাবারের মেনু
+                </h3>
+                <p className="text-slate-500 font-bold mt-2">মাদরাসা থেকে পরিবেশন করা খাবারের তালিকা</p>
+            </div>
+
+            {loadingFood ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {foodMenu.sort((a, b) => {
+                    const parseSerial = (val: any) => {
+                      if (val === undefined || val === null || val === "") return 999999;
+                      let s = String(val).trim();
+                      const banglaDigits: any = { '০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9' };
+                      s = s.replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+                      const n = parseInt(s.replace(/[^0-9]/g, ''));
+                      return isNaN(n) ? 999999 : n;
+                    };
+                    return parseSerial(a.serial || a.order) - parseSerial(b.serial || b.order);
+                  }).map((item, idx) => (
+                    <div key={item.id || idx} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative group overflow-hidden">
+                      <div className="relative mb-4">
+                        {item.image_url ? (
+                          <img src={item.image_url} className="w-full aspect-video object-cover rounded-3xl" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full aspect-video bg-emerald-50 rounded-3xl flex items-center justify-center">
+                            <Utensils className="w-12 h-12 text-emerald-200" />
+                          </div>
+                        )}
+                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-2xl font-black text-xs shadow-sm">
+                          {item.title}
+                        </div>
+                      </div>
+                      <p className="text-slate-700 font-bold leading-relaxed">{item.description}</p>
                     </div>
+                  ))}
+                  {foodMenu.length === 0 && (
+                    <div className="col-span-full text-center py-20 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                      <Utensils className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                      <p className="text-slate-400 font-bold">কোন খাবারের তালিকা পাওয়া যায়নি</p>
+                    </div>
+                  )}
+                </div>
+            )}
+          </motion.div>
+        )}
+
+              {activeTab === "results" && (
+                <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
+                  <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500 opacity-[0.03] rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                    
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 relative z-10">
+                      <div>
+                        <h3 className="text-3xl font-black text-slate-900 mb-2">পরীক্ষার ফলাফল</h3>
+                        <p className="text-slate-500 font-bold">সকল পরীক্ষার বিস্তারিত ফলাফল ও মার্কশিট</p>
+                      </div>
+                      <div className="flex flex-wrap gap-4">
+                        {fullProfile && selectedResultExam && (
+                          <motion.button 
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => downloadPDF('student-marksheet-template', `Marksheet_${student.name}.pdf`)}
+                            disabled={downloading}
+                            className="flex items-center gap-3 px-8 py-4 bg-emerald-900 text-white rounded-2xl font-black text-sm hover:bg-emerald-950 transition-all shadow-xl shadow-emerald-900/20 disabled:opacity-50"
+                          >
+                            {downloading ? (
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                              <Download className="w-5 h-5" />
+                            )}
+                            মার্কশিট ডাউনলোড
+                          </motion.button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 mb-10">
+                      {fullProfile?.examStats && Object.keys(fullProfile.examStats).sort((a, b) => b.localeCompare(a)).map(examKey => (
+                        <button
+                          key={examKey}
+                          onClick={() => setSelectedResultExam(examKey)}
+                          className={cn(
+                            "px-6 py-3 rounded-2xl font-black text-sm transition-all border-2",
+                            selectedResultExam === examKey
+                              ? "bg-emerald-900 text-white border-emerald-900 shadow-lg shadow-emerald-900/10"
+                              : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200 hover:text-emerald-600"
+                          )}
+                        >
+                          {examKey.split('|')[0]} ({toBn(examKey.split('|')[1])})
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedResultExam && fullProfile?.examStats?.[selectedResultExam] ? (
+                      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* Status Grid */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                              <Star className="w-3 h-3 text-amber-500" /> মোট নম্বর
+                            </p>
+                            <p className="text-3xl font-black text-slate-900">{toBn(fullProfile.examStats[selectedResultExam].myTotal)}</p>
+                          </div>
+                          <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
+                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                              <Award className="w-3 h-3" /> গ্রেড
+                            </p>
+                            <p className="text-3xl font-black text-emerald-900">
+                              {(() => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                const subResults = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                                const avg = fullProfile.examStats[selectedResultExam].myTotal / subResults.length;
+                                if (subResults.some((r: any) => r.grade === 'F')) return "F";
+                                return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                              })()}
+                            </p>
+                          </div>
+                          <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100">
+                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                              <Hash className="w-3 h-3" /> র‍্যাঙ্ক
+                            </p>
+                            <p className="text-3xl font-black text-blue-900">
+                              #{toBn(fullProfile.examStats[selectedResultExam].rank)}
+                              <span className="text-sm font-bold text-blue-400 ml-1">/{toBn(fullProfile.examStats[selectedResultExam].totalStudents)}</span>
+                            </p>
+                          </div>
+                          <div className="bg-orange-50 p-6 rounded-[2rem] border border-orange-100">
+                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                              <Trophy className="w-3 h-3" /> সর্বোচ্চ
+                            </p>
+                            <p className="text-3xl font-black text-orange-900">{toBn(fullProfile.examStats[selectedResultExam].highestMarks)}</p>
+                          </div>
+                        </div>
+
+                        {/* Marks Table */}
+                        <div className="overflow-hidden rounded-[2rem] border border-slate-100 shadow-sm bg-white">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50">
+                                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">বিষয়</th>
+                                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest text-center">প্রাপ্ত নম্বর</th>
+                                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest text-center">গ্রেড</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {fullProfile.results
+                                .filter((r: any) => r.exam_name === selectedResultExam.split('|')[0] && (r.year || new Date().getFullYear().toString()) === selectedResultExam.split('|')[1])
+                                .map((res: any, idx: number) => (
+                                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                                    <td className="px-8 py-5">
+                                      <p className="font-extrabold text-slate-700 group-hover:text-emerald-900 transition-colors">{res.subject}</p>
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                      <span className={cn(
+                                        "inline-block px-4 py-1.5 rounded-xl font-black text-lg",
+                                        Number(res.marks) < 33 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                                      )}>
+                                        {toBn(res.marks)}
+                                      </span>
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                      <span className={cn(
+                                        "font-black text-xl",
+                                        res.grade === 'F' ? "text-rose-500" : "text-emerald-500"
+                                      )}>
+                                        {res.grade}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                        <BookOpen className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">ফলাফল দেখতে ওপরের পরীক্ষা নির্বাচন করুন</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Marksheet Template (Hidden) */}
@@ -1417,22 +1681,34 @@ export default function ParentPortal() {
                             <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>সর্বোচ্চ নম্বর</p>
                             <p className="text-2xl font-black" style={{ color: '#1e293b' }}>{fullProfile.examStats[selectedResultExam].highestMarks}</p>
                           </div>
+                          <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #06b6d4' }}>
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>উপস্থিতি</p>
+                            <p className="text-2xl font-black" style={{ color: '#1e293b' }}>
+                              {fullProfile.attendance.length > 0 
+                                ? Math.round((fullProfile.attendance.filter((a: any) => a.status === 'present').length / fullProfile.attendance.length) * 100) 
+                                : 0}%
+                            </p>
+                          </div>
                           <div className="p-4 rounded-xl text-center shadow-sm" style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderTop: '4px solid #ec4899' }}>
-                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>গ্রেড</p>
-                            <p className="text-3xl font-black" style={(() => {
-                                const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
+                            <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>ফলাফল</p>
+                            <p className={cn("text-2xl font-black", 
+                              (() => {
                                 const [exam, year] = selectedResultExam.split('|');
-                                const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
-                                const avg = total / numSubjects;
-                                const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
-                                return grade === 'F' ? { color: '#e11d48' } : { color: '#059669' };
+                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                                  ? "text-rose-600" 
+                                  : "text-emerald-600"
+                              })()
+                            )} style={(() => {
+                                const [exam, year] = selectedResultExam.split('|');
+                                return fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).some((r: any) => r.grade === 'F') 
+                                  ? { color: '#e11d48' } : { color: '#059669' };
                               })()}>
                               {(() => {
-                                const total = fullProfile.examStats[selectedResultExam]?.myTotal || 0;
                                 const [exam, year] = selectedResultExam.split('|');
-                                const numSubjects = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year).length || 1;
-                                const avg = total / numSubjects;
-                                return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                                const resData = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
+                                if (resData.length === 0) return "-";
+                                const avg = fullProfile.examStats[selectedResultExam].myTotal / resData.length;
+                                return resData.some((r: any) => r.grade === 'F') ? "F" : (avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F");
                               })()}
                             </p>
                           </div>
@@ -1477,10 +1753,20 @@ export default function ParentPortal() {
                           <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
                           <p className="font-bold text-xl uppercase tracking-widest text-slate-800">শ্রেণী শিক্ষকের স্বাক্ষর</p>
                         </div>
-                        <div className="text-center">
-                          <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
-                          <p className="font-bold text-xl uppercase tracking-widest text-slate-800">অধ্যক্ষের স্বাক্ষর</p>
-                        </div>
+            <div className="text-center relative">
+               {settings?.muhtamim_signature_url && settings.show_muhtamim_signature && (
+                 <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-16 pointer-events-none z-10">
+                   <img 
+                     src={settings.muhtamim_signature_url} 
+                     className="w-full h-full object-contain mix-blend-multiply opacity-90" 
+                     alt="Signature"
+                     referrerPolicy="no-referrer"
+                   />
+                 </div>
+               )}
+               <div className="w-64 border-b-[3px] border-slate-800 mb-3 border-dashed"></div>
+               <p className="font-bold text-xl uppercase tracking-widest text-slate-800">মুহতামিমের স্বাক্ষর</p>
+            </div>
                       </div>
                     </div>
                   )}
@@ -1605,14 +1891,16 @@ export default function ParentPortal() {
                             <span className="text-xs font-bold text-pink-600">বিকাশ</span>
                           </button>
                           
-                          <button 
-                            disabled={paying}
-                            onClick={() => initiateLivePayment("nagad")}
-                            className="p-4 bg-white border-2 border-orange-50 hover:border-orange-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
-                          >
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Nagad_Logo.svg/1200px-Nagad_Logo.svg.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
-                            <span className="text-xs font-bold text-orange-600">নগদ</span>
-                          </button>
+                          {settings?.enable_nagad && (
+                            <button 
+                              disabled={paying}
+                              onClick={() => initiateLivePayment("nagad")}
+                              className="p-4 bg-white border-2 border-orange-50 hover:border-orange-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
+                            >
+                              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Nagad_Logo.svg/1200px-Nagad_Logo.svg.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
+                              <span className="text-xs font-bold text-orange-600">নগদ</span>
+                            </button>
+                          )}
 
                           <button 
                             disabled={paying}
