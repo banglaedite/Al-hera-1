@@ -316,7 +316,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
               </div>
             )}
           </div>
-          <h1 className="text-4xl font-black text-slate-900 mb-2">{settings?.title || "সুন্দর রসিক মাদ্রাসা"}</h1>
+          <h1 className="text-4xl font-black text-slate-900 mb-2">{settings?.title || "মাদরাসা"}</h1>
           <p className="text-slate-600 font-bold text-lg mb-4">{settings?.address || "মধুপুর, টাঙ্গাইল"}</p>
           
           <div className="inline-block px-8 py-2 bg-emerald-600 text-white rounded-full font-black text-xl mb-4">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { TeacherManager } from "./TeacherManager";
 import { TeacherArchiveManager } from "./TeacherArchiveManager";
@@ -118,7 +118,7 @@ const AdminStat = ({ label, value, icon: Icon, color }: any) => (
 );
 
 const PrintHeader = ({ settings }: { settings: any }) => (
-  <div className="hidden print:block print-header mb-8 border-b-4 border-slate-900 pb-6">
+  <div className="hidden print:block print-header mb-2 border-b-4 border-slate-900 pb-2">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-8">
         {settings?.logo_url && settings.logo_url !== "" && (
@@ -394,6 +394,44 @@ export default function AdminPanel() {
   const [sidebarPasswordModal, setSidebarPasswordModal] = useState<{isOpen: boolean, targetTab: string}>({isOpen: false, targetTab: ""});
   const [sidebarPasswordInput, setSidebarPasswordInput] = useState("");
   const [verifyingSidebarAccess, setVerifyingSidebarAccess] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    let isDown = false;
+    let startX: number;
+    let scrollLeft: number;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDown = true;
+      el.classList.add('cursor-grabbing');
+      startX = e.pageX - el.offsetLeft;
+      scrollLeft = el.scrollLeft;
+    };
+    const onMouseLeave = () => {
+      isDown = false;
+      el.classList.remove('cursor-grabbing');
+    };
+    const onMouseUp = () => {
+      isDown = false;
+      el.classList.remove('cursor-grabbing');
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      e.preventDefault();
+      el.style.userSelect = 'none';
+      const x = e.pageX - el.offsetLeft;
+      const walk = (x - startX) * 0.5; // Reduced speed
+      el.scrollLeft = scrollLeft - walk;
+    };
+
+    el.addEventListener('mousedown', onMouseDown);
+    el.addEventListener('mouseleave', () => { onMouseLeave(); el.style.userSelect = ''; });
+    el.addEventListener('mouseup', () => { onMouseUp(); el.style.userSelect = ''; });
+    el.addEventListener('mousemove', onMouseMove);
+  }, []);
   // A5 Receipt Template Component
   const A5Receipt = ({ transaction }: { transaction: any }) => (
     <div id="a5-receipt-print" className="hidden print:block w-[148mm] h-[210mm] p-10 bg-white font-sans text-slate-900 border-4 border-slate-900">
@@ -441,22 +479,48 @@ export default function AdminPanel() {
     localStorage.setItem("adminRole", adminRole);
     localStorage.setItem("adminPermissions", JSON.stringify(adminPermissions));
     if (isAuthenticated) {
-      Promise.all([
+      const tabsToFetchEssential = [
         fetchStats(),
-        fetchStudents(),
-        fetchTeachers(),
-        fetchNotices(),
         fetchSettings(),
         fetchClasses(),
         fetchPendingCounts()
-      ]).finally(() => {
+      ];
+
+      Promise.all(tabsToFetchEssential).finally(() => {
         setLoading(false);
       });
-      // Reduced polling from 30s to 5m to drastically cut down read quotas
+      
       const interval = setInterval(fetchPendingCounts, 300000);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
+
+  const [recentStudents, setRecentStudents] = useState<any[]>([]);
+
+  const fetchRecentStudents = async () => {
+    try {
+      const res = await fetch("/api/students/recent");
+      if (res.ok) setRecentStudents(await res.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      if (activeTab === "dashboard" && recentStudents.length === 0) {
+        fetchRecentStudents();
+      } else if (activeTab === "students" && students.length === 0) {
+        fetchStudents();
+      } else if (activeTab === "fees" && students.length === 0) {
+        fetchStudents();
+      } else if (activeTab === "teachers" && teachers.length === 0) {
+        fetchTeachers();
+      } else if (activeTab === "notices" && notices.length === 0) {
+        fetchNotices();
+      }
+    }
+  }, [activeTab, isAuthenticated, loading, recentStudents.length, students.length, teachers.length, notices.length]);
 
   useEffect(() => {
     localStorage.setItem("adminActiveTab", activeTab);
@@ -577,7 +641,7 @@ export default function AdminPanel() {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch("/api/students");
+      const res = await fetch("/api/students?limit=100");
       if (!res.ok) {
         const text = await res.text();
         console.error("Failed to fetch students. Status:", res.status, "Response:", text);
@@ -588,6 +652,7 @@ export default function AdminPanel() {
         const sortedStudents = data.sort((a, b) => {
           const rollA = Number(a.roll) || Infinity;
           const rollB = Number(b.roll) || Infinity;
+          if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
           return rollA - rollB;
         });
         setStudents(sortedStudents);
@@ -810,7 +875,7 @@ export default function AdminPanel() {
                           </tr>
                         </thead>
                         <tbody className="text-sm">
-                          {students?.slice(0, 5).map((s) => (
+                          {recentStudents.map((s) => (
                             <tr key={s.id} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50" onClick={() => {
                               setActiveTab("students");
                             }}>
@@ -2642,7 +2707,7 @@ const sendEmailWithPDF = async (elementId: string, student: any, transactionId: 
   }
 };
 
-const printElement = (elementId: string) => {
+const printElement = (elementId: string, isLandscape: boolean = false) => {
   const element = document.getElementById(elementId);
   if (!element) return;
   
@@ -2657,7 +2722,7 @@ const printElement = (elementId: string) => {
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Hind+Siliguri:wght@400;700&display=swap');
           @page {
-            size: auto;
+            size: ${isLandscape ? 'A4 landscape' : 'A4 portrait'};
             margin: 15mm 10mm;
           }
           * {
@@ -3805,7 +3870,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                             const [exam, year] = selectedResultExam.split('|');
                             const results = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
                             return results.length > 0 
-                              ? (fullProfile.examStats[selectedResultExam].myTotal / results.length).toFixed(1)
+                              ? (fullProfile.examStats[selectedResultExam].myTotal / results.length).toFixed(2)
                               : "0.0";
                           })()}
                         </p>
@@ -4174,7 +4239,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                                  {toBn((fullProfile.examStats[selectedResultExam].myTotal / (fullProfile.results.filter((r: any) => {
                                    const [exam, year] = selectedResultExam.split('|');
                                    return r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year;
-                                 }).length || 1)).toFixed(1))}
+                                 }).length || 1)).toFixed(2))}
                                </span>
                             </div>
                           </div>
@@ -4748,6 +4813,31 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
 
 function ResultManager({ students, settings, classesList, fullProfile, setFullProfile }: { students: any[], settings: any, classesList: string[], fullProfile: any, setFullProfile: (profile: any) => void }) {
   const { addToast } = useToast();
+  
+  // Horizontal Scroll with Mouse Drag
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [startX, setStartX] = React.useState(0);
+  const [scrollLeft, setScrollLeft] = React.useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollRef.current.offsetLeft);
+    setScrollLeft(scrollRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => setIsDragging(false);
+  const handleMouseUp = () => setIsDragging(false);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX) * 2; 
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
+
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedExam, setSelectedExam] = useState("");
   const [classResults, setClassResults] = useState<any[]>([]);
@@ -5823,13 +5913,13 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => { setViewMode("short"); setTimeout(() => printElement('class-results-report-template'), 500); }}
+                      onClick={() => { setViewMode("short"); setTimeout(() => printElement('class-results-report-template', true), 500); }}
                       className="px-4 py-3 bg-emerald-100 text-emerald-700 rounded-2xl hover:bg-emerald-200 transition-all font-bold text-xs"
                     >
                       সংক্ষিপ্ত প্রিন্ট
                     </button>
                     <button 
-                      onClick={() => { setViewMode("detailed"); setTimeout(() => printElement('class-results-report-template'), 500); }}
+                      onClick={() => { setViewMode("detailed"); setTimeout(() => printElement('class-results-report-template', true), 500); }}
                       className="px-4 py-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all font-bold text-xs"
                     >
                       বিস্তারিত প্রিন্ট
@@ -5902,162 +5992,156 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                     "p-12 bg-white border-4 border-emerald-50 rounded-3xl print:p-0 print:border-0 print:m-0 print:w-full print:max-w-none mx-auto print:shadow-none overflow-visible",
                     viewMode === "detailed" ? "is-detailed" : "is-short"
                   )}>
-                    {/* Header */}
-                    <div className="text-center mb-10 border-b-4 border-emerald-100 pb-8 print:border-b-2 print:pb-4 flex flex-col items-center">
-                      <div className="flex justify-between items-center w-full mb-6">
-                        {settings.logo && <img src={settings.logo} alt="Logo" className="w-24 h-24 object-contain rounded-2xl shadow-lg" />}
-                        <div className="text-center flex-1">
-                          <h1 className="text-4xl font-black text-emerald-900 mb-2 tracking-tight">{settings.name || "মাদ্রাসা"}</h1>
-                          <p className="text-lg font-bold text-emerald-700">{settings.address || ""}</p>
-                        </div>
-                        {settings.qr_code_url && <img src={settings.qr_code_url} alt="QR Code" className="w-24 h-24 object-contain rounded-2xl shadow-lg" />}
-                      </div>
-                      <div className="px-8 py-3 bg-emerald-600 text-white font-black text-xl rounded-2xl shadow-xl inline-block">
-                        {selectedExam} ({selectedYear}) - {selectedClass}
-                      </div>
-                    </div>
+                    {(() => {
+                      const pageSize = 15;
+                      // 1. Calculate Ranks first
+                      const forRanking = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
+                      const rankMap: Record<string, number> = {};
+                      let currentRank = 1;
+                      let prevMarks = -1;
+                      let mappedRank = 1;
+                      forRanking.forEach((r) => {
+                        if (r.totalMarks !== prevMarks) { mappedRank = currentRank; prevMarks = r.totalMarks; }
+                        rankMap[r.id] = mappedRank; currentRank++;
+                      });
 
-                    {/* Top Scorers for Print */}
-                    {includeTopScorersInPrint && Object.keys(topScorersPerSubject).length > 0 && (
-                      <div className="mb-8 bg-amber-50 p-6 rounded-2xl border-2 border-amber-100 print:bg-amber-50 print:border-amber-100">
-                        <h3 className="text-amber-800 font-black mb-4 text-center text-lg">সর্বোচ্চ নাম্বার (বিষয়ভিত্তিক)</h3>
-                        <div className="grid grid-cols-4 gap-4">
-                          {Object.entries(topScorersPerSubject).map(([subj, data]: [string, any]) => (
-                            <div key={subj} className="bg-white p-3 rounded-xl border border-amber-100 text-center shadow-sm">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1 leading-none">{subj}</p>
-                              <p className="text-lg font-black text-amber-600 leading-tight">{toBn(data.marks)}</p>
-                              <div className="text-[10px] font-bold text-slate-700 truncate leading-tight mt-1">
-                                {data.students.join(", ")}
+                      // 2. Sort by Roll
+                      const finalSorted = [...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
+                      
+                      return (
+                        <div className="break-inside-avoid print:pt-4">
+                          {/* Header */}
+                          <div className="text-center mb-2 border-b-4 border-emerald-100 pb-2 flex flex-col items-center print:border-0 print:pb-0 print:mb-0">
+                            <div className="flex flex-col justify-center items-center w-full print:mb-1">
+                              <div className="text-center flex-1">
+                                <p className="hidden print:block text-sm font-bold text-slate-800 mb-1">বিসমিল্লাহির রাহমানির রাহিম</p>
+                                <h1 className="text-3xl font-black text-emerald-900 mb-1 tracking-tight print:text-xl print:mb-0">{settings.title || "মাদ্রাসা"}</h1>
+                                <p className="text-md font-bold text-emerald-700 print:text-sm print:font-bold print:text-slate-800">{selectedExam} ({selectedYear})</p>
+                                <p className="text-lg font-black text-emerald-800 print:text-sm print:font-bold print:text-slate-800">শ্রেণি: {selectedClass}</p>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          </div>
 
-                    {/* Results Table Scroll Wrapper */}
-                    <div className="overflow-x-auto custom-scrollbar w-full border border-slate-100 rounded-2xl print:overflow-visible print:border-0">
-                      <table className={cn(
-                        "w-full min-w-[900px] text-left border-separate border-spacing-y-2 print:min-w-0 print:border-spacing-0",
-                        viewMode === 'detailed' ? "is-detailed" : "is-short"
-                      )}>
-                        <thead>
-                          <tr className="bg-emerald-50 text-emerald-900">
-                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">রোল</th>
-                            <th className="p-4 text-left border-b font-black text-xl print:text-5xl">নাম</th>
-                            {viewMode === 'detailed' && classSubjects.map(sub => (
-                              <th key={sub.id} className="p-0 border-b border-slate-900 text-center align-bottom" style={{ height: 'auto' }}>
-                                <div className="vertical-header" style={{ height: 'auto' }}>{sub.name}</div>
-                              </th>
-                            ))}
-                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">মোট</th>
-                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">গড়</th>
-                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">গ্রেড</th>
-                            <th className="p-4 text-center border-b font-black text-xl print:text-5xl">র‍্যাঙ্ক</th>
-                            <th className="p-4 rounded-r-2xl text-xs font-black uppercase tracking-widest text-center no-print print:hidden">অ্যাকশন</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-emerald-50">
-                          {(() => {
-                            // 1. Calculate Ranks first using Total Marks (Descending)
-                            const forRanking = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
-                            const rankMap: Record<string, number> = {};
-                            let currentRank = 1;
-                            let prevMarks = -1;
-                            let mappedRank = 1;
-                            
-                            forRanking.forEach((r) => {
-                              if (r.totalMarks !== prevMarks) {
-                                mappedRank = currentRank;
-                                prevMarks = r.totalMarks;
-                              }
-                              rankMap[r.id] = mappedRank;
-                              currentRank++;
-                            });
+                          {/* Top Scorers */}
+                          {includeTopScorersInPrint && Object.keys(topScorersPerSubject).length > 0 && (
+                            <div className="mb-4 bg-amber-50 p-3 rounded-xl border border-amber-100 print:mb-2 print:p-2">
+                              <h3 className="text-amber-800 font-black mb-2 text-center text-sm print:mb-1 print:text-[10px]">সর্বোচ্চ নাম্বার (বিষয়ভিত্তিক)</h3>
+                              <div className="grid grid-cols-4 gap-2 print:gap-1">
+                                {Object.entries(topScorersPerSubject).map(([subj, data]: [string, any]) => (
+                                  <div key={subj} className="bg-white p-2 rounded-lg border border-amber-100 text-center shadow-sm print:shadow-none print:border-amber-200">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter leading-none print:text-[7px]">{subj}</p>
+                                    <p className="text-md font-black text-amber-600 leading-tight print:text-[10px]">{toBn(data.marks)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-                            // 2. Final Sorting by Roll Number (Ascending)
-                            const finalSorted = [...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
-                            
-                            return finalSorted.map((r) => {
-                              const rank = rankMap[r.id];
-                              const avg = r.avgMarks || (r.totalMarks / (classSubjects.length || 1));
-                              const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
-                              
-                                return (
-                                  <tr key={r.id} className="bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none">
-                                    <td className="p-4 font-black text-slate-700 text-center text-lg print:p-8 print:text-5xl">{toBn(r.roll)}</td>
-                                    <td className="p-4 font-black text-slate-900 text-xl print:p-8 print:text-5xl">{r.name}</td>
-                                    {viewMode === 'detailed' && classSubjects.map(sub => {
-                                      const marks = r.subjects?.find((s: any) => String(s.subject || "").trim().toLowerCase() === String(sub.name || "").trim().toLowerCase())?.marks;
-                                      return (
-                                        <td key={sub.id} className="p-4 text-center font-black text-lg print:p-8 print:text-5xl">
-                                          <span className={cn(
-                                            marks !== undefined && marks !== "-" ? (
-                                              Number(marks) < 33 ? "text-rose-600" : 
-                                              Number(marks) === 100 ? "text-emerald-500" : 
-                                              "text-slate-900"
-                                            ) : "text-slate-400"
-                                          )}>
-                                            {toBn(marks || "-")}
-                                          </span>
-                                        </td>
-                                      )
-                                    })}
-                                    <td className="p-4 font-black text-emerald-700 text-2xl text-center print:p-8 print:text-6xl">{toBn(r.totalMarks)}</td>
-                                    <td className="p-4 font-black text-slate-900 text-xl text-center print:p-8 print:text-4xl">{toBn(avg.toFixed(1))}</td>
-                                    <td className="p-4 font-black text-center print:p-4 text-center">
-                                      <span className={cn(
-                                        "px-4 py-1 rounded-xl text-base font-black print:text-[10pt] print:px-2 print:py-0.5 print:bg-transparent print:border print:border-slate-300",
-                                        grade === 'A+' ? "bg-green-100 text-green-700 print:text-emerald-900 print:border-emerald-600" :
-                                        grade === 'A' ? "bg-blue-100 text-blue-700 print:text-blue-900 print:border-blue-600" :
-                                        grade === 'B' ? "bg-orange-100 text-orange-700 print:text-orange-900 print:border-orange-600" :
-                                        grade === 'C' ? "bg-purple-100 text-purple-700 print:text-purple-900 print:border-purple-600" :
-                                        grade === 'D' ? "bg-slate-100 text-slate-700 print:text-slate-900 print:border-slate-600" :
-                                        grade === 'F' ? "bg-red-100 text-red-700 print:text-rose-900 print:border-rose-600" : "bg-blue-100 text-blue-700"
-                                      )}>
-                                        {grade}
-                                      </span>
-                                    </td>
-                                    <td className="p-4 text-center print:p-6">
-                                      <div className={cn(
-                                        "w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm mx-auto print:w-auto print:h-auto print:px-2 print:py-0.5 print:text-[10pt] print:shadow-none print:border print:rounded-xl",
-                                        rank <= 3 ? "bg-green-100 text-green-700 print:text-emerald-900 print:border-emerald-600" : 
-                                        rank <= 10 ? "bg-yellow-100 text-yellow-700 print:text-yellow-900 print:border-yellow-600" :
-                                        "bg-blue-50 text-blue-600 border border-blue-100 print:text-slate-900 print:border-slate-600"
-                                      )}>
-                                        {toBn(rank)}
-                                      </div>
-                                    </td>
-                                  <td className="p-6 rounded-r-2xl text-center print:hidden">
-                                    <button 
-                                      onClick={() => handlePrintIndividualResult(r)}
-                                      className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all no-print"
-                                    >
-                                      <Printer className="w-4 h-4" />
-                                    </button>
-                                  </td>
+                          {/* Table Container */}
+                          <div className="overflow-x-auto custom-scrollbar w-full mb-2 print:hidden">
+                            <div style={{height: '10px'}} />
+                          </div>
+                          
+                          <div ref={scrollRef} className={cn("overflow-x-auto custom-scrollbar w-full border border-slate-100 rounded-2xl print:overflow-visible print:border-0 cursor-grab active:cursor-grabbing")}>
+                            <table className={cn(
+                              "w-full min-w-max text-left border-separate border-spacing-y-2 print:min-w-0 print:border-spacing-0",
+                              viewMode === 'detailed' ? "is-detailed" : "is-short"
+                            )}>
+                              <thead>
+                                <tr className="bg-emerald-50 text-emerald-900 print:bg-white print:border-b-2 print:border-slate-900 whitespace-nowrap">
+                                  <th className="p-4 text-center border border-slate-300 font-black text-xl print:text-base print:border-b-2 print:border-slate-900 print:p-2 sticky left-0 z-20 bg-emerald-50">রোল</th>
+                                  <th className="p-4 text-left border border-slate-300 font-black text-xl print:text-base print:border-b-2 print:border-slate-900 print:p-2 sticky left-[80px] z-20 bg-emerald-50">নাম</th>
+                                  {viewMode === 'detailed' && classSubjects.map(sub => (
+                                    <th key={sub.id} className="p-0 border-b border-l border-slate-200 border-slate-900 text-center align-bottom print:border-b-2 print:border-slate-900">
+                                      <div className="vertical-header">{sub.name}</div>
+                                    </th>
+                                  ))}
+                                  <th className="p-4 text-center border-b border-l border-slate-200 font-black text-xl print:text-base print:border-b-2 print:border-slate-900 print:p-2">মোট</th>
+                                  <th className="p-4 text-center border-b border-l border-slate-200 font-black text-xl print:text-base print:border-b-2 print:border-slate-900 print:p-2">গড়</th>
+                                  <th className="p-4 text-center border-b border-l border-slate-200 font-black text-xl print:text-base print:border-b-2 print:border-slate-900 print:p-2">গ্রেড</th>
+                                  <th className="p-4 text-center border-b border-l border-slate-200 font-black text-xl print:text-base print:border-b-2 print:border-slate-900 print:p-2">র‍্যাঙ্ক</th>
+                                  <th className="p-4 rounded-r-2xl text-xs font-black uppercase tracking-widest text-center no-print print:hidden">অ্যাকশন</th>
                                 </tr>
-                              );
-                            });
-                          })()}
-                        </tbody>
-                        <tfoot className="print:table-footer-group">
-                          <tr>
-                            <td colSpan={viewMode === 'detailed' ? 7 + classSubjects.length : 7} className="pt-12 border-0!">
-                            <div className="flex justify-between items-end px-16">
-                              <div className="text-left">
-                                <p className="text-slate-400 font-bold text-[12px] print:text-lg mb-2 print:mb-1">রিপোর্ট তারিখ:</p>
-                                <p className="text-slate-900 font-black text-sm print:text-xl">{formatDate(new Date())}</p>
-                              </div>
-                              <div className="text-center">
-                                <div className="w-48 border-t-2 border-slate-900 pt-3 font-black text-slate-900 text-lg print:w-48 print:pt-3 print:text-xl print:border-t-2">মুহতামিম</div>
-                              </div>
+                              </thead>
+                              <tbody className="divide-y divide-emerald-50 print:divide-y print:divide-slate-300">
+                                {finalSorted.map((r) => {
+                                  const rank = rankMap[r.id];
+                                  const avg = r.avgMarks || (r.totalMarks / (classSubjects.length || 1));
+                                  const grade = avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
+                                  
+                                  return (
+                                    <tr key={r.id} className="group bg-white hover:bg-emerald-50 transition-colors shadow-sm rounded-2xl print:shadow-none print:rounded-none whitespace-nowrap">
+                                      <td className="p-4 font-black text-slate-700 text-center text-lg print:p-2 print:text-base print:font-bold sticky left-0 z-10 bg-white group-hover:bg-emerald-50 border border-slate-300">{toBn(r.roll)}</td>
+                                      <td className="p-4 font-black text-slate-900 text-lg print:p-1 print:text-[8pt] print:leading-tight sticky left-[80px] z-10 bg-white group-hover:bg-emerald-50 border border-slate-300">{r.name}</td>
+                                      {viewMode === 'detailed' && classSubjects.map(sub => {
+                                        const marks = r.subjects?.find((s: any) => String(s.subject || "").trim().toLowerCase() === String(sub.name || "").trim().toLowerCase())?.marks;
+                                        return (
+                                          <td key={sub.id} className="p-4 text-center font-black text-lg print:p-1 print:text-[8pt] print:font-bold border-l border-slate-100">
+                                            <span className={cn(
+                                              marks !== undefined && marks !== "-" ? (
+                                                Number(marks) < 33 ? "text-rose-600 print:text-slate-900" : 
+                                                Number(marks) === 100 ? "text-emerald-500 print:text-slate-900" : 
+                                                "text-slate-900"
+                                              ) : "text-slate-400 print:text-slate-900"
+                                            )}>
+                                              {toBn(marks !== undefined && marks !== "-" ? Number(marks).toFixed(2).replace(/\.00$/, '') : marks)}
+                                            </span>
+                                          </td>
+                                        )
+                                      })}
+                                      <td className="p-4 font-black text-emerald-700 text-lg text-center print:p-1 print:text-[8pt] print:text-slate-900 print:font-bold border-l border-slate-100">{toBn(Number(r.totalMarks).toFixed(2).replace(/\.00$/, ''))}</td>
+                                      <td className="p-4 font-black text-slate-900 text-lg text-center print:p-1 print:text-[8pt] border-l border-slate-100">{toBn(Number(avg).toFixed(2).replace(/\.00$/, ''))}</td>
+                                      <td className="p-4 font-black text-center print:p-2 border-l border-slate-100">
+                                        <span className={cn(
+                                          "px-4 py-1 rounded-xl text-base font-black print:text-[10pt] print:px-2 print:py-0.5 print:bg-transparent print:border print:border-slate-300",
+                                          grade === 'A+' ? "bg-green-100 text-green-700 print:text-emerald-900 print:border-emerald-600" :
+                                          grade === 'A' ? "bg-blue-100 text-blue-700 print:text-blue-900 print:border-blue-600" :
+                                          grade === 'B' ? "bg-orange-100 text-orange-700 print:text-orange-900 print:border-orange-600" :
+                                          grade === 'C' ? "bg-purple-100 text-purple-700 print:text-purple-900 print:border-purple-600" :
+                                          grade === 'D' ? "bg-slate-100 text-slate-700 print:text-slate-900 print:border-slate-600" :
+                                          grade === 'F' ? "bg-red-100 text-red-700 print:text-rose-900 print:border-rose-600" : "bg-blue-100 text-blue-700"
+                                        )}>
+                                          {grade}
+                                        </span>
+                                      </td>
+                                      <td className="p-4 font-black ttext-center print:p-2 border-l border-slate-100">
+                                        <div className={cn(
+                                          "w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm mx-auto print:w-auto print:h-auto print:px-2 print:py-0.5 print:text-[10pt] print:shadow-none print:border print:rounded-xl",
+                                          rank <= 3 ? "bg-green-100 text-green-700 print:text-emerald-900 print:border-emerald-600" : 
+                                          rank <= 10 ? "bg-yellow-100 text-yellow-700 print:text-yellow-900 print:border-yellow-600" :
+                                          "bg-blue-50 text-blue-600 border border-blue-100 print:text-slate-900 print:border-slate-600"
+                                        )}>
+                                          {toBn(rank)}
+                                        </div>
+                                      </td>
+                                      <td className="p-6 rounded-r-2xl text-center print:hidden">
+                                        <button 
+                                          onClick={() => handlePrintIndividualResult(r)}
+                                          className="p-2 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-all no-print"
+                                        >
+                                          <Printer className="w-4 h-4" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Footer */}
+                          <div className="mt-20 flex justify-between items-end px-16 print:mt-12">
+                            <div className="text-left">
+                              <p className="text-slate-400 font-bold text-[12px] print:text-lg mb-2 print:mb-1">রিপোর্ট তারিখ:</p>
+                              <p className="text-slate-900 font-black text-sm print:text-xl">{formatDate(new Date())}</p>
                             </div>
-                          </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                            <div className="text-center">
+                              <div className="w-48 border-t-2 border-slate-900 pt-3 font-black text-slate-900 text-lg print:w-48 print:pt-3 print:text-xl print:border-t-2">মুহতামিম</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -6132,7 +6216,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                                    );
                                  })}
                                  <td className="p-2 text-center font-black border border-slate-300 bg-slate-50 print:p-4">{toBn(student.totalMarks)}</td>
-                                 <td className="p-2 text-center font-bold border border-slate-300 print:p-4">{toBn(avg.toFixed(1))}</td>
+                                 <td className="p-2 text-center font-bold border border-slate-300 print:p-4">{toBn(avg.toFixed(2))}</td>
                                  <td className="p-2 text-center font-black border border-slate-300 print:p-4">{grade}</td>
                                  <td className="p-2 text-center font-black border border-slate-300 text-blue-700 bg-blue-50 print:p-4">{toBn(student.calculatedRank)}</td>
                                </tr>

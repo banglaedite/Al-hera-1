@@ -86,7 +86,7 @@ export default function DashboardHome() {
             transition={{ duration: 0.6 }}
           >
             <span className="inline-block px-5 py-2 rounded-full bg-white/10 backdrop-blur-sm text-emerald-100 text-sm font-bold mb-8">
-              স্বাগতম আল হেরা মাদ্রাসায়
+              স্বাগতম {settings?.title || "মাদরাসায়"}
             </span>
             <h1 className="text-5xl md:text-7xl font-black leading-tight mb-8 tracking-tight">
               আধুনিক ও দ্বীনি শিক্ষার এক অনন্য সমন্বয়

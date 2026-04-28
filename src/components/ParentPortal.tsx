@@ -822,7 +822,6 @@ export default function ParentPortal() {
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "device-history", label: "স্মার্ট হাজিরা লগ", icon: History },
-            { id: "food-menu", label: "খাবারের তালিকা", icon: Coffee },
             { id: "results", label: "রেজাল্ট", icon: BookOpen },
             { id: "amal", label: "দৈনিক আমল", icon: Heart },
             { id: "syllabus", label: "রুটিন", icon: BookOpen },
@@ -982,7 +981,7 @@ export default function ParentPortal() {
                                const latest = results[results.length-1];
                                const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
                                const total = latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0);
-                               return toBn((total / latestResults.length).toFixed(1));
+                                return toBn((total / latestResults.length).toFixed(2));
                              })()}
                           </p>
                        </div>
@@ -1001,7 +1000,7 @@ export default function ParentPortal() {
                           </p>
                        </div>
                        <div className="p-6 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center justify-center text-center">
-                          <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">র‍্যাঙ্ক (Rank)</p>
+                          <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">মেধা স্থান</p>
                           <p className="text-2xl font-black text-rose-900">
                              {(() => {
                                if (!results || results.length === 0) return "-";
@@ -1423,58 +1422,7 @@ export default function ParentPortal() {
           </motion.div>
         )}
 
-        {activeTab === "food-menu" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-                  <Utensils className="text-emerald-600" /> প্রতিদিনের খাবারের মেনু
-                </h3>
-                <p className="text-slate-500 font-bold mt-2">মাদরাসা থেকে পরিবেশন করা খাবারের তালিকা</p>
-            </div>
 
-            {loadingFood ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {foodMenu.sort((a, b) => {
-                    const parseSerial = (val: any) => {
-                      if (val === undefined || val === null || val === "") return 999999;
-                      let s = String(val).trim();
-                      const banglaDigits: any = { '০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9' };
-                      s = s.replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
-                      const n = parseInt(s.replace(/[^0-9]/g, ''));
-                      return isNaN(n) ? 999999 : n;
-                    };
-                    return parseSerial(a.serial || a.order) - parseSerial(b.serial || b.order);
-                  }).map((item, idx) => (
-                    <div key={item.id || idx} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative group overflow-hidden">
-                      <div className="relative mb-4">
-                        {item.image_url ? (
-                          <img src={item.image_url} className="w-full aspect-video object-cover rounded-3xl" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-full aspect-video bg-emerald-50 rounded-3xl flex items-center justify-center">
-                            <Utensils className="w-12 h-12 text-emerald-200" />
-                          </div>
-                        )}
-                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-2xl font-black text-xs shadow-sm">
-                          {item.title}
-                        </div>
-                      </div>
-                      <p className="text-slate-700 font-bold leading-relaxed">{item.description}</p>
-                    </div>
-                  ))}
-                  {foodMenu.length === 0 && (
-                    <div className="col-span-full text-center py-20 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-                      <Utensils className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                      <p className="text-slate-400 font-bold">কোন খাবারের তালিকা পাওয়া যায়নি</p>
-                    </div>
-                  )}
-                </div>
-            )}
-          </motion.div>
-        )}
 
               {activeTab === "results" && (
                 <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
@@ -1549,7 +1497,7 @@ export default function ParentPortal() {
                           </div>
                           <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100">
                             <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                              <Hash className="w-3 h-3" /> র‍্যাঙ্ক
+                              <Hash className="w-3 h-3" /> মেধা স্থান
                             </p>
                             <p className="text-3xl font-black text-blue-900">
                               #{toBn(fullProfile.examStats[selectedResultExam].rank)}
@@ -1565,8 +1513,8 @@ export default function ParentPortal() {
                         </div>
 
                         {/* Marks Table */}
-                        <div className="overflow-hidden rounded-[2rem] border border-slate-100 shadow-sm bg-white">
-                          <table className="w-full text-left border-collapse">
+                        <div className="overflow-x-auto w-full custom-scrollbar">
+                          <table className="w-full text-left border-collapse min-w-[500px]">
                             <thead>
                               <tr className="bg-slate-50">
                                 <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase tracking-widest">বিষয়</th>
@@ -1617,13 +1565,21 @@ export default function ParentPortal() {
                     <div id="student-marksheet-template" className="hidden absolute top-0 left-0 bg-white w-[794px] min-h-[1123px] mx-auto text-center" style={{ padding: '80px 48px 48px 48px', overflow: 'hidden', position: 'relative' }}>
                       {/* Watermark Logo/Pattern */}
                       <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
-                        <GraduationCap className="w-96 h-96" style={{ color: '#064e3b' }} />
+                        {settings?.logo_url ? (
+                           <img src={settings.logo_url} alt="Watermark" className="w-96 h-96 object-contain" />
+                        ) : (
+                           <GraduationCap className="w-96 h-96" style={{ color: '#064e3b' }} />
+                        )}
                       </div>
                       
                       {/* Header Section */}
                       <div className="relative z-10 flex flex-col items-center justify-center mb-10 pb-8" style={{ borderBottom: '4px double #10b981' }}>
-                        <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border-2 border-emerald-200">
-                          <GraduationCap className="w-12 h-12" style={{ color: '#059669' }} />
+                        <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-4 border-2 border-emerald-200 shadow-md">
+                          {settings?.logo_url ? (
+                            <img src={settings.logo_url} alt="Logo" className="w-20 h-20 object-contain" />
+                          ) : (
+                            <GraduationCap className="w-12 h-12" style={{ color: '#059669' }} />
+                          )}
                         </div>
                         <h2 className="text-5xl font-black mb-3 drop-shadow-sm" style={{ color: '#064e3b', fontFamily: 'sans-serif' }}>{settings?.title || "আল হেরা মাদরাসা"}</h2>
                         <div className="px-6 py-2 rounded-full" style={{ backgroundColor: '#ecfdf5', border: '1px solid #10b981' }}>
@@ -1666,7 +1622,7 @@ export default function ParentPortal() {
                                 const [exam, year] = selectedResultExam.split('|');
                                 const resData = fullProfile.results.filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === year);
                                 return resData.length > 0 
-                                  ? (fullProfile.examStats[selectedResultExam].myTotal / resData.length).toFixed(1)
+                                  ? (fullProfile.examStats[selectedResultExam].myTotal / resData.length).toFixed(2)
                                   : "0.0";
                               })()}
                             </p>

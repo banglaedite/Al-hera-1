@@ -705,7 +705,7 @@ export function TeacherManager({
                       <img src={settings.logo_url} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
                     )}
                     <div className="flex-1">
-                      <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "আল হেরা মাদরাসা"}</h2>
+                      <h2 className="text-2xl font-black text-slate-900 leading-tight">{settings?.title || "মাদরাসা"}</h2>
                       <p className="text-xs font-bold text-slate-500">{settings?.address || "ঠিকানা এখানে লিখুন"}</p>
                       <p className="text-[10px] font-bold text-slate-400">ফোন: {settings?.contact_phone}</p>
                     </div>

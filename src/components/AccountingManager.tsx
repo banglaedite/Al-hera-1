@@ -477,9 +477,9 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
   };
 
   const generateBeautifulReportHTML = (reportTitle: string, contentHtml: string, dateRange: string, classInfo: string = "") => {
-    const title = settings?.title || "আল-হেরা ক্যাডেট মাদ্রাসা";
-    const address = settings?.address || "সাভার, ঢাকা";
-    const logo = settings?.logo || "/logo.png";
+    const title = settings?.title || "মাদরাসা";
+    const address = settings?.address || "ঠিকানা এখানে লিখুন";
+    const logo = settings?.logo_url || settings?.logo || "/logo.png";
 
     return `
       <!DOCTYPE html>

@@ -42,17 +42,25 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
           } as unknown as Response;
         }
   
-        const response = await originalFetch(input, init);
-        if (response.ok) {
-          const cloned = response.clone();
-          try {
-            const data = await cloned.json();
-            fetchCache.set(urlStr, { data, timestamp: Date.now() });
-          } catch(e) {
-            // Ignore parse errors
+        try {
+          const response = await originalFetch(input, init);
+          if (!response.ok) {
+            console.error(`Fetch failed for ${urlStr}: ${response.status} ${response.statusText}`);
           }
+          if (response.ok) {
+            const cloned = response.clone();
+            try {
+              const data = await cloned.json();
+              fetchCache.set(urlStr, { data, timestamp: Date.now() });
+            } catch(e) {
+              // Ignore parse errors
+            }
+          }
+          return response;
+        } catch (e) {
+          console.error(`Fetch exception for ${urlStr}:`, e);
+          throw e;
         }
-        return response;
       }
     } else {
       // It's a mutation (POST, PUT, DELETE) to an /api/ endpoint.

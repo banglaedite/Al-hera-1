@@ -5,9 +5,10 @@ import { cn } from "../lib/utils";
 interface IDCardProps {
   data: any;
   type?: "student" | "guardian";
+  settings?: any;
 }
 
-export default function IDCard({ data, type = "student" }: IDCardProps) {
+export default function IDCard({ data, type = "student", settings }: IDCardProps) {
   const isGuardian = type === "guardian";
   
   return (
@@ -18,8 +19,12 @@ export default function IDCard({ data, type = "student" }: IDCardProps) {
         isGuardian ? "bg-indigo-900" : "bg-emerald-900"
       )}>
         <div className="relative z-10">
-          <GraduationCap className="w-10 h-10 mx-auto mb-2 text-white/80" />
-          <h2 className="text-xl font-bold tracking-tight">আল হেরা মাদ্রাসা</h2>
+          {settings?.logo_url ? (
+             <img src={settings.logo_url} alt="Logo" className="w-12 h-12 mx-auto mb-2 object-contain brightness-0 invert" />
+          ) : (
+             <GraduationCap className="w-10 h-10 mx-auto mb-2 text-white/80" />
+          )}
+          <h2 className="text-xl font-bold tracking-tight">{settings?.title || "মাদরাসা"}</h2>
           <p className="text-[10px] uppercase tracking-[0.2em] text-white/60">
             {isGuardian ? "Digital Guardian ID Card" : "Digital Student ID Card"}
           </p>

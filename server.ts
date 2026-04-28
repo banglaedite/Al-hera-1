@@ -15,6 +15,7 @@ const __dirname = path.dirname(__filename);
 console.log("Starting server with NODE_ENV:", process.env.NODE_ENV);
 
 const ADMIN_CONFIG_PATH = path.join(__dirname, "firebase-admin-config.json");
+const SERVICE_ACCOUNT_PATH = path.join(__dirname, "service-account.json");
 
 // Firebase Configuration (Hardcoded for Vercel compatibility)
 const firebaseConfig = {
@@ -48,7 +49,8 @@ function getFirestoreInstance() {
     let config = { ...hardcodedServiceAccount };
     let dbId = firebaseConfig.firestoreDatabaseId;
 
-    // Try to load from dynamic config file
+    // Try to load from dynamic config file or service account file
+    let configLoaded = false;
     if (fs.existsSync(ADMIN_CONFIG_PATH)) {
       try {
         const dynamicContent = fs.readFileSync(ADMIN_CONFIG_PATH, 'utf-8');
@@ -60,11 +62,27 @@ function getFirestoreInstance() {
             private_key: dynamicConfig.privateKey || dynamicConfig.private_key || config.private_key,
           };
           dbId = dynamicConfig.databaseId || dynamicConfig.database_id || dbId;
-          console.log("Loaded dynamic Firebase Admin config.");
+          console.log("Loaded dynamic Firebase Admin config from firebase-admin-config.json");
+          configLoaded = true;
         }
       } catch (e) {
         console.error("Error parsing dynamic config file:", e);
       }
+    }
+
+    if (!configLoaded && fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+        try {
+          const content = fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf-8');
+          const sa = JSON.parse(content);
+          config = {
+            project_id: sa.project_id,
+            client_email: sa.client_email,
+            private_key: sa.private_key,
+          };
+          console.log("Loaded Firebase Admin config from service-account.json");
+        } catch (e) {
+          console.error("Error parsing service-account.json:", e);
+        }
     }
 
     const projectId = process.env.FIREBASE_PROJECT_ID || config.project_id;
@@ -918,8 +936,10 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     
     try {
       const db = getFirestoreInstance();
-      const studentsSnapshot = await db.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
-      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const studentsSnapshot = await db.collection("students").where("class", "==", className).get();
+      const students = studentsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => !s.deleted_at);
       
       const report = await Promise.all(students.map(async (student: any) => {
         const feesSnapshot = await db.collection("fees")
@@ -986,6 +1006,46 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   // --- Site Settings ---
+
+  app.get("/manifest.json", async (req, res) => {
+    try {
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const settingsDoc = await db.collection("site_settings").doc("1").get();
+      const settings = settingsDoc.exists ? settingsDoc.data() : null;
+      
+      const manifest = {
+        "name": settings?.title || "Al-Hera Madrasah",
+        "short_name": settings?.title ? (settings.title.length > 12 ? settings.title.substring(0, 10) + ".." : settings.title) : "Al-Hera",
+        "description": settings?.description || "Al-Hera Madrasah Management System",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": "#065f46",
+        "icons": [
+          {
+            "src": settings?.logo_url || "https://i.postimg.cc/rmYRvGPF/IMG-20260322-WA0001.png",
+            "sizes": "192x192",
+            "type": "image/png"
+          },
+          {
+            "src": settings?.logo_url || "https://i.postimg.cc/rmYRvGPF/IMG-20260322-WA0001.png",
+            "sizes": "512x512",
+            "type": "image/png"
+          }
+        ]
+      };
+      res.json(manifest);
+    } catch (error) {
+      res.json({
+        "name": "Al-Hera Madrasah",
+        "short_name": "Al-Hera",
+        "start_url": "/",
+        "display": "standalone",
+        "icons": [{ "src": "https://i.postimg.cc/rmYRvGPF/IMG-20260322-WA0001.png", "sizes": "512x512", "type": "image/png" }]
+      });
+    }
+  });
 
   app.get("/api/site-settings", async (req, res) => {
     console.log("Fetching site settings...");
@@ -1810,12 +1870,18 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
           const chunks = [];
           for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
           const feePromises = chunks.map(chunk => {
-            let q = firestore.collection("fees").where("status", "==", "paid").where("student_id", "in", chunk);
-            if (category) q = q.where("category", "==", category);
+            let q = firestore.collection("fees").where("student_id", "in", chunk);
             return q.get();
           });
           const snaps = await Promise.all(feePromises);
-          feesSnapshot = { docs: snaps.flatMap(s => s.docs) };
+          let docs = snaps.flatMap(s => s.docs);
+          // Filter in memory to avoid composite index
+          if (category) {
+            docs = docs.filter(d => d.data().status === "paid" && d.data().category === category);
+          } else {
+            docs = docs.filter(d => d.data().status === "paid");
+          }
+          feesSnapshot = { docs };
         }
       } else {
         feesSnapshot = await feesQuery.get();
@@ -1903,30 +1969,54 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/admin/accounting/summary", async (req, res) => {
     const { start_date, end_date, class_name } = req.query;
     try {
-      let feesQuery: any = firestore.collection("fees").where("status", "==", "paid");
-      let incomeQuery: any = firestore.collection("income");
-      let expenseQuery: any = firestore.collection("expenses");
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
+      let feesQuery: any = db.collection("fees").where("status", "==", "paid");
+      let incomeQuery: any = db.collection("income");
+      let expenseQuery: any = db.collection("expenses");
+
+      if (start_date) {
+        feesQuery = feesQuery.where("paid_date", ">=", start_date);
+        incomeQuery = incomeQuery.where("date", ">=", start_date);
+        expenseQuery = expenseQuery.where("date", ">=", start_date);
+      }
+      if (end_date) {
+        // Add end of day to end_date
+        const end = end_date + "T23:59:59.999Z";
+        feesQuery = feesQuery.where("paid_date", "<=", end);
+        incomeQuery = incomeQuery.where("date", "<=", end);
+        expenseQuery = expenseQuery.where("date", "<=", end);
+      }
 
       if (class_name) {
         incomeQuery = incomeQuery.where("class_name", "==", class_name);
         expenseQuery = expenseQuery.where("class_name", "==", class_name);
       }
 
-      let feesSnapshot: any = { docs: [] };
+      let feeDocs: any[] = [];
       if (class_name) {
-        const studentsSnapshot = await firestore.collection("students").where("class", "==", class_name).get();
+        const studentsSnapshot = await db.collection("students").where("class", "==", class_name).get();
         const studentIds = studentsSnapshot.docs.map(doc => doc.id);
         if (studentIds.length > 0) {
           const chunks = [];
           for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
           const feePromises = chunks.map(chunk => {
-            return firestore.collection("fees").where("status", "==", "paid").where("student_id", "in", chunk).get();
+            let q = db.collection("fees").where("student_id", "in", chunk);
+            return q.get();
           });
           const snaps = await Promise.all(feePromises);
-          feesSnapshot = { docs: snaps.flatMap(s => s.docs) };
+          feeDocs = snaps.flatMap(s => s.docs.map(d => d.data()))
+            .filter((d: any) => {
+              if (d.status !== "paid") return false;
+              if (start_date && d.paid_date < start_date) return false;
+              if (end_date && d.paid_date > end_date + "T23:59:59.999Z") return false;
+              return true;
+            });
         }
       } else {
-        feesSnapshot = await feesQuery.get();
+        const snapshot = await feesQuery.get();
+        feeDocs = snapshot.docs.map(doc => doc.data());
       }
 
       const [incomeSnapshot, expenseSnapshot] = await Promise.all([
@@ -1944,9 +2034,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         });
       };
 
-      const feeDocs = filterByDate(feesSnapshot.docs.map(doc => doc.data()), "paid_date", start_date, end_date);
-      const incomeDocs = filterByDate(incomeSnapshot.docs.map(doc => doc.data()), "date", start_date, end_date);
-      const expenseDocs = filterByDate(expenseSnapshot.docs.map(doc => doc.data()), "date", start_date, end_date);
+      const incomeDocs = incomeSnapshot.docs.map(doc => doc.data());
+      const expenseDocs = expenseSnapshot.docs.map(doc => doc.data());
 
       const feeIncome = feeDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
       const otherIncome = incomeDocs.reduce((sum: number, data: any) => sum + (data.amount || 0), 0);
@@ -2030,13 +2119,20 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
           const chunks = [];
           for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
           const feePromises = chunks.map(chunk => {
-            let q = firestore.collection("fees").where("status", "==", "paid").where("student_id", "in", chunk);
-            if (start_date) q = q.where("paid_date", ">=", start_date);
-            if (end_date) q = q.where("paid_date", "<=", end_date + "T23:59:59.999Z");
+            let q = firestore.collection("fees").where("student_id", "in", chunk);
             return q.get();
           });
           const snaps = await Promise.all(feePromises);
-          feesSnapshot = { docs: snaps.flatMap(s => s.docs) };
+          const allDocs = snaps.flatMap(s => s.docs);
+          // Filter in memory to avoid composite index
+          const filteredDocs = allDocs.filter(d => {
+            const data = d.data();
+            if (data.status !== "paid") return false;
+            if (start_date && data.paid_date < start_date) return false;
+            if (end_date && data.paid_date > end_date + "T23:59:59.999Z") return false;
+            return true;
+          });
+          feesSnapshot = { docs: filteredDocs };
         }
       } else {
         feesSnapshot = await feesQuery.get();
@@ -2247,14 +2343,16 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     const { name, amount, classAmounts, className } = req.body;
     
     try {
-      let studentsQuery = firestore.collection("students").where("deleted_at", "==", null);
+      let studentsQuery: any = firestore.collection("students");
       
       if (className && className !== "All") {
         studentsQuery = studentsQuery.where("class", "==", className);
       }
       
       const studentsSnapshot = await studentsQuery.get();
-      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const students = studentsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => !s.deleted_at);
       
       const setupRef = firestore.collection("fee_setups").doc();
       const batches = [];
@@ -2373,11 +2471,26 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/admin/fees/search", async (req, res) => {
     const { search, className } = req.query;
     try {
-      const feesSnapshot = await firestore.collection("fees").where("status", "==", "unpaid").get();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
+      let feesQuery: any = db.collection("fees").where("status", "==", "unpaid");
+      
+      const feesSnapshot = await feesQuery.get();
       const fees = feesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-      const studentsSnapshot = await firestore.collection("students").get();
-      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      if (fees.length === 0) return res.json([]);
+
+      // Get unique student IDs from fees
+      const studentIds = Array.from(new Set(fees.map(f => f.student_id)));
+      
+      // Fetch only those students in batches of 30 (Firestore limit for 'in' operator)
+      const students: any[] = [];
+      for (let i = 0; i < studentIds.length; i += 30) {
+        const batchIds = studentIds.slice(i, i + 30);
+        const stSnapshot = await db.collection("students").where("__name__", "in", batchIds).get();
+        stSnapshot.docs.forEach(doc => students.push({ id: doc.id, ...doc.data() }));
+      }
 
       let results = fees.map(fee => {
         const student = students.find(s => s.id === fee.student_id);
@@ -2471,37 +2584,73 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     }
   });
   // --- Student & Admission ---
-  app.get("/api/students", async (req, res) => {
-    const { className, search, limit, offset, include_deleted } = req.query;
+  app.get("/api/students/recent", async (req, res) => {
     try {
-      let query: any = firestore.collection("students");
-      if (include_deleted !== 'true') {
-        query = query.where("deleted_at", "==", null);
-      }
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      
+      // Avoiding composite index by fetching and filtering in memory
+      const snapshot = await db.collection("students").get();
+      let students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      
+      // Filter active and sort
+      students = students.filter(s => !s.deleted_at);
+      students.sort((a, b) => new Date(b.admission_date || 0).getTime() - new Date(a.admission_date || 0).getTime());
+      
+      res.json(students.slice(0, 5));
+    } catch (error) {
+      console.error("Recent students error:", error);
+      res.status(500).json({ error: "Failed to fetch recent students" });
+    }
+  });
+
+  app.get("/api/students", async (req, res) => {
+    const { className, search, offset, include_deleted } = req.query;
+    const limit = parseInt(req.query.limit as string) || 100;
+    try {
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
+      // To avoid composite index errors, we fetch the collection and filter/sort in memory
+      let query: any = db.collection("students");
+      
+      // If we have a specific class, we can filter by it on DB level as it only uses 1 field
       if (className && className !== "All") {
         query = query.where("class", "==", className);
       }
+
       const snapshot = await query.get();
       let students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
+      // 1. Filter deleted
+      if (include_deleted !== 'true') {
+        students = students.filter(s => !s.deleted_at);
+      }
+
+      // 2. Filter search
       if (search) {
         const s = (search as string).toLowerCase();
         students = students.filter(student => 
           (student.name && student.name.toLowerCase().includes(s)) ||
-          (student.id && student.id.toLowerCase().includes(s)) ||
+          (student.studentId && student.studentId.toLowerCase().includes(s)) ||
           (student.roll && student.roll.toString().includes(s))
         );
       }
 
+      // 3. Sort
       students.sort((a, b) => {
         if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
-        return parseRoll(a.roll) - parseRoll(b.roll);
+        const rollA = parseInt(a.roll) || 0;
+        const rollB = parseInt(b.roll) || 0;
+        return rollA - rollB;
       });
 
+      // 4. Pagination
+      const o = parseInt(offset as string || "0");
       if (limit) {
-        const l = parseInt(limit as string);
-        const o = offset ? parseInt(offset as string) : 0;
-        students = students.slice(o, o + l);
+        students = students.slice(o, o + limit);
+      } else {
+        students = students.slice(o);
       }
 
       res.json(students);
@@ -3302,13 +3451,14 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
 
-      let studentsQuery = db.collection("students").where("deleted_at", "==", null);
+      let studentsQuery: any = db.collection("students");
       if (className !== "All") {
         studentsQuery = studentsQuery.where("class", "==", className);
       }
       const studentsSnapshot = await studentsQuery.get();
       const students = studentsSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => !s.deleted_at)
         .sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
       
       const attendanceSnapshot = await db.collection("attendance").where("date", "==", date).get();
@@ -3618,13 +3768,13 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       let person: any = null;
       let type: 'student' | 'teacher' = 'student';
 
-      const studentSnapshot = await firestore.collection("students").where("biometric_id", "==", biometric_id).where("deleted_at", "==", null).get();
-      if (!studentSnapshot.empty) {
+      const studentSnapshot = await firestore.collection("students").where("biometric_id", "==", biometric_id).get();
+      if (!studentSnapshot.empty && !studentSnapshot.docs[0].data().deleted_at) {
         person = { id: studentSnapshot.docs[0].id, ...studentSnapshot.docs[0].data() };
         type = 'student';
       } else {
-        const teacherSnapshot = await firestore.collection("teachers").where("biometric_id", "==", biometric_id).where("deleted_at", "==", null).get();
-        if (!teacherSnapshot.empty) {
+        const teacherSnapshot = await firestore.collection("teachers").where("biometric_id", "==", biometric_id).get();
+        if (!teacherSnapshot.empty && !teacherSnapshot.docs[0].data().deleted_at) {
           person = { id: teacherSnapshot.docs[0].id, ...teacherSnapshot.docs[0].data() };
           type = 'teacher';
         }
@@ -3744,8 +3894,10 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
 
-      const studentsSnapshot = await db.collection("students").where("class", "==", className).where("deleted_at", "==", null).get();
-      const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const studentsSnapshot = await db.collection("students").where("class", "==", className).get();
+      const students = studentsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => !s.deleted_at);
       console.log(`Found ${students.length} students for class ${className}`);
       
       const resultsSnapshot = await db.collection("results").where("class_name", "==", className).get();
@@ -4365,22 +4517,45 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     generateAndSendBackup();
   });
 
-  // --- Admin Stats ---
+  // --- Admin Stats (Optimized with basic caching) ---
+  let cachedStats: any = null;
+  let lastStatsFetch = 0;
+  const STATS_CACHE_TIME = 5 * 60 * 1000; // 5 minutes cache
+
   app.get("/api/admin/stats", async (req, res) => {
     try {
-      const studentsSnapshot = await firestore.collection("students").where("deleted_at", "==", null).get();
-      const feesSnapshot = await firestore.collection("fees").where("status", "==", "paid").get();
-      const expensesSnapshot = await firestore.collection("expenses").get();
+      const now = Date.now();
+      if (cachedStats && (now - lastStatsFetch < STATS_CACHE_TIME)) {
+        return res.json(cachedStats);
+      }
+
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+
+      // Use Count aggregation for students - Costs 1 read per 1000 docs (approx) or much less than full read
+      const studentsCountSnapshot = await db.collection("students").where("deleted_at", "==", null).count().get();
+      const studentCount = studentsCountSnapshot.data().count;
+
+      // For income/expenses, we still need to sum them up if we don't have a summary doc.
+      // To optimize, we could limit to this year or maintain a counter.
+      // For now, let's just use the count aggregation for the stats route to save student reads.
+      // If payment/expense list is huge, this still costs reads.
+      const feesSnapshot = await db.collection("fees").where("status", "==", "paid").get();
+      const expensesSnapshot = await db.collection("expenses").get();
       
       const income = feesSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
       const expenses = expensesSnapshot.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
 
-      res.json({
-        students: studentsSnapshot.size,
+      cachedStats = {
+        students: studentCount,
         income: income,
         expenses: expenses
-      });
+      };
+      lastStatsFetch = now;
+
+      res.json(cachedStats);
     } catch (error) {
+      console.error("Stats error:", error);
       res.status(500).json({ error: "Failed to fetch stats" });
     }
   });
@@ -4550,15 +4725,21 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const loginByIdEnabled = hifzSettings.guardian_login_by_id_enabled !== false;
 
       // Check phone
-      let snapshot = await firestore.collection("students").where("phone", "==", identifier).where("deleted_at", "==", null).get();
-      if (snapshot.empty) {
+      let snapshot = await firestore.collection("students").where("phone", "==", identifier).get();
+      if (snapshot.empty || snapshot.docs[0].data().deleted_at) {
         // Check email
-        snapshot = await firestore.collection("students").where("email", "==", identifier).where("deleted_at", "==", null).get();
-      }
-      
-      if (snapshot.empty && loginByIdEnabled) {
-        // Check student_code ONLY if login by ID is enabled
-        snapshot = await firestore.collection("students").where("student_code", "==", identifier).where("deleted_at", "==", null).get();
+        snapshot = await firestore.collection("students").where("email", "==", identifier).get();
+        if (snapshot.empty || snapshot.docs[0].data().deleted_at) {
+          if (loginByIdEnabled) {
+            // Check student_code ONLY if login by ID is enabled
+            snapshot = await firestore.collection("students").where("student_code", "==", identifier).get();
+            if (!snapshot.empty && snapshot.docs[0].data().deleted_at) {
+              snapshot = { empty: true } as any; // Treat as not found if deleted
+            }
+          } else {
+            snapshot = { empty: true } as any;
+          }
+        }
       }
 
       if (snapshot.empty) {
@@ -4823,15 +5004,13 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
   app.get("/api/admin/online-payments", async (req, res) => {
     try {
-      const snapshot = await firestore!.collection("pending_payments").get();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const snapshot = await db.collection("pending_payments").orderBy("createdAt", "desc").limit(100).get();
       const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      payments.sort((a: any, b: any) => {
-        const dateA = new Date(a.createdAt || 0).getTime();
-        const dateB = new Date(b.createdAt || 0).getTime();
-        return dateB - dateA;
-      });
       res.json(payments);
     } catch (error) {
+      console.error("Online payments error:", error);
       res.status(500).json({ error: "Failed to fetch online payments" });
     }
   });
@@ -4974,7 +5153,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   // --- Database Reset ---
   app.get("/api/admin/archive/students", async (req, res) => {
     try {
-      const snapshot = await firestore!.collection("archive_students").get();
+      const db = getFirestoreInstance();
+      if (!db) throw new Error("Firestore not initialized");
+      const snapshot = await db.collection("archive_students").limit(100).get();
       const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(students);
     } catch (error) {
@@ -5054,7 +5235,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const collectionsToRecover = [
         "students", "exams", "fees", "attendance", "results", "hifz_records",
         "subjects", "notices", "donations", "expenses", "income", "teacher_attendance",
-        "admissions", "teacher_salaries", "fee_setups", "job_applications", "delete_history"
+        "admissions", "teacher_salaries", "fee_setups", "job_applications", "delete_history",
+        "site_settings", "features", "food_menu", "routines", "syllabus_routines", "amal_tasks", "amal_logs"
       ];
 
       for (const collectionName of collectionsToRecover) {

@@ -157,7 +157,7 @@ const LandingPage = () => {
       .catch((err) => {
         console.error("Failed to load settings:", err);
         setSettings({
-          title: 'আল হেরা মাদরাসা',
+          title: 'মাদরাসা',
           description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
           hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
           contact_phone: '01700000000',

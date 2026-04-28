@@ -17,7 +17,7 @@ import IDCard from "./IDCard";
 import { cn } from "../lib/utils";
 import { useToast } from "./ToastContext";
 
-export default function StudentSearch() {
+export default function StudentSearch({ settings }: { settings?: any }) {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("1");
@@ -170,7 +170,7 @@ export default function StudentSearch() {
             {/* ID Card View */}
             <div className="flex flex-col items-center gap-6">
               <div className="print:block">
-                <IDCard data={student} />
+                <IDCard data={student} settings={settings} />
               </div>
               <button 
                 onClick={handlePrint}

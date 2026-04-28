@@ -79,6 +79,21 @@ const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
     <>
       <Navbar settings={settings} />
       {children}
+      <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <div className="flex justify-center gap-4 mb-6">
+            <Link to="/secret-admin-access" className="group relative p-2" title="Admin Access">
+              <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <BookOpen className="w-10 h-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300 relative z-10 cursor-pointer" />
+            </Link>
+          </div>
+          <h3 className="text-xl font-bold mb-2">{settings?.title || "মাদরাসা"}</h3>
+          <p className="text-sm opacity-70 mb-8">{settings?.address || "একটি আদর্শ দ্বীনি শিক্ষা প্রতিষ্ঠান"}</p>
+          <div className="border-t border-emerald-900 pt-8 text-xs opacity-50">
+            © {new Date().getFullYear()} {settings?.title || "মাদরাসা"}। সর্বস্বত্ব সংরক্ষিত।
+          </div>
+        </div>
+      </footer>
     </>
   );
 };
@@ -112,7 +127,7 @@ const Navbar = ({ settings }: { settings: any }) => {
                </div>
             )}
             <span className="text-2xl font-black tracking-tight font-display text-emerald-900 drop-shadow-sm bg-clip-text text-transparent bg-gradient-to-r from-emerald-900 to-emerald-600">
-              {settings?.title || "আল হেরা মাদরাসা"}
+              {settings?.title || "মাদরাসা"}
             </span>
           </div>
           
@@ -312,22 +327,6 @@ export default function App() {
             </main>
             
             <FloatingContact />
-            
-            <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
-              <div className="max-w-7xl mx-auto px-4 text-center">
-                <div className="flex justify-center gap-4 mb-6">
-                  <Link to="/secret-admin-access" className="group relative p-2" title="Admin Access">
-                    <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <BookOpen className="w-10 h-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300 relative z-10 cursor-pointer" />
-                  </Link>
-                </div>
-                <h3 className="text-xl font-bold mb-2">আল হেরা মাদ্রাসা</h3>
-                <p className="text-sm opacity-70 mb-8">একটি আদর্শ দ্বীনি শিক্ষা প্রতিষ্ঠান</p>
-                <div className="border-t border-emerald-900 pt-8 text-xs opacity-50">
-                  © {new Date().getFullYear()} আল হেরা মাদ্রাসা। সর্বস্বত্ব সংরক্ষিত।
-                </div>
-              </div>
-            </footer>
           </div>
         </SiteSettingsProvider>
       </ToastProvider>
