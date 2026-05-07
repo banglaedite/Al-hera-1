@@ -57,6 +57,8 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
   const [rankingReports, setRankingReports] = useState<any[]>([]);
   const [rankingCategory, setRankingCategory] = useState<'sabok' | 'sat_sabok' | 'amukhta' | 'tilawat' | 'sabina'>('sabok');
   
+  const [visibleRankingsCount, setVisibleRankingsCount] = useState(10);
+  
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
 
@@ -139,11 +141,16 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch("/api/students?className=All");
+      const res = await fetch("/api/students?className=All&limit=1000");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       const hifzStudents = data
-        .filter((s: any) => s.is_hifz === 1 || s.class?.includes("হিফজ") || s.class?.includes("হেফজ"))
+        .filter((s: any) => {
+          const isHifzFlag = s.is_hifz === 1 || s.is_hifz === true || s.is_hifz === "1" || s.is_hifz === "true";
+          const className = (s.class || s.className || "").toString();
+          const isHifzClass = className.includes("হিফজ") || className.includes("হেফজ") || className.includes("Hifz");
+          return isHifzFlag || isHifzClass;
+        })
         .sort((a: any, b: any) => (Number(a.roll) || 0) - (Number(b.roll) || 0));
       setStudents(hifzStudents);
     } catch (error) {
@@ -1464,7 +1471,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {getRankingData().map((student, index) => {
+                      {getRankingData().slice(0, visibleRankingsCount).map((student, index) => {
                         const isTop3 = index < 3 && student.score > 0;
                         return (
                           <tr key={student.id} className="bg-white hover:bg-slate-50 transition-colors group shadow-sm">
@@ -1500,6 +1507,17 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                     </tbody>
                   </table>
                 </div>
+
+                {getRankingData().length > visibleRankingsCount && (
+                  <div className="mt-8 text-center">
+                    <button 
+                      onClick={() => setVisibleRankingsCount(prev => prev + 10)}
+                      className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all"
+                    >
+                      আরো দেখুন
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

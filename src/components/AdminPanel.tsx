@@ -2904,7 +2904,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
     if (!selectedClass) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/students?className=${encodeURIComponent(selectedClass)}&limit=20&offset=${newOffset}`);
+      const res = await fetch(`/api/students?className=${encodeURIComponent(selectedClass)}&limit=20&offset=${newOffset}&summary_only=true`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (newOffset === 0) {

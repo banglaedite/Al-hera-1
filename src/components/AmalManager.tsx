@@ -16,11 +16,15 @@ export function AmalManager() {
   const [statusDate, setStatusDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [fetchingStatus, setFetchingStatus] = useState(false);
   const [statusTarget, setStatusTarget] = useState<"student" | "teacher">("teacher");
+  const [statusClass, setStatusClass] = useState("All");
+  const [visibleStatusCount, setVisibleStatusCount] = useState(10);
 
   // Rankings state
   const [rankings, setRankings] = useState<any[]>([]);
   const [fetchingRankings, setFetchingRankings] = useState(false);
   const [rankingTarget, setRankingTarget] = useState<"student" | "teacher">("teacher");
+  const [rankingClass, setRankingClass] = useState("All");
+  const [visibleRankingsCount, setVisibleRankingsCount] = useState(10);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
@@ -44,8 +48,9 @@ export function AmalManager() {
 
   const fetchRankings = async () => {
     setFetchingRankings(true);
+    setVisibleRankingsCount(10);
     try {
-      const res = await fetch(`/api/admin/amal-rankings?target=${rankingTarget}&startDate=${startDate}&endDate=${endDate}`);
+      const res = await fetch(`/api/admin/amal-rankings?target=${rankingTarget}&startDate=${startDate}&endDate=${endDate}&className=${rankingClass}`);
       const data = await res.json();
       if (Array.isArray(data)) setRankings(data);
     } catch (error) {
@@ -57,8 +62,9 @@ export function AmalManager() {
 
   const fetchStatus = async () => {
     setFetchingStatus(true);
+    setVisibleStatusCount(10);
     try {
-      const res = await fetch(`/api/admin/amal-submission-status?target=${statusTarget}&date=${statusDate}`);
+      const res = await fetch(`/api/admin/amal-submission-status?target=${statusTarget}&date=${statusDate}&className=${statusClass}`);
       const data = await res.json();
       if (Array.isArray(data)) setSubmissionStatus(data);
     } catch (error) {
@@ -78,7 +84,7 @@ export function AmalManager() {
     } else if (activeTab === "status") {
       fetchStatus();
     }
-  }, [activeTab, rankingTarget, startDate, endDate, statusTarget, statusDate]);
+  }, [activeTab, rankingTarget, rankingClass, startDate, endDate, statusTarget, statusClass, statusDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +143,8 @@ export function AmalManager() {
       addToast("সমস্যা হয়েছে", "error");
     }
   };
+
+  const CLASSES = ["প্লে", "নার্সারি", "১ম", "২য়", "৩য়", "৪র্থ", "৫ম", "৬ষ্ঠ", "৭ম", "৮ম", "৯ম", "১০ম", "হিফজ", "মক্তব"];
 
   if (loading) return <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12 mx-auto">
   <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
@@ -242,7 +250,7 @@ export function AmalManager() {
       ) : activeTab === "rankings" ? (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">কাদের র‍্যাংকিং?</label>
                 <select 
@@ -254,6 +262,19 @@ export function AmalManager() {
                   <option value="teacher">ওস্তাদ</option>
                 </select>
               </div>
+              {rankingTarget === "student" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">ক্লাস</label>
+                  <select 
+                    value={rankingClass}
+                    onChange={(e) => setRankingClass(e.target.value)}
+                    className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="All">সকল ক্লাস</option>
+                    {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">শুরুর তারিখ</label>
                 <input 
@@ -301,44 +322,60 @@ export function AmalManager() {
                         <p className="mt-4 text-slate-500 font-bold">লোড হচ্ছে...</p>
                       </td>
                     </tr>
-                  ) : rankings.length > 0 ? rankings.map((rank, index) => (
-                    <tr key={rank.userId} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-6">
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center font-black",
-                          index === 0 ? "bg-amber-100 text-amber-700" :
-                          index === 1 ? "bg-slate-200 text-slate-700" :
-                          index === 2 ? "bg-orange-100 text-orange-700" :
-                          "bg-slate-100 text-slate-500"
-                        )}>
-                          {index + 1}
-                        </div>
-                      </td>
-                      <td className="p-6">
-                        <p className="font-black text-slate-900">{rank.name}</p>
-                        <p className="text-xs text-slate-400 font-bold">ID: {rank.userId}</p>
-                      </td>
-                      <td className="p-6">
-                        <div className="flex items-center gap-4">
-                          <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${rank.percentage}%` }}
-                              className={cn(
-                                "h-full rounded-full",
-                                rank.percentage >= 80 ? "bg-emerald-500" :
-                                rank.percentage >= 50 ? "bg-amber-500" :
-                                "bg-rose-500"
-                              )}
-                            />
-                          </div>
-                          <span className="font-black text-slate-900 w-12">{Math.round(rank.percentage)}%</span>
-                        </div>
-                      </td>
-                      <td className="p-6 text-center font-bold text-slate-600">{rank.total}</td>
-                      <td className="p-6 text-center font-black text-emerald-600">{rank.completed}</td>
-                    </tr>
-                  )) : (
+                  ) : rankings.length > 0 ? (
+                    <>
+                      {rankings.slice(0, visibleRankingsCount).map((rank, index) => (
+                        <tr key={rank.userId} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-6">
+                            <div className={cn(
+                              "w-10 h-10 rounded-full flex items-center justify-center font-black",
+                              index === 0 ? "bg-amber-100 text-amber-700" :
+                              index === 1 ? "bg-slate-200 text-slate-700" :
+                              index === 2 ? "bg-orange-100 text-orange-700" :
+                              "bg-slate-100 text-slate-500"
+                            )}>
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            <p className="font-black text-slate-900">{rank.name}</p>
+                            <p className="text-xs text-slate-400 font-bold">ID: {rank.userId}</p>
+                          </td>
+                          <td className="p-6">
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${rank.percentage}%` }}
+                                  className={cn(
+                                    "h-full rounded-full",
+                                    rank.percentage >= 80 ? "bg-emerald-500" :
+                                    rank.percentage >= 50 ? "bg-amber-500" :
+                                    "bg-rose-500"
+                                  )}
+                                />
+                              </div>
+                              <span className="font-black text-slate-900 w-12">{Math.round(rank.percentage)}%</span>
+                            </div>
+                          </td>
+                          <td className="p-6 text-center font-bold text-slate-600">{rank.total}</td>
+                          <td className="p-6 text-center font-black text-emerald-600">{rank.completed}</td>
+                        </tr>
+                      ))}
+                      {rankings.length > visibleRankingsCount && (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center">
+                            <button 
+                              onClick={() => setVisibleRankingsCount(prev => prev + 10)}
+                              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                            >
+                              আরো দেখুন
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ) : (
                     <tr>
                       <td colSpan={5} className="p-12 text-center text-slate-400 font-bold">কোনো ডাটা পাওয়া যায়নি</td>
                     </tr>
@@ -351,7 +388,7 @@ export function AmalManager() {
       ) : (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">কাদের রিপোর্ট?</label>
                 <select 
@@ -363,6 +400,19 @@ export function AmalManager() {
                   <option value="teacher">ওস্তাদ</option>
                 </select>
               </div>
+              {statusTarget === "student" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">ক্লাস</label>
+                  <select 
+                    value={statusClass}
+                    onChange={(e) => setStatusClass(e.target.value)}
+                    className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="All">সকল ক্লাস</option>
+                    {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">তারিখ</label>
                 <input 
@@ -413,34 +463,50 @@ export function AmalManager() {
                         <p className="mt-4 text-slate-500 font-bold">লোড হচ্ছে...</p>
                       </td>
                     </tr>
-                  ) : submissionStatus.length > 0 ? submissionStatus.map((item) => (
-                    <tr key={item.userId} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-6">
-                        <p className="font-black text-slate-900">{item.name}</p>
-                        <p className="text-xs text-slate-400 font-bold">ID: {item.userId}</p>
-                      </td>
-                      <td className="p-6 text-center">
-                        <span className={cn(
-                          "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest",
-                          item.submitted ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                        )}>
-                          {item.submitted ? "জমা হয়েছে" : "বাকি"}
-                        </span>
-                      </td>
-                      <td className="p-6">
-                        <div className="flex flex-wrap gap-2">
-                          {item.logs.length > 0 ? item.logs.map((log: any) => (
-                            <span key={log.id} className={cn(
-                              "px-3 py-1 rounded-lg text-[10px] font-bold",
-                              log.status === 'completed' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-slate-100 text-slate-400"
+                  ) : submissionStatus.length > 0 ? (
+                    <>
+                      {submissionStatus.slice(0, visibleStatusCount).map((item) => (
+                        <tr key={item.userId} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-6">
+                            <p className="font-black text-slate-900">{item.name}</p>
+                            <p className="text-xs text-slate-400 font-bold">ID: {item.userId}</p>
+                          </td>
+                          <td className="p-6 text-center">
+                            <span className={cn(
+                              "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest",
+                              item.submitted ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
                             )}>
-                              {tasks.find(t => t.id === log.task_id)?.title || "Unknown Task"}
+                              {item.submitted ? "জমা হয়েছে" : "বাকি"}
                             </span>
-                          )) : <span className="text-slate-400 text-xs italic">কোনো আমল রেকর্ড নেই</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  )) : (
+                          </td>
+                          <td className="p-6">
+                            <div className="flex flex-wrap gap-2">
+                              {item.logs.length > 0 ? item.logs.map((log: any) => (
+                                <span key={log.id} className={cn(
+                                  "px-3 py-1 rounded-lg text-[10px] font-bold",
+                                  log.status === 'completed' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-slate-100 text-slate-400"
+                                )}>
+                                  {tasks.find(t => t.id === log.task_id)?.title || "Unknown Task"}
+                                </span>
+                              )) : <span className="text-slate-400 text-xs italic">কোনো আমল রেকর্ড নেই</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {submissionStatus.length > visibleStatusCount && (
+                        <tr>
+                          <td colSpan={3} className="p-6 text-center">
+                            <button 
+                              onClick={() => setVisibleStatusCount(prev => prev + 10)}
+                              className="px-6 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                            >
+                              আরো দেখুন
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ) : (
                     <tr>
                       <td colSpan={3} className="p-12 text-center text-slate-400 font-bold">কোনো ডাটা পাওয়া যায়নি</td>
                     </tr>

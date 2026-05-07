@@ -3,7 +3,7 @@ import {
   DollarSign, Plus, Search, TrendingUp, TrendingDown, 
   Printer, Download, Calendar, Filter, MoreVertical,
   Share2, Mail, MessageCircle, PieChart, ArrowUpRight, ArrowDownRight,
-  Trash2, X as CloseIcon, ArrowRightLeft, History, Loader2, Clock, ChevronDown
+  Trash2, X as CloseIcon, ArrowRightLeft, History, Loader2, Clock, ChevronDown, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import html2canvas from 'html2canvas';
@@ -214,75 +214,91 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
     }
   }, [activeView, reportMonth, reportCategory, reportClass, startDate, endDate]);
 
-  const fetchData = async (reset = true) => {
+  const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = async (reset = true, force = false) => {
     if (reset) {
       setLoading(true);
       setIncomeOffset(0);
       setExpenseOffset(0);
     }
+    if (force) setRefreshing(true);
     
-    const params = new URLSearchParams();
-    if (startDate) params.append("start_date", startDate);
-    if (endDate) params.append("end_date", endDate);
-    if (reportClass) params.append("class_name", reportClass);
-
-    const summaryRes = await fetch(`/api/admin/accounting/summary?${params}`);
-    if (!summaryRes.ok) throw new Error(`HTTP error! status: ${summaryRes.status}`);
-    const summaryData = await summaryRes.json();
-    setSummary(summaryData);
-
-    // Fetch previous month summary if month is selected
-    if (selectedMonth) {
-      const [year, m] = selectedMonth.split("-");
-      const prevDate = new Date(parseInt(year), parseInt(m) - 2, 1);
-      const firstDay = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`;
-      const lastDayDate = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0);
-      const lastDay = `${lastDayDate.getFullYear()}-${String(lastDayDate.getMonth() + 1).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`;
-      
-      const prevParams = new URLSearchParams();
-      prevParams.append("start_date", firstDay);
-      prevParams.append("end_date", lastDay);
-      try {
-        const prevRes = await fetch(`/api/admin/accounting/summary?${prevParams}`);
-        if (!prevRes.ok) throw new Error(`HTTP error! status: ${prevRes.status}`);
-        const prevData = await prevRes.json();
-        setPrevSummary(prevData);
-      } catch (err) {
-        console.error("Failed to fetch previous summary:", err);
-      }
-    }
-
-    // Fetch categories
     try {
-      const [incCatRes, expCatRes] = await Promise.all([
-        fetch("/api/admin/accounting/income-categories"),
-        fetch("/api/admin/accounting/expense-categories")
-      ]);
-      if (incCatRes.ok) setIncomeCategories(await incCatRes.json());
-      if (expCatRes.ok) setExpenseCategories(await expCatRes.json());
-    } catch (err) {
-      console.error("Failed to fetch categories:", err);
+      const params = new URLSearchParams();
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      if (reportClass) params.append("class_name", reportClass);
+      if (force) params.append("force_refresh", "true");
+
+      const summaryRes = await fetch(`/api/admin/accounting/summary?${params}`);
+      if (!summaryRes.ok) throw new Error(`HTTP error! status: ${summaryRes.status}`);
+      const summaryData = await summaryRes.json();
+      setSummary(summaryData);
+
+      // Fetch previous month summary if month is selected
+      if (selectedMonth) {
+        const [year, m] = selectedMonth.split("-");
+        const prevDate = new Date(parseInt(year), parseInt(m) - 2, 1);
+        const firstDay = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`;
+        const lastDayDate = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0);
+        const lastDay = `${lastDayDate.getFullYear()}-${String(lastDayDate.getMonth() + 1).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`;
+        
+        const prevParams = new URLSearchParams();
+        prevParams.append("start_date", firstDay);
+        prevParams.append("end_date", lastDay);
+        try {
+          const prevRes = await fetch(`/api/admin/accounting/summary?${prevParams}`);
+          if (prevRes.ok) {
+            const prevData = await prevRes.json();
+            setPrevSummary(prevData);
+          }
+        } catch (err) {
+          console.error("Failed to fetch previous summary:", err);
+        }
+      }
+
+      // Fetch categories only initially or periodically
+      if (incomeCategories.length === 0) {
+        try {
+          const [incCatRes, expCatRes] = await Promise.all([
+            fetch("/api/admin/accounting/income-categories"),
+            fetch("/api/admin/accounting/expense-categories")
+          ]);
+          if (incCatRes.ok) setIncomeCategories(await incCatRes.json());
+          if (expCatRes.ok) setExpenseCategories(await expCatRes.json());
+        } catch (err) {
+          console.error("Failed to fetch categories:", err);
+        }
+      }
+
+      const incomeParams = new URLSearchParams(params);
+      incomeParams.append("limit", "20");
+      incomeParams.append("offset", reset ? "0" : incomeOffset.toString());
+      const incomeRes = await fetch(`/api/admin/accounting/income?${incomeParams}`);
+      const incomeData = await incomeRes.json();
+      if (reset) setIncome(incomeData.data || []);
+      else setIncome(prev => [...prev, ...(incomeData.data || [])]);
+      setHasMoreIncome(incomeData.hasMore || false);
+
+      const expenseParams = new URLSearchParams(params);
+      expenseParams.append("limit", "20");
+      expenseParams.append("offset", reset ? "0" : expenseOffset.toString());
+      const expenseRes = await fetch(`/api/admin/accounting/expenses?${expenseParams}`);
+      const expenseData = await expenseRes.json();
+      if (reset) setExpenses(expenseData.data || []);
+      else setExpenses(prev => [...prev, ...(expenseData.data || [])]);
+      setHasMoreExpenses(expenseData.hasMore || false);
+
+      setLastRefreshed(Date.now());
+    } catch (error) {
+      console.error(error);
+      addToast("ডাটা লোড করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-
-    const incomeParams = new URLSearchParams(params);
-    incomeParams.append("limit", "20");
-    incomeParams.append("offset", reset ? "0" : incomeOffset.toString());
-    const incomeRes = await fetch(`/api/admin/accounting/income?${incomeParams}`);
-    const incomeData = await incomeRes.json();
-    if (reset) setIncome(incomeData.data || []);
-    else setIncome(prev => [...prev, ...(incomeData.data || [])]);
-    setHasMoreIncome(incomeData.hasMore || false);
-
-    const expenseParams = new URLSearchParams(params);
-    expenseParams.append("limit", "20");
-    expenseParams.append("offset", reset ? "0" : expenseOffset.toString());
-    const expenseRes = await fetch(`/api/admin/accounting/expenses?${expenseParams}`);
-    const expenseData = await expenseRes.json();
-    if (reset) setExpenses(expenseData.data || []);
-    else setExpenses(prev => [...prev, ...(expenseData.data || [])]);
-    setHasMoreExpenses(expenseData.hasMore || false);
-
-    setLoading(false);
   };
 
   const loadMoreIncome = async () => {
@@ -316,7 +332,10 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
   };
 
   useEffect(() => {
-    fetchData();
+    // Only fetch initially. Subsequent refreshes are manual.
+    if (!lastRefreshed) {
+      fetchData();
+    }
   }, [startDate, endDate]);
 
   useEffect(() => {
@@ -1066,6 +1085,19 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
           </div>
         </div>
 
+        <div className="flex flex-col gap-2">
+          <button 
+            onClick={() => fetchData()}
+            disabled={loading}
+            className="flex items-center gap-2 px-6 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-600/20"
+          >
+            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} /> রিফ্রেশ
+          </button>
+          {lastRefreshed && (
+            <span className="text-[10px] font-bold text-slate-400 text-center uppercase">লাস্ট: {new Date(lastRefreshed).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}</span>
+          )}
+        </div>
+
         <button 
           onClick={() => { 
             setStartDate(""); 
@@ -1073,6 +1105,7 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
             setSelectedMonth(""); 
             setSelectedYear("");
             setReportClass(""); 
+            setLastRefreshed(null);
           }}
           className="flex items-center gap-2 px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all active:scale-95"
         >
@@ -1145,7 +1178,23 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <PieChart className="text-blue-600" /> সংক্ষিপ্ত আয় ব্যয় রিপোর্ট
               </h3>
-              <PrintDownloadMenu targetId="summary-report-content" filename="summary-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
+              <div className="flex items-center gap-3">
+                {lastRefreshed && (
+                  <span className="text-[10px] font-bold text-slate-400">সর্বশেষ রিফ্রেশ: {new Date(lastRefreshed).toLocaleTimeString('bn-BD')}</span>
+                )}
+                <button 
+                  onClick={() => fetchData(true, true)} 
+                  disabled={refreshing}
+                  className={cn(
+                    "p-2.5 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-all active:scale-95",
+                    refreshing && "animate-spin text-emerald-600"
+                  )}
+                  title="হিসাব রিফ্রেশ করুন"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                <PrintDownloadMenu targetId="summary-report-content" filename="summary-report" onPrint={(type) => handleReportAction('print', type)} onDownload={(type) => handleReportAction('download', type)} />
+              </div>
             </div>
             
             {/* Hidden Header for Print */}

@@ -58,6 +58,8 @@ export default function ParentPortal() {
   const [selectedClass, setSelectedClass] = useState("সব");
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [attendanceViewMode, setAttendanceViewMode] = useState<'today' | 'week' | 'month'>('today');
+  const [paymentHistoryFilterDate, setPaymentHistoryFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedPayMonths, setSelectedPayMonths] = useState<string[]>([]);
   const [paying, setPaying] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
@@ -94,6 +96,12 @@ export default function ParentPortal() {
   const [foodMenu, setFoodMenu] = useState<any[]>([]);
   const [loadingFood, setLoadingFood] = useState(false);
 
+  const [visibleAttendanceCount, setVisibleAttendanceCount] = useState(10);
+  const [visibleStatusCount, setVisibleStatusCount] = useState(10);
+  const [visibleAmalRankingsCount, setVisibleAmalRankingsCount] = useState(10);
+  const [rankingClass, setRankingClass] = useState("All");
+  const [fetchingRankings, setFetchingRankings] = useState(false);
+  
   const fetchFoodMenu = async () => {
     setLoadingFood(true);
     try {
@@ -311,7 +319,7 @@ export default function ParentPortal() {
         fetchStudentAmalData();
       }
     }
-  }, [student, activeTab, amalDate, selectedClass]);
+  }, [student, activeTab, amalDate, selectedClass, rankingClass]);
 
   const fetchStudentAmalData = async () => {
     setFetchingStatus(true);
@@ -371,13 +379,14 @@ export default function ParentPortal() {
   };
 
   const fetchAmalRankings = async () => {
+    setFetchingRankings(true);
     try {
       const target = student.isTeacher ? "teacher" : "student";
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
       const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
       
-      const res = await fetch(`/api/amal-rankings?target=${target}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`);
+      const res = await fetch(`/api/amal-rankings?target=${target}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}&className=${rankingClass}`);
       if (res.ok) {
         const data = await res.json();
         setAmalRankings(data);
@@ -389,6 +398,8 @@ export default function ParentPortal() {
       }
     } catch (error) {
       console.error("Failed to fetch rankings:", error);
+    } finally {
+      setFetchingRankings(false);
     }
   };
 
@@ -584,10 +595,7 @@ export default function ParentPortal() {
         setSettings(settingsData);
       } else {
         // Fetch related data
-        const [attRes, resRes, hifzRes, profileRes, deviceRes, noticeRes, historyRes, settingsRes, hifzSettingsRes] = await Promise.all([
-          fetch(`/api/attendance/${data.id}`),
-          fetch(`/api/results/${data.id}`),
-          fetch(`/api/hifz/${data.id}`),
+        const [profileRes, deviceRes, noticeRes, historyRes, settingsRes, hifzSettingsRes] = await Promise.all([
           fetch(`/api/students/${data.id}/full-profile`),
           fetch(`/api/parent/device-history/${data.id}`),
           fetch("/api/notices"),
@@ -596,20 +604,15 @@ export default function ParentPortal() {
           fetch("/api/admin/settings/hifz")
         ]);
         
-        const attData = await attRes.json();
-        setAttendance(Array.isArray(attData) ? attData : []);
-        
-        const resData = await resRes.json();
-        setResults(Array.isArray(resData) ? resData : []);
-        
-        const hifzData = await hifzRes.json();
-        setHifzRecords(Array.isArray(hifzData) ? hifzData : []);
+        const profileData = await profileRes.json();
+        setFullProfile(profileData);
+        setFees(profileData.fees || []);
+        setAttendance(profileData.attendance || []);
+        setResults(profileData.results || []);
+        setHifzRecords(profileData.hifz || []);
         
         const deviceData = await deviceRes.json();
         setDeviceHistory(Array.isArray(deviceData) ? deviceData : []);
-        
-        const profileData = await profileRes.json();
-        setFees(profileData.fees || []);
 
         const noticeData = await noticeRes.json();
         setNotices(Array.isArray(noticeData) ? noticeData : []);
@@ -922,25 +925,24 @@ export default function ParentPortal() {
             <AnimatePresence mode="wait">
               {activeTab === "overview" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
-                  {/* Leaderboard Banner */}
-                  {amalRankings.length > 0 && userAmalStats && (
-                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-[2.5rem] p-8 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-                      <div className="relative z-10 flex items-center gap-6">
-                        <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center border-4 border-white/30 backdrop-blur-sm">
-                          <Trophy className="w-10 h-10 text-white" />
+                    {amalRankings.length > 0 && userAmalStats && (
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-[2.5rem] p-8 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative z-10 flex items-center gap-6">
+                          <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center border-4 border-white/30 backdrop-blur-sm">
+                            <Trophy className="w-10 h-10 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-2xl font-black mb-1">মাসিক লিডারবোর্ড</h3>
+                            <p className="text-amber-100 font-medium">আপনার বর্তমান অবস্থান: <span className="font-black text-white text-xl">#{userAmalStats.rank}</span></p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-2xl font-black mb-1">মাসিক লিডারবোর্ড</h3>
-                          <p className="text-amber-100 font-medium">আপনার বর্তমান অবস্থান: <span className="font-black text-white text-xl">#{userAmalStats.rank}</span></p>
+                        <div className="relative z-10 bg-white/20 px-8 py-4 rounded-3xl backdrop-blur-sm border border-white/30 text-center min-w-[150px]">
+                          <div className="text-sm text-amber-100 font-bold uppercase tracking-wider mb-1">মোট পয়েন্ট</div>
+                          <div className="text-4xl font-black">{toBn(userAmalStats.completed || userAmalStats.score)}</div>
                         </div>
                       </div>
-                      <div className="relative z-10 bg-white/20 px-8 py-4 rounded-3xl backdrop-blur-sm border border-white/30 text-center min-w-[150px]">
-                        <div className="text-sm text-amber-100 font-bold uppercase tracking-wider mb-1">মোট পয়েন্ট</div>
-                        <div className="text-4xl font-black">{userAmalStats.score}</div>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -1078,39 +1080,62 @@ export default function ParentPortal() {
                 </motion.div>
               )}
 
-              {activeTab === "attendance" && (
+               {activeTab === "attendance" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                    <h3 className="text-2xl font-bold text-slate-900">হাজিরা রিপোর্ট</h3>
-                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-2xl border border-slate-100">
-                      <input 
-                        type="month" 
-                        value={selectedMonth} 
-                        onChange={async (e) => {
-                          setSelectedMonth(e.target.value);
-                          const res = await fetch(`/api/attendance/student/${student.id}/month/${e.target.value}`);
-                          setAttendance(await res.json());
-                        }}
-                        className="bg-transparent border-none focus:ring-0 font-bold text-slate-600 px-4 py-2"
-                      />
+                    <div>
+                      <h3 className="text-2xl font-bold text-slate-900">হাজিরা রিপোর্ট</h3>
+                      <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl mt-4">
+                        <button onClick={() => setAttendanceViewMode('today')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'today' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>আজ</button>
+                        <button onClick={() => setAttendanceViewMode('week')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'week' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>৭ দিন</button>
+                        <button onClick={() => setAttendanceViewMode('month')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'month' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>মাসিক</button>
+                      </div>
                     </div>
+                    {attendanceViewMode === 'month' && (
+                      <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-2xl border border-slate-100">
+                        <input 
+                          type="month" 
+                          value={selectedMonth} 
+                          onChange={async (e) => {
+                            setSelectedMonth(e.target.value);
+                            const res = await fetch(`/api/attendance/student/${student.id}/month/${e.target.value}`);
+                            setAttendance(await res.json());
+                          }}
+                          className="bg-transparent border-none focus:ring-0 font-bold text-slate-600 px-4 py-2"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {(() => {
                       const [year, month] = selectedMonth.split('-').map(Number);
                       const now = new Date();
-                      const isCurrentMonth = now.getFullYear() === year && (now.getMonth() + 1) === month;
                       
                       const daysInMonth = new Date(year, month, 0).getDate();
-                      const daysToShow = isCurrentMonth ? now.getDate() : daysInMonth;
+                      
+                      let daysToShow = [];
+                      if (attendanceViewMode === 'today') {
+                        daysToShow = [now.getDate()];
+                      } else if (attendanceViewMode === 'week') {
+                        for(let i=0; i<7; i++) {
+                           const d = new Date();
+                           d.setDate(now.getDate() - i);
+                           if (d.getMonth() + 1 === month && d.getFullYear() === year) {
+                             daysToShow.push(d.getDate());
+                           }
+                        }
+                      } else {
+                        const isCurrentMonth = now.getFullYear() === year && (now.getMonth() + 1) === month;
+                        const maxDay = isCurrentMonth ? now.getDate() : daysInMonth;
+                        for(let d = maxDay; d >= 1; d--) daysToShow.push(d);
+                      }
 
-                      const days = [];
-                      for (let d = 1; d <= daysToShow; d++) {
+                      const daysJSX = daysToShow.map(d => {
                         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                         const record = attendance.find(a => a.date === dateStr);
                         
-                        days.push(
+                        return (
                           <div key={d} className={cn(
                             "p-4 rounded-2xl border flex flex-col items-center justify-center transition-all",
                             record?.status === 'present' 
@@ -1122,16 +1147,39 @@ export default function ParentPortal() {
                             <span className="text-[10px] font-bold uppercase tracking-wider mb-1">
                               {new Date(dateStr).toLocaleDateString('bn-BD', { weekday: 'short' })}
                             </span>
-                            <span className="text-xl font-black">{d}</span>
+                            <span className="text-xl font-black">{toBn(d)}</span>
                             <span className="text-[10px] font-bold mt-1">
                               {record?.status === 'present' ? 'উপস্থিত' : record?.status === 'absent' ? 'অনুপস্থিত' : 'তথ্য নেই'}
                             </span>
                           </div>
                         );
-                      }
-                      return days;
+                      });
+                      
+                      return attendanceViewMode === 'month' ? daysJSX.slice(0, visibleAttendanceCount) : daysJSX;
                     })()}
                   </div>
+
+                  {(() => {
+                    const [year, month] = selectedMonth.split('-').map(Number);
+                    const now = new Date();
+                    const isCurrentMonth = now.getFullYear() === year && (now.getMonth() + 1) === month;
+                    const daysInMonth = new Date(year, month, 0).getDate();
+                    const daysToShow = isCurrentMonth ? now.getDate() : daysInMonth;
+                    
+                    if (visibleAttendanceCount < daysToShow) {
+                      return (
+                        <div className="mt-8 text-center">
+                          <button 
+                            onClick={() => setVisibleAttendanceCount(prev => prev + 10)}
+                            className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all"
+                          >
+                            আরো দেখুন
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   <div className="mt-8 pt-8 border-t border-slate-100 flex flex-wrap gap-6 justify-center">
                     <div className="flex items-center gap-2">
@@ -1152,41 +1200,65 @@ export default function ParentPortal() {
 
               {activeTab === "device-history" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-2xl font-bold text-slate-900">স্মার্ট হাজিরা লগ</h3>
-                    <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold">
-                      ডিভাইস এন্ট্রি (প্রবেশ ও প্রস্থান)
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <div>
+                      <h3 className="text-2xl font-bold text-slate-900">স্মার্ট হাজিরা লগ</h3>
+                      <div className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-[10px] font-bold inline-block mt-1">
+                        ডিভাইস এন্ট্রি (প্রবেশ ও প্রস্থান)
+                      </div>
+                    </div>
+                    <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
+                        <button onClick={() => setAttendanceViewMode('today')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'today' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>আজ</button>
+                        <button onClick={() => setAttendanceViewMode('week')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'week' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>৭ দিন</button>
+                        <button onClick={() => setAttendanceViewMode('month')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'month' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>মাসিক</button>
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    {deviceHistory.length > 0 ? deviceHistory.map((log, i) => (
-                      <div key={log.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center font-black",
-                            log.action === 'check_in' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                          )}>
-                            {log.action === 'check_in' ? "IN" : "OUT"}
+                    {(() => {
+                      const filteredHistory = deviceHistory.filter(log => {
+                        const logDate = new Date(log.timestamp);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        if (attendanceViewMode === 'today') {
+                          return logDate.toDateString() === today.toDateString();
+                        } else if (attendanceViewMode === 'week') {
+                          const weekAgo = new Date();
+                          weekAgo.setDate(today.getDate() - 7);
+                          weekAgo.setHours(0, 0, 0, 0);
+                          return logDate >= weekAgo;
+                        }
+                        return true; // monthly (all loaded)
+                      });
+
+                      return filteredHistory.length > 0 ? filteredHistory.map((log, i) => (
+                        <div key={log.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "w-12 h-12 rounded-xl flex items-center justify-center font-black",
+                              log.action === 'check_in' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                            )}>
+                              {log.action === 'check_in' ? "IN" : "OUT"}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-900">{log.action === 'check_in' ? "মাদরাসায় প্রবেশ" : "মাদরাসা থেকে প্রস্থান"}</h4>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                {new Date(log.timestamp).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-bold text-slate-900">{log.action === 'check_in' ? "মাদরাসায় প্রবেশ" : "মাদরাসা থেকে প্রস্থান"}</h4>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                              {new Date(log.timestamp).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}
-                            </p>
+                          <div className="text-right">
+                            <p className="font-black text-slate-900 text-lg">{log.time}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">ডিভাইস আইডি: {log.id?.slice(-4)}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-black text-slate-900 text-lg">{log.time}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">ডিভাইস আইডি: {log.id?.slice(-4)}</p>
+                      )) : (
+                        <div className="text-center py-20">
+                          <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                          <p className="text-slate-400 font-bold">এই সময়ে কোন হাজিরা লগ পাওয়া যায়নি</p>
                         </div>
-                      </div>
-                    )) : (
-                      <div className="text-center py-20">
-                        <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold">এখনো কোন স্মার্ট হাজিরা লগ পাওয়া যায়নি</p>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </motion.div>
               )}
@@ -1285,6 +1357,94 @@ export default function ParentPortal() {
                         )}
                       </div>
                     )}
+
+                    {/* Rankings Section in Amal Tab */}
+                    <div className="mt-12 pt-12 border-t border-slate-100">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-900 mb-1">লিডারবোর্ড র‍্যাংকিং</h3>
+                          <p className="text-slate-500 font-bold">এই মাসের আমল পূরণের সেরা তালিকা</p>
+                        </div>
+                        <select 
+                          value={rankingClass}
+                          onChange={(e) => setRankingClass(e.target.value)}
+                          className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-emerald-500/20"
+                        >
+                          <option value="All">সকল শ্রেণী</option>
+                          {settings?.classes?.map((c: string) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="overflow-x-auto bg-slate-50/50 rounded-3xl p-4">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="text-slate-500 font-bold text-[10px] uppercase tracking-widest border-b border-slate-200">
+                              <th className="p-4">র‍্যাংক</th>
+                              <th className="p-4">নাম ও শ্রেণী</th>
+                              <th className="p-4 text-center">পয়েন্ট</th>
+                              <th className="p-4 text-right">অগ্রগতি</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {fetchingRankings ? (
+                              <tr>
+                                <td colSpan={4} className="p-8 text-center text-slate-400 font-bold">লোড হচ্ছে...</td>
+                              </tr>
+                            ) : amalRankings.length > 0 ? (
+                              <>
+                                {amalRankings.slice(0, visibleAmalRankingsCount).map((rank, index) => (
+                                  <tr key={rank.userId} className={cn("hover:bg-white transition-colors rounded-xl", rank.userId === student.id && "bg-white shadow-sm ring-1 ring-emerald-100")}>
+                                    <td className="p-4">
+                                      <div className={cn(
+                                        "w-8 h-8 rounded-full flex items-center justify-center font-black text-xs",
+                                        index === 0 ? "bg-amber-100 text-amber-700 shadow-sm" :
+                                        index === 1 ? "bg-slate-200 text-slate-700 shadow-sm" :
+                                        index === 2 ? "bg-orange-100 text-orange-700 shadow-sm" :
+                                        "text-slate-400"
+                                      )}>
+                                        {index + 1}
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <p className="font-bold text-slate-900 text-sm">{rank.name}</p>
+                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{rank.class || ""}</p>
+                                    </td>
+                                    <td className="p-4 text-center font-black text-slate-700">{toBn(rank.completed)}</td>
+                                    <td className="p-4">
+                                       <div className="w-20 h-1.5 bg-slate-200 rounded-full ml-auto overflow-hidden">
+                                          <div 
+                                            className="h-full bg-emerald-500 rounded-full transition-all"
+                                            style={{ width: `${rank.percentage}%` }}
+                                          />
+                                       </div>
+                                       <p className="text-[10px] font-black text-right mt-1 text-emerald-600">{Math.round(rank.percentage)}%</p>
+                                    </td>
+                                  </tr>
+                                ))}
+                                {visibleAmalRankingsCount < amalRankings.length && (
+                                  <tr>
+                                    <td colSpan={4} className="p-4 text-center text-slate-400 font-bold pt-6">
+                                      <button 
+                                        onClick={() => setVisibleAmalRankingsCount(prev => prev + 10)}
+                                        className="text-xs text-emerald-600 font-black hover:underline"
+                                      >
+                                        আরো দেখুন
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="p-8 text-center text-slate-400 font-bold">কোনো তালিকা পাওয়া যায়নি</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1337,37 +1497,53 @@ export default function ParentPortal() {
 </div>
                               </td>
                             </tr>
-                          ) : submissionStatus.length > 0 ? submissionStatus.map((s) => (
-                            <tr key={s.userId} className="hover:bg-slate-50 transition-colors">
-                              <td className="p-6">
-                                <p className="font-black text-slate-900">{s.name}</p>
-                                <p className="text-[10px] text-slate-400 font-bold">ID: {s.userId} | {s.class}</p>
-                              </td>
-                              <td className="p-6">
-                                <div className="flex flex-wrap gap-2">
-                                  {studentTasks.map(task => {
-                                    const log = s.logs.find((l: any) => l.task_id === task.id);
-                                    const isCompleted = log?.status === "completed";
-                                    return (
-                                      <button
-                                        key={task.id}
-                                        onClick={() => toggleStudentAmal(s.userId, task.id, isCompleted)}
-                                        className={cn(
-                                          "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-2",
-                                          isCompleted 
-                                            ? "bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm" 
-                                            : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200"
-                                        )}
-                                      >
-                                        {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : <Heart className="w-3 h-3" />}
-                                        {task.title}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </td>
-                            </tr>
-                          )) : (
+                          ) : submissionStatus.length > 0 ? (
+                            <>
+                              {submissionStatus.slice(0, visibleStatusCount).map((s) => (
+                                <tr key={s.userId} className="hover:bg-slate-50 transition-colors">
+                                  <td className="p-6">
+                                    <p className="font-black text-slate-900">{s.name}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold">ID: {s.userId} | {s.class}</p>
+                                  </td>
+                                  <td className="p-6">
+                                    <div className="flex flex-wrap gap-2">
+                                      {studentTasks.map(task => {
+                                        const log = s.logs.find((l: any) => l.task_id === task.id);
+                                        const isCompleted = log?.status === "completed";
+                                        return (
+                                          <button
+                                            key={task.id}
+                                            onClick={() => toggleStudentAmal(s.userId, task.id, isCompleted)}
+                                            className={cn(
+                                              "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center gap-2",
+                                              isCompleted 
+                                                ? "bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm" 
+                                                : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200"
+                                            )}
+                                          >
+                                            {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : <Heart className="w-3 h-3" />}
+                                            {task.title}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {visibleStatusCount < submissionStatus.length && (
+                                <tr>
+                                  <td colSpan={2} className="p-6 text-center">
+                                    <button 
+                                      onClick={() => setVisibleStatusCount(prev => prev + 10)}
+                                      className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all"
+                                    >
+                                      আরো দেখুন
+                                    </button>
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          ) : (
                             <tr>
                               <td colSpan={2} className="p-12 text-center text-slate-400 font-bold">কোনো ছাত্র পাওয়া যায়নি</td>
                             </tr>
@@ -1853,7 +2029,7 @@ export default function ParentPortal() {
                               onClick={() => initiateLivePayment("nagad")}
                               className="p-4 bg-white border-2 border-orange-50 hover:border-orange-200 rounded-3xl transition-all flex flex-col items-center gap-2 group active:scale-95"
                             >
-                              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Nagad_Logo.svg/1200px-Nagad_Logo.svg.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
+                              <img src="https://i.postimg.cc/fRPdtz9t/nagad.png" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" alt="nagad" />
                               <span className="text-xs font-bold text-orange-600">নগদ</span>
                             </button>
                           )}
@@ -1875,12 +2051,41 @@ export default function ParentPortal() {
 
               {activeTab === "payment-history" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-8">{student.isTeacher ? "বেতন হিস্টোরি" : "পেমেন্ট হিস্টোরি"}</h3>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <h3 className="text-2xl font-bold text-slate-900">{student.isTeacher ? "বেতন হিস্টোরি" : "পেমেন্ট হিস্টোরি"}</h3>
+                    <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
+                       <label className="text-xs font-black text-slate-500">তারিখ:</label>
+                       <input 
+                         type="date" 
+                         value={paymentHistoryFilterDate} 
+                         onChange={e => setPaymentHistoryFilterDate(e.target.value)} 
+                         className="bg-transparent border-none font-black text-slate-700 outline-none text-sm cursor-pointer" 
+                       />
+                       <button 
+                         onClick={() => setPaymentHistoryFilterDate("")}
+                         className={cn("text-[10px] font-black uppercase tracking-wider transition-all", paymentHistoryFilterDate === "" ? "text-slate-400 cursor-default" : "text-emerald-600 hover:text-emerald-700")}
+                       >
+                         সব দেখুন
+                       </button>
+                    </div>
+                  </div>
                   <div className="space-y-6">
-                    {paymentHistory.length > 0 ? (
-                      student.isTeacher ? (
-                        // Group salary history by month and year for teachers
-                        Object.entries(paymentHistory.reduce((acc: any, payment: any) => {
+                    {(() => {
+                      const filteredHistory = paymentHistory.filter(p => {
+                        if (!paymentHistoryFilterDate) return true;
+                        const pDate = new Date(p.date || p.created_at || p.createdAt).toLocaleDateString('en-CA');
+                        return pDate === paymentHistoryFilterDate;
+                      });
+
+                      if (filteredHistory.length === 0) return (
+                        <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                          <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                          <p className="text-slate-400 font-bold">এই তারিখে কোন পেমেন্ট পাওয়া যায়নি</p>
+                        </div>
+                      );
+
+                      if (student.isTeacher) {
+                        return Object.entries(filteredHistory.reduce((acc: any, payment: any) => {
                           const key = `${payment.month} ${payment.year || ''}`;
                           if (!acc[key]) acc[key] = { month: payment.month, year: payment.year, total_paid: 0, total_salary: payment.total_salary || student.salary || 0, payments: [] };
                           acc[key].total_paid += Number(payment.amount);
@@ -1921,10 +2126,9 @@ export default function ParentPortal() {
                               ))}
                             </div>
                           </div>
-                        ))
-                      ) : (
-                        // Student payment history
-                        paymentHistory.map((payment: any, i: number) => (
+                        ));
+                      } else {
+                        return filteredHistory.map((payment: any, i: number) => (
                           <div key={payment.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white hover:shadow-lg transition-all group">
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -1955,14 +2159,9 @@ export default function ParentPortal() {
                               </span>
                             </div>
                           </div>
-                        ))
-                      )
-                    ) : (
-                      <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
-                        <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold">{student.isTeacher ? "এখনো কোন বেতন হিস্টোরি নেই" : "এখনো কোন পেমেন্ট হিস্টোরি নেই"}</p>
-                      </div>
-                    )}
+                        ));
+                      }
+                    })()}
                   </div>
                 </motion.div>
               )}

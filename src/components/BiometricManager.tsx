@@ -32,7 +32,7 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
     setLoading(true);
     try {
       const [sRes, tRes] = await Promise.all([
-        fetch("/api/students?limit=1000"),
+        fetch("/api/students?limit=1000&summary_only=true"),
         fetch("/api/admin/teachers")
       ]);
       const sData = await sRes.json();

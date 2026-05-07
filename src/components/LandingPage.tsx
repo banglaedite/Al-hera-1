@@ -242,9 +242,9 @@ const LandingPage = () => {
   if (!settings) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="relative">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-24 w-24 border-t-4 border-b-4 border-emerald-600"></div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <GraduationCap className="w-6 h-6 text-emerald-600" />
+          <img src="https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png" className="w-12 h-12 object-contain" alt="Loading..." />
         </div>
       </div>
     </div>

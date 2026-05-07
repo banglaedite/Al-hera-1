@@ -18,17 +18,16 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/archive/students");
+      const res = await fetch("/api/admin/archive/students?limit=1000");
       if (!res.ok) throw new Error("Failed to fetch students");
       const data = await res.json();
       setStudents(data);
       
-      // Calculate class breakdown
-      const breakdown: any = {};
-      data.forEach((s: any) => {
-        breakdown[s.class] = (breakdown[s.class] || 0) + 1;
-      });
-      setClassBreakdown(breakdown);
+      // Fetch breakdown separately to save reads
+      const breakdownRes = await fetch("/api/admin/students/breakdown");
+      if (breakdownRes.ok) {
+        setClassBreakdown(await breakdownRes.json());
+      }
     } catch (error) {
       console.error("Error fetching students:", error);
     } finally {
