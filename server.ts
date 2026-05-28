@@ -130,6 +130,23 @@ const app = express();
 
 app.use(cors());
 
+// Global Firestore initialization & Cache clearing middleware
+app.use(async (req, res, next) => {
+  try {
+    if (!firestore) {
+      await getFirestoreInstance();
+    }
+  } catch (e) {
+    console.error("Critical: Firestore initialization failed in middleware:", e);
+  }
+
+  if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+    routeCache.clear();
+    console.log(`Cache cleared due to mutation: ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 // Enhanced logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
@@ -1062,24 +1079,27 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.get("/api/site-settings", async (req, res) => {
+    const cached = routeCache.get("site-settings");
+    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION * 6)) {
+      return res.json(cached.data);
+    }
+
     console.log("Fetching site settings...");
     try {
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
 
-      // Add a timeout to firestore call
-      const settingsPromise = db.collection("site_settings").doc("1").get();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Firestore timeout")), 10000)
-      );
+      const settingsDoc = await db.collection("site_settings").doc("1").get();
+      const settings = settingsDoc.exists ? { id: settingsDoc.id, ...settingsDoc.data() } : {};
       
-      const settingsDoc = await Promise.race([settingsPromise, timeoutPromise]) as admin.firestore.DocumentSnapshot;
+      if (settingsDoc.exists) {
+        routeCache.set("site-settings", { data: settings, timestamp: Date.now() });
+      }
       
-      console.log("Site settings fetched successfully. Exists:", settingsDoc.exists);
-      res.json(settingsDoc.exists ? { id: settingsDoc.id, ...settingsDoc.data() } : {});
+      res.json(settings);
     } catch (error) {
       console.error("Error fetching site settings:", error);
-      res.status(500).json({ error: "Failed to fetch settings", details: error instanceof Error ? error.message : String(error) });
+      res.status(500).json({ error: "Failed to fetch settings" });
     }
   });
 
@@ -2018,13 +2038,13 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
             let q = db.collection("fees").where("student_id", "in", chunk).where("status", "==", "paid");
             if (start_date) q = q.where("paid_date", ">=", start_date);
             if (end_date) q = q.where("paid_date", "<=", end_date + "T23:59:59.999Z");
-            return q.aggregate({ total: sumField("amount") }).get();
+            return q.select("amount").get();
           }));
-          feeIncome = results.reduce((sum, res) => sum + (Number(res.data().total) || 0), 0);
+          feeIncome = results.reduce((sum, res) => sum + res.docs.reduce((s, doc) => s + (Number(doc.data().amount) || 0), 0), 0);
         }
       } else {
-        const snapshot = await feesQuery.aggregate({ total: sumField("amount") }).get();
-        feeIncome = Number(snapshot.data().total) || 0;
+        const snapshot = await feesQuery.select("amount").get();
+        feeIncome = snapshot.docs.reduce((sum, doc) => sum + (Number(doc.data().amount) || 0), 0);
       }
 
       if (class_name) {
@@ -2032,14 +2052,14 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         expenseQuery = expenseQuery.where("class_name", "==", class_name);
       }
 
-      const [incomeSumSnap, expenseSumSnap] = await Promise.all([
-        incomeQuery.aggregate({ total: sumField("amount") }).get(),
-        expenseQuery.aggregate({ total: sumField("amount") }).get()
+      const [incomeSnap, expenseSnap] = await Promise.all([
+        incomeQuery.select("amount").get(),
+        expenseQuery.select("amount").get()
       ]);
 
-      const otherIncome = Number(incomeSumSnap.data().total) || 0;
+      const otherIncome = incomeSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0);
       const totalIncome = feeIncome + otherIncome;
-      const totalExpense = Number(expenseSumSnap.data().total) || 0;
+      const totalExpense = expenseSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0);
 
       let prevBalance = 0;
       let prevIncome = 0;
@@ -2060,22 +2080,22 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
             for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
             const results = await Promise.all(chunks.map(chunk => 
               db.collection("fees").where("student_id", "in", chunk).where("status", "==", "paid").where("paid_date", "<", start_date)
-                .aggregate({ total: sumField("amount") }).get()
+                .select("amount").get()
             ));
-            prevIncome = results.reduce((sum, r) => sum + (Number(r.data().total) || 0), 0);
+            prevIncome = results.reduce((sum, res) => sum + res.docs.reduce((s, doc) => s + (Number(doc.data().amount) || 0), 0), 0);
           }
         } else {
-          const pfSnap = await pFeesQ.aggregate({ total: sumField("amount") }).get();
-          prevIncome = Number(pfSnap.data().total) || 0;
+          const pfSnap = await pFeesQ.select("amount").get();
+          prevIncome = pfSnap.docs.reduce((sum, doc) => sum + (Number(doc.data().amount) || 0), 0);
         }
 
         const [piSnap, peSnap] = await Promise.all([
-          pIncQ.aggregate({ total: sumField("amount") }).get(),
-          pExpQ.aggregate({ total: sumField("amount") }).get()
+          pIncQ.select("amount").get(),
+          pExpQ.select("amount").get()
         ]);
 
-        prevIncome += (Number(piSnap.data().total) || 0);
-        prevExpense = Number(peSnap.data().total) || 0;
+        prevIncome += piSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0);
+        prevExpense = peSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0);
         prevBalance = prevIncome - prevExpense;
       }
 
@@ -2797,13 +2817,27 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       }
       
       let studentCode = "";
-      const lastStudentSnapshot = await firestore.collection("students").where("student_code", ">=", "AH").orderBy("student_code", "desc").limit(1).get();
-      if (!lastStudentSnapshot.empty) {
-        const lastStudent = lastStudentSnapshot.docs[0].data();
-        const lastNum = parseInt(lastStudent.student_code.replace('AH', ''));
-        studentCode = `AH${(lastNum + 1).toString().padStart(2, '0')}`;
-      } else {
-        studentCode = "AH01";
+      try {
+        const lastStudentSnapshot = await firestore.collection("students").where("student_code", ">=", "AH").orderBy("student_code", "desc").limit(1).get();
+        if (!lastStudentSnapshot.empty) {
+          const lastStudent = lastStudentSnapshot.docs[0].data();
+          const lastNum = parseInt(lastStudent.student_code.replace('AH', ''));
+          studentCode = `AH${(lastNum + 1).toString().padStart(2, '0')}`;
+        } else {
+          studentCode = "AH01";
+        }
+      } catch (e) {
+        console.warn("Fast student_code generation failed, falling back to all-docs scan", e);
+        const allStudents = await firestore.collection("students").select("student_code").get();
+        let maxNum = 0;
+        allStudents.forEach(doc => {
+          const code = doc.data().student_code;
+          if (code && code.startsWith("AH")) {
+            const num = parseInt(code.replace("AH", ""));
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        });
+        studentCode = `AH${(maxNum + 1).toString().padStart(2, '0')}`;
       }
 
       const existingDoc = await firestore.collection("students").doc(studentId).get();
@@ -2868,7 +2902,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       guardian_name, guardian_relation, guardian_nid, guardian_mobile,
       interview_permissions,
       father_occupation, father_nid, mother_occupation, mother_nid,
-      nationality, religion, gender
+      nationality, religion, gender,
+      birth_cert_url, parent_nid_url
     } = req.body;
     try {
       if (student_code) {
@@ -2888,6 +2923,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         roll, is_hifz: (is_hifz || className?.includes("হিফজ") || className?.includes("হেফজ")) ? 1 : 0, photo_url, 
         monthly_fee: monthly_fee || 0, student_code,
         biometric_id: req.body.biometric_id || null,
+        birth_cert_url: birth_cert_url || null,
+        parent_nid_url: parent_nid_url || null,
         guardian_name,
         guardian_relation,
         guardian_nid,
@@ -2986,8 +3023,35 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const className = application.class;
       const studentCountSnapshot = await firestore.collection("students").where("class", "==", className).get();
       const roll = (studentCountSnapshot.size + 1).toString().padStart(3, '0');
-      const studentId = `AHM-${className}-${roll}`;
-      const studentCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      const classMap: { [key: string]: string } = {
+        "১ম": "1", "২য়": "2", "৩য়": "3", "৪র্থ": "4", "৫ম": "5", "হিফজ": "Hifz"
+      };
+      const classNumeric = classMap[className] || className;
+      const studentId = `AHM-${classNumeric}-${roll}`;
+      
+      let studentCode = "";
+      try {
+        const lastStudentSnapshot = await firestore.collection("students").where("student_code", ">=", "AH").orderBy("student_code", "desc").limit(1).get();
+        if (!lastStudentSnapshot.empty) {
+          const lastStudent = lastStudentSnapshot.docs[0].data();
+          const lastNum = parseInt(lastStudent.student_code.replace('AH', ''));
+          studentCode = `AH${(lastNum + 1).toString().padStart(2, '0')}`;
+        } else {
+          studentCode = "AH01";
+        }
+      } catch (e) {
+        const allStudents = await firestore.collection("students").select("student_code").get();
+        let maxNum = 0;
+        allStudents.forEach(doc => {
+          const code = doc.data().student_code;
+          if (code && code.startsWith("AH")) {
+            const num = parseInt(code.replace("AH", ""));
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        });
+        studentCode = `AH${(maxNum + 1).toString().padStart(2, '0')}`;
+      }
 
       const studentData = {
         studentId,
@@ -4628,20 +4692,21 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const db = getFirestoreInstance();
       if (!db) throw new Error("Firestore not initialized");
 
-      const sumField = (fieldName: string) => (AggregateField as any).sum(fieldName);
+      const feesSnap = await db.collection("fees").where("status", "==", "paid").select("amount").get();
+      const feeIncome = feesSnap.docs.reduce((acc, doc) => acc + (Number(doc.data().amount) || 0), 0);
 
-      const [studentsCountSnap, feesSumSnap, expensesSumSnap, otherIncomeSumSnap] = await Promise.all([
-        db.collection("students").where("deleted_at", "==", null).count().get(),
-        db.collection("fees").where("status", "==", "paid").aggregate({ total: sumField("amount") }).get(),
-        db.collection("expenses").aggregate({ total: sumField("amount") }).get(),
-        db.collection("income").aggregate({ total: sumField("amount") }).get()
+      const expensesSnap = await db.collection("expenses").select("amount").get();
+      const expenses = expensesSnap.docs.reduce((acc, doc) => acc + (Number(doc.data().amount) || 0), 0);
+
+      const otherIncomeSnap = await db.collection("income").select("amount").get();
+      const otherIncome = otherIncomeSnap.docs.reduce((acc, doc) => acc + (Number(doc.data().amount) || 0), 0);
+
+      const [studentsCountSnap] = await Promise.all([
+        db.collection("students").where("deleted_at", "==", null).count().get()
       ]);
 
       const studentCount = studentsCountSnap.data().count;
-      const feeIncome = Number(feesSumSnap.data().total) || 0;
-      const otherIncome = Number(otherIncomeSumSnap.data().total) || 0;
       const income = feeIncome + otherIncome;
-      const expenses = Number(expensesSumSnap.data().total) || 0;
 
       cachedStats = {
         totalStudents: studentCount,

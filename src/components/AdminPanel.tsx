@@ -2955,6 +2955,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
         examStats: data.examStats || {}
       };
       
+      setSelectedStudent(safeData.student);
       setFullProfile(safeData);
       
       // Set default selected exam to the latest one (using exam|year format)
@@ -2964,7 +2965,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
       }
     } catch (error) {
       console.error("Failed to fetch full profile", error);
-      setFullProfile({ fees: [], transactions: [], results: [], attendance: [], examStats: {} });
+      setFullProfile({ student: studentId ? { id: studentId } : null, fees: [], transactions: [], results: [], attendance: [], examStats: {} });
     } finally {
       setLoadingProfile(false);
     }
@@ -3579,7 +3580,16 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
               >
                 <Printer className="w-4 h-4" /> প্রিন্ট
               </button>
-              <button onClick={() => setIsEditing(true)} className="px-6 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-100 transition-all">
+              <button 
+                onClick={() => {
+                  if (fullProfile?.student?.id === selectedStudent.id) {
+                    setIsEditing(true);
+                  } else {
+                    addToast("প্রোফাইল লোড হওয়া পর্যন্ত অপেক্ষা করুন", "info");
+                  }
+                }} 
+                className="px-6 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-100 transition-all"
+              >
                 <Edit className="w-4 h-4" /> এডিট প্রোফাইল
               </button>
               <button 

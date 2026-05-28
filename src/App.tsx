@@ -34,7 +34,14 @@ import { useToast } from "./components/ToastContext";
 
 const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
   const { addToast } = useToast();
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem("siteSettings");
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -44,6 +51,7 @@ const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
           const data = await res.json();
           if (data && typeof data === 'object' && Object.keys(data).length > 0) {
             setSettings(data);
+            localStorage.setItem("siteSettings", JSON.stringify(data));
             
             // Apply Site Title & Favicon Globally
             if (data.title) {

@@ -239,16 +239,27 @@ const LandingPage = () => {
       .catch(err => console.error("Failed to load routines:", err));
   }, []);
 
-  if (!settings) return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="relative">
-        <div className="animate-spin rounded-full h-24 w-24 border-t-4 border-b-4 border-emerald-600"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <img src="https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png" className="w-12 h-12 object-contain" alt="Loading..." />
+  if (!settings) {
+    const cachedSettings = localStorage.getItem("siteSettings");
+    let cachedLogo = "https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png";
+    if (cachedSettings) {
+      try {
+        const parsed = JSON.parse(cachedSettings);
+        if (parsed.logo_url) cachedLogo = parsed.logo_url;
+      } catch(e) {}
+    }
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-24 w-24 border-t-4 border-b-4 border-emerald-600"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <img src={cachedLogo} className="w-12 h-12 object-contain" alt="Loading..." />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="relative bg-white font-sans selection:bg-emerald-200 selection:text-emerald-900">

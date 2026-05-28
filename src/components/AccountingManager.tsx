@@ -92,7 +92,7 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [isAddingIncome, setIsAddingIncome] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
-  const [startDate, setStartDate] = useState("");
+  const [startDate, setStartDate] = useState("2023-01-01");
   const [endDate, setEndDate] = useState("");
   const [activeView, setActiveView] = useState<"summary" | "income" | "expense" | "category-report" | "class-report" | "monthly-report" | "yearly-report">("summary");
   const [selectedStudentProfile, setSelectedStudentProfile] = useState<any>(null);
