@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
 import { db } from "./firebase";
 import { 
   Home, 
@@ -331,6 +331,7 @@ export default function App() {
                 <Route path="/parent" element={<div className="max-w-7xl mx-auto px-4 py-12"><ParentPortal /></div>} />
                 <Route path="/teacher" element={<TeacherPortal />} />
                 <Route path="/secret-admin-access" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdminPanel /></div>} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
             

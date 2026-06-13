@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
+import RecruitmentForm from "./RecruitmentForm";
 
 function TypingTitle({ text }: { text: string }) {
   const isEnglish = (text: string) => /^[A-Za-z0-9\s!@#$%^&*()_+=-`~\\|[\]{};':",./<>?]+$/.test(text);
@@ -698,6 +699,35 @@ const LandingPage = () => {
 
       {/* Content Sections Toggle Buttons - REMOVED */}
       {/* Container for Rules setting will go here later */}
+
+      {/* General Rules Section */}
+      {settings?.general_rules && (
+        <section id="rules" className={`py-12 bg-white ${settings?.show_general_rules !== 1 ? 'hidden target:block' : ''}`}>
+          <div className="max-w-4xl mx-auto px-4">
+             <div className="bg-slate-50 border border-slate-100 p-8 md:p-10 rounded-[2.5rem] shadow-sm">
+                <h2 className="text-3xl font-black text-slate-900 mb-6 flex items-center gap-3">
+                  <FileText className="w-8 h-8 text-indigo-900" />
+                  সাধারণ নিয়মনীতি
+                </h2>
+                <div className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                  {settings.general_rules}
+                </div>
+             </div>
+          </div>
+        </section>
+      )}
+
+      {/* Teacher Recruitment Section */}
+      {settings?.enable_recruitment === 1 && (
+        <section id="recruitment" className="py-24 bg-emerald-50">
+          <div className="max-w-4xl mx-auto px-4">
+            <h2 className="text-4xl font-black text-slate-900 mb-10 text-center">শিক্ষক নিয়োগ আবেদন</h2>
+            <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-lg border border-emerald-100">
+               <RecruitmentForm />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Routine & Syllabus Section */}
       {(settings?.show_routines_directly === 1 || routines.length > 0) && (

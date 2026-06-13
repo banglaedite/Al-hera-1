@@ -249,6 +249,36 @@ app.post("/api/admin/verify-password", async (req, res, next) => {
   }
 });
 
+app.get("/api/admin/dashboard-stats", async (req, res) => {
+  try {
+    const db = getFirestoreInstance();
+    const studentsCountSnap = await db.collection("students").count().get();
+    const teachersCountSnap = await db.collection("teachers").count().get();
+    
+    // Aggregate income and expenses directly
+    const [incomeSnap, expenseSnap, feesSnap] = await Promise.all([
+        db.collection("income").select("amount").get(),
+        db.collection("expenses").select("amount").get(),
+        db.collection("fees").where("status", "==", "paid").select("amount").get()
+    ]);
+    
+    const totalIncome = incomeSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0) +
+                       feesSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0);
+    const totalExpenses = expenseSnap.docs.reduce((sum: number, doc: any) => sum + (Number(doc.data().amount) || 0), 0);
+    
+    res.json({
+      totalStudents: studentsCountSnap.data().count,
+      totalTeachers: teachersCountSnap.data().count,
+      totalIncome,
+      totalExpenses,
+      balance: totalIncome - totalExpenses
+    });
+  } catch (error) {
+    console.error("Dashboard stats error:", error);
+    res.status(500).json({ error: "Failed to fetch dashboard stats" });
+  }
+});
+
 // API to update Firebase Config
 app.post("/api/admin/update-firebase-config", async (req, res) => {
   const { projectId, clientEmail, privateKey, databaseId, password } = req.body;
@@ -1119,7 +1149,8 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       qr_code_url, enable_qr_code, auto_whatsapp, enable_historical_reports,
       show_routines_directly, bkash_instructions, nagad_instructions, rocket_instructions,
       payment_special_note, enable_signature, signature_url,
-      popup_enabled, popup_image, popup_link, popup_title, popup_description, popup_duration, popup_show_close
+      popup_enabled, popup_image, popup_link, popup_title, popup_description, popup_duration, popup_show_close,
+      general_rules, show_general_rules
     } = req.body;
     try {
       const db = getFirestoreInstance();
@@ -1162,7 +1193,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         popup_title: popup_title || "",
         popup_description: popup_description || "",
         popup_duration: popup_duration || 10,
-        popup_show_close: popup_show_close ? 1 : 0
+        popup_show_close: popup_show_close ? 1 : 0,
+        general_rules: general_rules || "",
+        show_general_rules: show_general_rules ? 1 : 0
       }, { merge: true });
       res.json({ success: true });
     } catch (error) {
@@ -2099,16 +2132,19 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         prevBalance = prevIncome - prevExpense;
       }
 
+      const settingsDoc = await db.collection("site_settings").doc("1").get();
+      const ijaraBalance = Number(settingsDoc.exists ? settingsDoc.data()?.ijara_balance || 0 : 0);
+
       const result = { 
         totalIncome, 
         feeIncome,
         otherIncome,
         totalExpense, 
-        balance: totalIncome - totalExpense,
-        prevBalance,
+        balance: totalIncome - totalExpense + ijaraBalance,
+        prevBalance: prevBalance + ijaraBalance,
         prevIncome,
         prevExpense,
-        totalBalance: prevBalance + (totalIncome - totalExpense)
+        totalBalance: prevBalance + (totalIncome - totalExpense) + ijaraBalance
       };
 
       routeCache.set(cacheKey, { data: result, timestamp: Date.now() });

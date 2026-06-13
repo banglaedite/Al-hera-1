@@ -828,7 +828,7 @@ export default function AdminPanel() {
           <button
             onClick={() => {
               localStorage.removeItem("isAdmin");
-              window.location.reload();
+              window.location.href = "/";
             }}
             className="w-full flex items-center gap-3 px-6 py-4 rounded-2xl font-bold transition-all bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100 mt-8"
           >
@@ -2201,6 +2201,15 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
             <input type="checkbox" checked={!!settings.enable_rocket} onChange={(e) => setSettings({...settings, enable_rocket: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
           <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">ইযারা (Opening Balance)</label>
+            <input 
+              type="number" 
+              value={settings.ijara_balance || 0} 
+              onChange={(e) => setSettings({...settings, ijara_balance: Number(e.target.value)})} 
+              className="w-full p-4 bg-slate-50 border rounded-2xl" 
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">শিক্ষক নিয়োগ চালু করুন</label>
             <input type="checkbox" checked={!!settings.enable_recruitment} onChange={(e) => setSettings({...settings, enable_recruitment: e.target.checked ? 1 : 0})} className="w-6 h-6" />
           </div>
@@ -2259,6 +2268,16 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">মাদরাসা নামের লোগোর উচ্চতা (px)</label>
             <input type="number" value={settings.name_logo_height || 80} onChange={(e) => setSettings({...settings, name_logo_height: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">সাধারণ নিয়মনীতি (General Rules)</label>
+            <textarea 
+              value={settings.general_rules || ""} 
+              onChange={(e) => setSettings({...settings, general_rules: e.target.value})} 
+              className="w-full p-4 bg-slate-50 border rounded-2xl h-48"
+              placeholder="এখানে মাদরাসার সাধারণ নিয়মনীতি লিখুন..."
+            />
           </div>
           
           <div className="col-span-1 md:col-span-2 h-px bg-slate-100 my-4" />
@@ -2860,6 +2879,12 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
       setInterviewPermissions([{ name: "", phone: "", relation: "", nid: "" }]);
     }
   }, [isEditing, isAdding, selectedStudent]);
+
+  useEffect(() => {
+    if (isEditing && fullProfile?.student) {
+      setSelectedStudent(fullProfile.student);
+    }
+  }, [isEditing, fullProfile]);
   
   // Fee Management State
   const [showFeeModal, setShowFeeModal] = useState(false);

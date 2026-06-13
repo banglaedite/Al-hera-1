@@ -11,7 +11,8 @@ import {
   Calendar,
   CheckCircle2,
   Heart,
-  ShieldCheck
+  ShieldCheck,
+  TrendingDown
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "./ToastContext";
@@ -54,6 +55,14 @@ export default function DashboardHome() {
   const [settings, setSettings] = useState<any>({});
   const [rankingCriteria, setRankingCriteria] = useState<"amal" | "result" | "attendance">("amal");
   const [topStudents, setTopStudents] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({ totalStudents: 0, totalTeachers: 0, totalIncome: 0, totalExpenses: 0 });
+
+  useEffect(() => {
+    fetch("/api/admin/dashboard-stats")
+      .then(res => res.json())
+      .then(setStats)
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     fetch(`/api/top-students?type=${rankingCriteria}`)
@@ -118,10 +127,10 @@ export default function DashboardHome() {
 
       {/* Stats */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard icon={Users} label="মোট ছাত্র" value="৪৫০+" color="bg-blue-500" />
-        <StatCard icon={GraduationCap} label="মোট শিক্ষক" value="২৫+" color="bg-emerald-500" />
-        <StatCard icon={CheckCircle2} label="সাফল্যের হার" value="৯৮%" color="bg-amber-500" />
-        <StatCard icon={Calendar} label="প্রতিষ্ঠা সাল" value="২০১০" color="bg-rose-500" />
+        <StatCard icon={Users} label="মোট ছাত্র" value={stats.totalStudents} color="bg-blue-500" />
+        <StatCard icon={GraduationCap} label="মোট শিক্ষক" value={stats.totalTeachers} color="bg-emerald-500" />
+        <StatCard icon={CreditCard} label="মোট আয়" value={`৳${stats.totalIncome.toLocaleString('en-IN')}`} color="bg-amber-500" />
+        <StatCard icon={TrendingDown} label="মোট ব্যয়" value={`৳${stats.totalExpenses.toLocaleString('en-IN')}`} color="bg-rose-500" />
       </section>
 
       {/* Quick Actions */}
