@@ -92,6 +92,24 @@ export default function ParentPortal() {
   const [livePaymentReference, setLivePaymentReference] = useState("");
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [selectedResultExam, setSelectedResultExam] = useState<string>("");
+
+  const getPublishedExamKeys = React.useCallback((): string[] => {
+    const publishedList = settings?.published_exams;
+    if (!Array.isArray(publishedList) || publishedList.length === 0) return [];
+    const allExamKeys = fullProfile?.examStats ? Object.keys(fullProfile.examStats) : [];
+    return allExamKeys.filter(key => publishedList.includes(key));
+  }, [settings, fullProfile]);
+
+  React.useEffect(() => {
+    const publishedKeys = getPublishedExamKeys();
+    if (publishedKeys.length > 0) {
+      if (!selectedResultExam || !publishedKeys.includes(selectedResultExam)) {
+        setSelectedResultExam(publishedKeys[0]);
+      }
+    } else {
+      setSelectedResultExam("");
+    }
+  }, [getPublishedExamKeys, selectedResultExam]);
   const [downloading, setDownloading] = useState(false);
   const [foodMenu, setFoodMenu] = useState<any[]>([]);
   const [loadingFood, setLoadingFood] = useState(false);
@@ -177,9 +195,10 @@ export default function ParentPortal() {
           fetch(`/api/students/${student.id}/full-profile`),
           fetch(`/api/parent/payment-history/${student.id}`)
         ]);
-        const profileData = await profileRes.json();
+        const profileData = profileRes.ok ? await profileRes.json().catch(() => ({})) : {};
         setFees(profileData.fees || []);
-        setPaymentHistory(await historyRes.json());
+        const historyData = historyRes.ok ? await historyRes.json().catch(() => ([])) : [];
+        setPaymentHistory(Array.isArray(historyData) ? historyData : []);
       } else {
         alert(data.error || "পেমেন্ট ব্যর্থ হয়েছে");
       }
@@ -604,26 +623,26 @@ export default function ParentPortal() {
           fetch("/api/admin/settings/hifz")
         ]);
         
-        const profileData = await profileRes.json();
+        const profileData = profileRes.ok ? await profileRes.json().catch(() => ({})) : {};
         setFullProfile(profileData);
         setFees(profileData.fees || []);
         setAttendance(profileData.attendance || []);
         setResults(profileData.results || []);
         setHifzRecords(profileData.hifz || []);
         
-        const deviceData = await deviceRes.json();
+        const deviceData = deviceRes.ok ? await deviceRes.json().catch(() => ([])) : [];
         setDeviceHistory(Array.isArray(deviceData) ? deviceData : []);
 
-        const noticeData = await noticeRes.json();
+        const noticeData = noticeRes.ok ? await noticeRes.json().catch(() => ([])) : [];
         setNotices(Array.isArray(noticeData) ? noticeData : []);
 
-        const historyData = await historyRes.json();
+        const historyData = historyRes.ok ? await historyRes.json().catch(() => ([])) : [];
         setPaymentHistory(Array.isArray(historyData) ? historyData : []);
 
-        const settingsData = await settingsRes.json();
+        const settingsData = settingsRes.ok ? await settingsRes.json().catch(() => ({})) : {};
         setSettings(settingsData);
 
-        const hifzSettingsData = await hifzSettingsRes.json();
+        const hifzSettingsData = hifzSettingsRes.ok ? await hifzSettingsRes.json().catch(() => ({})) : {};
         setHifzSettings(hifzSettingsData);
       }
     } catch (err: any) {
@@ -641,9 +660,16 @@ export default function ParentPortal() {
       if (res.ok) {
         const data = await res.json();
         setFullProfile(data);
-        if (data.results && data.results.length > 0) {
-          const exams = [...new Set(data.results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))];
-          setSelectedResultExam(exams[exams.length - 1] as string);
+        const publishedList = settings?.published_exams;
+        if (Array.isArray(publishedList) && publishedList.length > 0 && data.examStats) {
+          const publishedKeys = Object.keys(data.examStats).filter(k => publishedList.includes(k));
+          if (publishedKeys.length > 0) {
+            setSelectedResultExam(publishedKeys[0]);
+          } else {
+            setSelectedResultExam("");
+          }
+        } else {
+          setSelectedResultExam("");
         }
       }
     } catch (error) {
@@ -958,62 +984,7 @@ export default function ParentPortal() {
                     </div>
                   </div>
 
-                  {/* Results Summary Section */}
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 mb-8">
-                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                       <BookOpen className="w-5 h-5 text-emerald-600" /> সাম্প্রতিক ফলাফল
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                       <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex flex-col items-center justify-center text-center">
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">মোট নম্বর</p>
-                          <p className="text-2xl font-black text-emerald-900">
-                             {(() => {
-                               if (!results || results.length === 0) return toBn(0);
-                               const latest = results[results.length-1];
-                               const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
-                               return toBn(latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0));
-                             })()}
-                          </p>
-                       </div>
-                       <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 flex flex-col items-center justify-center text-center">
-                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">গড় (Average)</p>
-                          <p className="text-2xl font-black text-blue-900">
-                             {(() => {
-                               if (!results || results.length === 0) return toBn(0);
-                               const latest = results[results.length-1];
-                               const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
-                               const total = latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0);
-                                return toBn((total / latestResults.length).toFixed(2));
-                             })()}
-                          </p>
-                       </div>
-                       <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex flex-col items-center justify-center text-center">
-                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">গ্রেড (Grade)</p>
-                          <p className="text-2xl font-black text-amber-900">
-                             {(() => {
-                               if (!results || results.length === 0) return "-";
-                               const latest = results[results.length-1];
-                               const latestResults = results.filter(r => r.exam_name === latest.exam_name && (r.year || new Date().getFullYear().toString()) === (latest.year || new Date().getFullYear().toString()));
-                               const total = latestResults.reduce((sum, r) => sum + Number(r.marks || 0), 0);
-                               const avg = total / latestResults.length;
-                               if (latestResults.some(r => r.grade === 'F')) return "F";
-                               return avg >= 80 ? "A+" : avg >= 70 ? "A" : avg >= 60 ? "A-" : avg >= 50 ? "B" : avg >= 40 ? "C" : avg >= 33 ? "D" : "F";
-                             })()}
-                          </p>
-                       </div>
-                       <div className="p-6 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center justify-center text-center">
-                          <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">মেধা স্থান</p>
-                          <p className="text-2xl font-black text-rose-900">
-                             {(() => {
-                               if (!results || results.length === 0) return "-";
-                               const latest = results[results.length-1];
-                               const statKey = `${latest.exam_name}|${latest.year || new Date().getFullYear().toString()}`;
-                               return fullProfile?.examStats?.[statKey]?.rank ? toBn(fullProfile.examStats[statKey].rank) : "-";
-                             })()}
-                          </p>
-                       </div>
-                    </div>
-                  </div>
+
 
                   {/* Personal Info Section */}
                   <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
@@ -1611,7 +1582,7 @@ export default function ParentPortal() {
                         <p className="text-slate-500 font-bold">সকল পরীক্ষার বিস্তারিত ফলাফল ও মার্কশিট</p>
                       </div>
                       <div className="flex flex-wrap gap-4">
-                        {fullProfile && selectedResultExam && (
+                        {fullProfile && selectedResultExam && getPublishedExamKeys().includes(selectedResultExam) && (
                           <motion.button 
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
@@ -1630,24 +1601,43 @@ export default function ParentPortal() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-3 mb-10">
-                      {fullProfile?.examStats && Object.keys(fullProfile.examStats).sort((a, b) => b.localeCompare(a)).map(examKey => (
-                        <button
-                          key={examKey}
-                          onClick={() => setSelectedResultExam(examKey)}
-                          className={cn(
-                            "px-6 py-3 rounded-2xl font-black text-sm transition-all border-2",
-                            selectedResultExam === examKey
-                              ? "bg-emerald-900 text-white border-emerald-900 shadow-lg shadow-emerald-900/10"
-                              : "bg-white text-slate-400 border-slate-100 hover:border-emerald-200 hover:text-emerald-600"
-                          )}
-                        >
-                          {examKey.split('|')[0]} ({toBn(examKey.split('|')[1])})
-                        </button>
-                      ))}
-                    </div>
+                    {(() => {
+                      const publishedExamKeys = getPublishedExamKeys();
 
-                    {selectedResultExam && fullProfile?.examStats?.[selectedResultExam] ? (
+                      if (publishedExamKeys.length === 0) {
+                        return (
+                          <div className="text-center py-16 bg-slate-50/50 rounded-[2.5rem] border border-dashed border-slate-200 p-8 my-6">
+                            <div className="w-16 h-16 bg-slate-100 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                              <BookOpen className="w-8 h-8" />
+                            </div>
+                            <p className="text-slate-600 font-black text-lg">বর্তমানে কোনো প্রকাশিত ফলাফল নেই</p>
+                            <p className="text-slate-400 text-xs mt-1 font-bold">ফলাফল প্রকাশ করা হলে এখানে তা দেখতে পাবেন</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="flex flex-wrap gap-3 mb-10">
+                          {publishedExamKeys.sort((a, b) => b.localeCompare(a)).map(examKey => (
+                            <button
+                              key={examKey}
+                              onClick={() => setSelectedResultExam(examKey)}
+                              className={cn(
+                                "px-6 py-3.5 rounded-2xl font-black text-sm transition-all border-2 flex items-center gap-2",
+                                selectedResultExam === examKey
+                                  ? "bg-emerald-900 text-white border-emerald-900 shadow-lg shadow-emerald-900/10 scale-[1.02]"
+                                  : "bg-white text-slate-500 border-slate-100 hover:border-emerald-200 hover:text-emerald-700"
+                              )}
+                            >
+                              <Trophy className={cn("w-4 h-4", selectedResultExam === examKey ? "text-emerald-300" : "text-slate-400")} />
+                              {examKey.split('|')[0]} ({toBn(examKey.split('|')[1])})
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {selectedResultExam && getPublishedExamKeys().includes(selectedResultExam) && fullProfile?.examStats?.[selectedResultExam] ? (
                       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* Status Grid */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -151,7 +151,19 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
           const isHifzClass = className.includes("হিফজ") || className.includes("হেফজ") || className.includes("Hifz");
           return isHifzFlag || isHifzClass;
         })
-        .sort((a: any, b: any) => (Number(a.roll) || 0) - (Number(b.roll) || 0));
+        .sort((a: any, b: any) => {
+          const parseRoll = (val: any) => {
+            if (val === undefined || val === null || val === "") return Infinity;
+            const banglaDigits: Record<string, string> = {
+              '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+              '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+            };
+            let s = String(val).trim().replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+            const n = parseInt(s.replace(/[^0-9]/g, ''));
+            return isNaN(n) ? Infinity : n;
+          };
+          return parseRoll(a.roll) - parseRoll(b.roll);
+        });
       setStudents(hifzStudents);
     } catch (error) {
       console.error("Failed to fetch students", error);

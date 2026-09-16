@@ -1,3 +1,29 @@
+
+const isClassMatch = (studentClass?: string, targetClass?: string) => {
+  if (!studentClass || !targetClass) return false;
+  if (targetClass === "All" || targetClass === "সকল" || targetClass === "") return true;
+  const sCls = studentClass.trim().toLowerCase();
+  const tCls = targetClass.trim().toLowerCase();
+  if (sCls === tCls) return true;
+  const cleanS = sCls.replace(/শ্রেণি|শ্রেণী|গ্রুপ|গ্রূপ|class|\s+/g, "");
+  const cleanT = tCls.replace(/শ্রেণি|শ্রেণী|গ্রুপ|গ্রূপ|class|\s+/g, "");
+  if (cleanS === cleanT && cleanS.length > 0) return true;
+
+  const isSPlay = cleanS.includes("প্লে") || cleanS.includes("play");
+  const isTPlay = cleanT.includes("প্লে") || cleanT.includes("play");
+  if (isSPlay && isTPlay) return true;
+
+  const isSNursery = cleanS.includes("নার্সার") || cleanS.includes("nursery");
+  const isTNursery = cleanT.includes("নার্সার") || cleanT.includes("nursery");
+  if (isSNursery && isTNursery) return true;
+
+  const isSHifz = cleanS.includes("হিফজ") || cleanS.includes("hifz");
+  const isTHifz = cleanT.includes("হিফজ") || cleanT.includes("hifz");
+  if (isSHifz && isTHifz) return true;
+
+  return sCls.includes(tCls) || tCls.includes(sCls) || cleanS.includes(cleanT) || cleanT.includes(cleanS);
+};
+
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { TeacherManager } from "./TeacherManager";
@@ -641,25 +667,21 @@ export default function AdminPanel() {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch("/api/students?limit=100");
+      const res = await fetch("/api/students?limit=2000");
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Failed to fetch students. Status:", res.status, "Response:", text);
-        throw new Error("Failed to fetch students");
+        setStudents([]);
+        return;
       }
-      const data = await res.json();
+      const data = await res.json().catch(() => []);
       if (Array.isArray(data)) {
         const sortedStudents = data.sort((a, b) => {
-          const rollA = Number(a.roll) || Infinity;
-          const rollB = Number(b.roll) || Infinity;
           if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
-          return rollA - rollB;
+          return parseRoll(a.roll) - parseRoll(b.roll);
         });
         setStudents(sortedStudents);
       }
     } catch (error) {
       console.error("Error fetching students:", error);
-      addToast("ছাত্র তালিকা লোড করতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -2209,6 +2231,40 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
               className="w-full p-4 bg-slate-50 border rounded-2xl" 
             />
           </div>
+          <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-4 my-2">
+            <div>
+              <h4 className="text-base font-black text-slate-900">বিগত বছরের প্রারম্ভিক জের (Yearly Opening Balances)</h4>
+              <p className="text-xs text-slate-500 font-bold mt-1">
+                এখানে বিভিন্ন বছরের শুরুর ব্যালেন্স সংরক্ষণ করুন (যেমন ২০২৩, ২০২৪)। উক্ত বছরের হিসেব-নিকাশ এই প্রারম্ভিক জের থেকেই শুরু হবে।
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {['2023', '2024', '2025', '2026'].map((yr) => (
+                <div key={yr} className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="text-xs font-black text-slate-700 flex items-center justify-between">
+                    <span>{yr} সালের প্রারম্ভিক জের</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">৳ BDT</span>
+                  </label>
+                  <input 
+                    type="number"
+                    placeholder="0"
+                    value={settings.yearly_opening_balances?.[yr] ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSettings({
+                        ...settings,
+                        yearly_opening_balances: {
+                          ...(settings.yearly_opening_balances || {}),
+                          [yr]: val === "" ? "" : Number(val)
+                        }
+                      });
+                    }}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">শিক্ষক নিয়োগ চালু করুন</label>
             <input type="checkbox" checked={!!settings.enable_recruitment} onChange={(e) => setSettings({...settings, enable_recruitment: e.target.checked ? 1 : 0})} className="w-6 h-6" />
@@ -2959,7 +3015,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
 
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || (s.studentId || s.id).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesClass = selectedClass === "All" || s.class === selectedClass;
+    const matchesClass = selectedClass === "All" || isClassMatch(s.class, selectedClass);
     return matchesSearch && matchesClass;
   }).sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
 
@@ -4848,6 +4904,11 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
 
 function ResultManager({ students, settings, classesList, fullProfile, setFullProfile }: { students: any[], settings: any, classesList: string[], fullProfile: any, setFullProfile: (profile: any) => void }) {
   const { addToast } = useToast();
+  const [localSettings, setLocalSettings] = useState(settings || {});
+
+  useEffect(() => {
+    setLocalSettings(settings || {});
+  }, [settings]);
   
   // Horizontal Scroll with Mouse Drag
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -5274,6 +5335,82 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
     }
   }, [selectedYear, exams]);
 
+  const handleDragScrollMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    el.setAttribute('data-dragging', 'true');
+    el.setAttribute('data-start-x', String(e.pageX - el.offsetLeft));
+    el.setAttribute('data-scroll-left', String(el.scrollLeft));
+  };
+
+  const handleDragScrollMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.getAttribute('data-dragging') !== 'true') return;
+    e.preventDefault();
+    const startX = Number(el.getAttribute('data-start-x') || 0);
+    const scrollLeft = Number(el.getAttribute('data-scroll-left') || 0);
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    el.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleDragScrollMouseUpOrLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.removeAttribute('data-dragging');
+  };
+
+  const handleTogglePublishExam = async (examKey: string) => {
+    const currentPublished: string[] = localSettings.published_exams || [];
+    const exists = currentPublished.includes(examKey);
+    const updated = exists 
+      ? currentPublished.filter(k => k !== examKey) 
+      : [...currentPublished, examKey];
+    
+    try {
+      const res = await fetch("/api/site-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...localSettings, published_exams: updated })
+      });
+      if (res.ok) {
+        setLocalSettings(prev => ({ ...prev, published_exams: updated }));
+        if (settings) settings.published_exams = updated;
+        addToast(exists ? "রেজাল্ট টি প্রোফাইল থেকে লুকানো হয়েছে" : "রেজাল্ট টি প্রোফাইলে প্রকাশ করা হয়েছে", "success");
+      }
+    } catch (err) {
+      addToast("আপডেট করতে সমস্যা হয়েছে", "error");
+    }
+  };
+
+  const handleTogglePublishAllYearExams = async (year: string, publish: boolean) => {
+    const yearExams = exams
+      .filter(e => (e.year || new Date().getFullYear().toString()) === year)
+      .map(e => `${e.name}|${year}`);
+    
+    let currentPublished: string[] = localSettings.published_exams || [];
+    let updated: string[];
+    
+    if (publish) {
+      const setKeys = new Set([...currentPublished, ...yearExams]);
+      updated = Array.from(setKeys);
+    } else {
+      updated = currentPublished.filter(k => !yearExams.includes(k));
+    }
+
+    try {
+      const res = await fetch("/api/site-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...localSettings, published_exams: updated })
+      });
+      if (res.ok) {
+        setLocalSettings(prev => ({ ...prev, published_exams: updated }));
+        if (settings) settings.published_exams = updated;
+        addToast(publish ? `${year} সালের সকল পরীক্ষা প্রকাশ করা হয়েছে` : `${year} সালের সকল পরীক্ষা লুকানো হয়েছে`, "success");
+      }
+    } catch (err) {
+      addToast("আপডেট করতে সমস্যা হয়েছে", "error");
+    }
+  };
+
   const handleSaveResult = async () => {
     if (!selectedStudent) return;
 
@@ -5599,6 +5736,16 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                 )}
               >
                 পরীক্ষা ব্যবস্থাপনা
+              </button>
+              <button 
+                onClick={() => setActiveTab("published-exams")}
+                className={cn(
+                  "px-6 py-3 font-black text-sm transition-all border-b-2 flex items-center gap-2",
+                  activeTab === "published-exams" ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                )}
+              >
+                <Eye className="w-4 h-4" />
+                প্রোফাইলে প্রকাশিত রেজাল্ট
               </button>
             </div>
 
@@ -5933,6 +6080,92 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
               </div>
             )}
 
+            {activeTab === "published-exams" && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 pb-6 border-b border-slate-100">
+                    <div>
+                      <h4 className="text-2xl font-black text-slate-900 font-display flex items-center gap-2">
+                        <Eye className="w-6 h-6 text-emerald-600" /> প্রোফাইলে প্রকাশিত রেজাল্ট নির্ধারণ
+                      </h4>
+                      <p className="text-sm font-bold text-slate-400 mt-1">
+                        যে সকল পরীক্ষা টিক দেওয়া থাকবে, শুধুমাত্র সেগুলোর রেজাল্ট ছাত্র প্রোফাইল ও অভিভাবক পোর্টালে দেখা যাবে।
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <select 
+                        value={selectedYear} 
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        className="p-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold"
+                      >
+                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <button
+                        onClick={() => handleTogglePublishAllYearExams(selectedYear, true)}
+                        className="px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl font-bold text-xs transition-all"
+                      >
+                        সব প্রকাশ করুন
+                      </button>
+                      <button
+                        onClick={() => handleTogglePublishAllYearExams(selectedYear, false)}
+                        className="px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl font-bold text-xs transition-all"
+                      >
+                        সব বন্ধ করুন
+                      </button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const yearExams = exams.filter(e => (e.year || new Date().getFullYear().toString()) === selectedYear);
+                    const currentPublished = localSettings.published_exams || [];
+                    
+                    if (yearExams.length === 0) {
+                      return (
+                        <div className="text-center py-16 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                          <p className="text-slate-400 font-bold">{selectedYear} সালের কোনো পরীক্ষা এখনো যুক্ত করা হয়নি।</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {yearExams.map((e, idx) => {
+                          const examKey = `${e.name}|${selectedYear}`;
+                          const isPublished = currentPublished.includes(examKey);
+                          return (
+                            <div 
+                              key={e.id || idx} 
+                              onClick={() => handleTogglePublishExam(examKey)}
+                              className={cn(
+                                "p-6 rounded-3xl border-2 cursor-pointer transition-all flex items-center justify-between",
+                                isPublished 
+                                  ? "bg-emerald-50/60 border-emerald-500 shadow-md shadow-emerald-100" 
+                                  : "bg-white border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300"
+                              )}
+                            >
+                              <div className="space-y-1">
+                                <span className="font-black text-slate-900 text-lg block">{e.name}</span>
+                                <span className="text-xs font-bold text-slate-400">সাল: {selectedYear}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "text-xs font-black px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5",
+                                  isPublished ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
+                                )}>
+                                  {isPublished && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                  {isPublished ? "প্রকাশিত" : "লুকানো"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {activeTab === "results" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex justify-between items-center mb-8 print:hidden">
@@ -6077,7 +6310,14 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                             <div style={{height: '10px'}} />
                           </div>
                           
-                          <div ref={scrollRef} className={cn("overflow-x-auto custom-scrollbar w-full border border-slate-100 rounded-2xl print:overflow-visible print:border-0 cursor-grab active:cursor-grabbing")}>
+                          <div 
+                            ref={scrollRef} 
+                            onMouseDown={handleDragScrollMouseDown}
+                            onMouseMove={handleDragScrollMouseMove}
+                            onMouseUp={handleDragScrollMouseUpOrLeave}
+                            onMouseLeave={handleDragScrollMouseUpOrLeave}
+                            className={cn("overflow-x-auto custom-scrollbar w-full border border-slate-100 rounded-2xl print:overflow-visible print:border-0 cursor-grab active:cursor-grabbing select-none")}
+                          >
                             <table className={cn(
                               "w-full min-w-max text-left border-separate border-spacing-y-2 print:min-w-0 print:border-spacing-0",
                               viewMode === 'detailed' ? "is-detailed" : "is-short"
@@ -6494,6 +6734,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
 
 
 function FeeManager({ students, settings, onUpdate, initialStudentId, classesList }: { students: any[], settings: any, onUpdate: () => void, initialStudentId?: string, classesList: string[] }) {
+  const [fetchedClassStudents, setFetchedClassStudents] = useState<any[]>([]);
   const { addToast } = useToast();
   const classes = ["All", ...classesList];
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -6501,6 +6742,19 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
 
   const [activeTab, setActiveTab] = useState("collection");
   const [selectedClass, setSelectedClass] = useState("All");
+
+  useEffect(() => {
+    if (selectedClass && selectedClass !== "All") {
+      fetch("/api/students?className=" + encodeURIComponent(selectedClass) + "&limit=500")
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setFetchedClassStudents(data);
+        })
+        .catch(err => console.error("Class student fetch error:", err));
+    } else {
+      setFetchedClassStudents([]);
+    }
+  }, [selectedClass]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [studentFees, setStudentFees] = useState<any[]>([]);
@@ -6710,7 +6964,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
   };
 
   const handlePayMonthlyFees = async () => {
-    if (selectedMonths.length === 0) return;
+    if (selectedMonths.length === 0 || paying) return;
     setPaying(true);
     const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     
@@ -6825,7 +7079,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
   };
 
   const handlePay = async () => {
-    if (selectedFeeIds.length === 0) return;
+    if (selectedFeeIds.length === 0 || paying) return;
     setPaying(true);
 
     const paidAmounts: any = {};
@@ -6977,16 +7231,26 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
     }
   };
 
-  const filteredStudents = students.filter(s => {
-    if (selectedClass === "All") return false; // Require class selection
-    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          s.roll.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch && s.class === selectedClass;
+  const allAvailableStudents = React.useMemo(() => {
+    const map = new Map();
+    (students || []).forEach(s => map.set(s.id, s));
+    (fetchedClassStudents || []).forEach(s => map.set(s.id, s));
+    return Array.from(map.values());
+  }, [students, fetchedClassStudents]);
+
+  const filteredStudents = allAvailableStudents.filter(s => {
+    if (selectedClass === "All" && !searchTerm) return false;
+    const sName = (s.name || "").toLowerCase();
+    const sId = (s.id || "").toLowerCase();
+    const sCode = (s.studentId || s.student_code || "").toLowerCase();
+    const sRoll = (s.roll || "").toString().toLowerCase();
+    const term = searchTerm.toLowerCase();
+
+    const matchesSearch = !searchTerm || sName.includes(term) || sId.includes(term) || sCode.includes(term) || sRoll.includes(term);
+    const matchesClass = selectedClass === "All" || isClassMatch(s.class, selectedClass);
+    return matchesSearch && matchesClass;
   }).sort((a, b) => {
-    const rollA = Number(a.roll) || Infinity;
-    const rollB = Number(b.roll) || Infinity;
-    return rollA - rollB;
+    return parseRoll(a.roll) - parseRoll(b.roll);
   });
 
   return (
@@ -8935,62 +9199,68 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
                 <li><strong>পোর্ট ও ডোমেইন:</strong> Server Port <code className="bg-emerald-800 px-2 py-1 rounded">80</code> (বা 443) দিন এবং Enable Domain Name অপশনটি ON করে দিন।</li>
                 <li>সবশেষে <strong>Save</strong> করে মেশিনটি একবার বন্ধ করে চালু (Restart) করুন।</li>
               </ol>
-              <div className="mt-4 p-4 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-200 text-sm">
-                <strong>নোট:</strong> মেশিনে ছাত্রদের যে ID (যেমন: 101) দিয়ে ফিঙ্গারপ্রিন্ট সেভ করবেন, সফটওয়্যারেও ছাত্রদের রোল বা স্টুডেন্ট আইডি হুবহু একই হতে হবে। তাহলে সফটওয়্যার অটোমেটিক বুঝে নেবে কে উপস্থিত হয়েছে।
+              <div className="mt-4 p-4 bg-amber-500/25 border border-amber-500/50 rounded-2xl text-xs text-amber-200">
+                নোট: নিশ্চিত করুন যে আপনার সার্ভারটি পাবলিক আইপি বা ডোমেইনে চলতে পারে এবং ডোমেইন বা আইপি পিন্ট করা যাচ্ছে।
               </div>
             </div>
           </div>
         </div>
 
+        {/* Right Column: History & Logs */}
         <div className="lg:col-span-2">
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 min-h-[500px]">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <History className="w-5 h-5 text-emerald-600" /> সাম্প্রতিক ডিভাইস লগ
-              </h3>
-              <button onClick={fetchHistory} className="p-2 text-slate-400 hover:text-emerald-600 transition-all">
-                <div className="relative flex justify-center items-center w-5 h-5">
-  <div className="absolute inset-0 rounded-full border-2 border-emerald-100/30"></div>
-  <div className="absolute inset-0 rounded-full border-t-2 border-t-emerald-500 border-b-2 border-b-rose-500 animate-spin"></div>
-</div>
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-slate-900">সাম্প্রতিক ডিভাইস হাজিরা লগ</h3>
+              <button onClick={fetchHistory} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all">
+                রিফ্রেশ
               </button>
             </div>
-
-            <div className="space-y-4">
-              {history.length > 0 ? history.map((log, i) => (
-                <motion.div 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  key={log.id} 
-                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center font-black",
-                      log.action === 'check_in' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                    )}>
-                      {log.action === 'check_in' ? "IN" : "OUT"}
-                    </div>
-                    <div>
-                      <h4 className="font-black text-slate-900">{log.name || log.id}</h4>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                        {log.type === 'student' ? 'ছাত্র' : log.type === 'teacher' ? 'শিক্ষক' : 'অভিভাবক'} | ID: {log.studentId || log.id}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-black text-slate-900">{log.time}</p>
-                    <p className="text-[10px] text-slate-400 font-bold">{new Date(log.timestamp).toLocaleDateString()}</p>
-                  </div>
-                </motion.div>
-              )) : (
-                <div className="text-center py-20">
-                  <History className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                  <p className="text-slate-400 font-bold">এখনো কোন লগ পাওয়া যায়নি</p>
-                </div>
-              )}
-            </div>
+            {history.length === 0 ? (
+              <div className="text-center py-16 bg-slate-50 rounded-3xl border border-slate-100 text-slate-400 font-bold">
+                কোনো ডিভাইস হাজিরা রেকর্ড পাওয়া যায়নি
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase font-black">
+                      <th className="pb-3">আইডি</th>
+                      <th className="pb-3">টাইপ</th>
+                      <th className="pb-3">স্ট্যাটাস</th>
+                      <th className="pb-3">সময়</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-sm font-bold">
+                    {history.map((item, index) => (
+                      <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3 text-slate-900">{item.id || item.studentId || "-"}</td>
+                        <td className="py-3">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-black",
+                            item.type === 'teacher' ? "bg-purple-100 text-purple-700" :
+                            item.type === 'guardian' ? "bg-blue-100 text-blue-700" :
+                            "bg-emerald-100 text-emerald-700"
+                          )}>
+                            {item.type === 'teacher' ? 'শিক্ষক' : item.type === 'guardian' ? 'অভিভাবক' : 'ছাত্র'}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-black",
+                            item.action === 'check_in' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                          )}>
+                            {item.action === 'check_in' ? 'প্রবেশ (Check In)' : 'প্রস্থান (Check Out)'}
+                          </span>
+                        </td>
+                        <td className="py-3 text-slate-500 text-xs">
+                          {item.time ? new Date(item.time).toLocaleString() : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -214,7 +214,7 @@ export default function MonthlyYearlyReport({ data, type, loading, startDate, en
                 className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all hover:bg-white hover:border-slate-200"
               >
                 <option value="">বছর</option>
-                {Array.from({ length: 3000 - 2025 + 1 }, (_, i) => 2025 + i).map(y => (
+                {Array.from({ length: 15 }, (_, i) => 2023 + i).map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>

@@ -81,35 +81,45 @@ const LandingPage = () => {
   const [visibleNotices, setVisibleNotices] = useState(6);
 
   useEffect(() => {
-    const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeout);
+    const controller = new AbortController();
+    let isCancelled = false;
+
+    const fetchLeaderboard = async () => {
       try {
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(id);
-        if (!res.ok && res.status >= 500 && retries > 0) {
-          await new Promise(r => setTimeout(r, 1000));
-          return fetchWithTimeout(url, timeout, retries - 1);
+        const timeoutId = setTimeout(() => {
+          try { controller.abort("Timeout"); } catch (e) {}
+        }, 8000);
+
+        const res = await fetch(`/api/leaderboard?type=${leaderboardType}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          if (!isCancelled) setLeaderboard([]);
+          return;
         }
-        return res;
-      } catch (err) {
-        clearTimeout(id);
-        if (retries > 0 && (err instanceof Error && (err.name === 'AbortError' || err.message.includes('fetch')))) {
-          await new Promise(r => setTimeout(r, 1000));
-          return fetchWithTimeout(url, timeout, retries - 1);
+
+        const data = await res.json();
+        if (!isCancelled && Array.isArray(data)) {
+          setLeaderboard(data);
         }
-        throw err;
+      } catch (err: any) {
+        if (isCancelled || err?.name === 'AbortError' || err?.message?.includes('abort')) {
+          // Cleanly ignore abort / unmount cancellations
+          return;
+        }
+        console.warn("Could not load leaderboard:", err?.message || err);
+        if (!isCancelled) setLeaderboard([]);
       }
     };
 
-    fetchWithTimeout(`/api/leaderboard?type=${leaderboardType}`)
-      .then((res) => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setLeaderboard(data);
-        }
-      })
-      .catch(err => console.error("Failed to load leaderboard:", err));
+    fetchLeaderboard();
+
+    return () => {
+      isCancelled = true;
+      try { controller.abort("Cleanup"); } catch (e) {}
+    };
   }, [leaderboardType]);
 
   useEffect(() => {

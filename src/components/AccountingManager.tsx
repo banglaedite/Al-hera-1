@@ -406,8 +406,13 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
 
   const handleAddTransaction = async (e: React.FormEvent, type: 'income' | 'expense') => {
     e.preventDefault();
+    if (isSubmitting) return;
     const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
+    const data: Record<string, any> = Object.fromEntries(formData.entries());
+
+    if (type === 'income' && !data.purpose) {
+      data.purpose = data.category || 'আয়';
+    }
 
     const url = type === 'income' ? "/api/admin/accounting/income" : "/api/admin/accounting/expenses";
     
@@ -1030,7 +1035,7 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
               className="p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-slate-900/5 transition-all hover:bg-white hover:border-slate-200"
             >
               <option value="">বছর</option>
-              {Array.from({ length: 3000 - 2025 + 1 }, (_, i) => 2025 + i).map(y => (
+              {Array.from({ length: 15 }, (_, i) => 2023 + i).map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
@@ -1706,31 +1711,22 @@ export function AccountingManager({ settings, addToast, classesList, initialSubT
                 <button onClick={() => { setIsAddingExpense(false); setIsAddingIncome(false); }} className="text-slate-400 hover:text-slate-600">✕</button>
               </div>
               <form onSubmit={(e) => handleAddTransaction(e, isAddingIncome ? 'income' : 'expense')} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500">ক্যাটাগরি</label>
-                    <select name="category" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900">
-                      <option value="">ক্যাটাগরি নির্বাচন করুন</option>
-                      {(isAddingIncome ? incomeCategories : expenseCategories).map(cat => (
-                        <option key={cat.id} value={cat.name}>{cat.name}</option>
-                      ))}
-                      <option value="অন্যান্য">অন্যান্য</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500">ক্লাস (ঐচ্ছিক)</label>
-                    <select name="class_name" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900">
-                      <option value="">ক্লাস নির্বাচন করুন</option>
-                      {classesList?.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500">বাবদ/উদ্দেশ্য</label>
-                  <input name="purpose" required placeholder="বিস্তারিত লিখুন" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+                  <label className="text-xs font-bold text-slate-500">ক্যাটাগরি</label>
+                  <select name="category" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-slate-900">
+                    <option value="">ক্যাটাগরি নির্বাচন করুন</option>
+                    {(isAddingIncome ? incomeCategories : expenseCategories).map(cat => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                    <option value="অন্যান্য">অন্যান্য</option>
+                  </select>
                 </div>
+                {!isAddingIncome && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500">বাবদ/উদ্দেশ্য</label>
+                    <input name="purpose" required placeholder="বিস্তারিত লিখুন" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500">পরিমাণ (টাকা)</label>

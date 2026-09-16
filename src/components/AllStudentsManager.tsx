@@ -44,9 +44,17 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
     const matchesClass = selectedClass === "All" || s.class === selectedClass;
     return matchesSearch && matchesClass;
   }).sort((a, b) => {
-    const rollA = Number(a.roll) || Infinity;
-    const rollB = Number(b.roll) || Infinity;
-    return rollA - rollB;
+    const parseRoll = (val: any) => {
+      if (val === undefined || val === null || val === "") return Infinity;
+      const banglaDigits: Record<string, string> = {
+        '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+        '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+      };
+      let s = String(val).trim().replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+      const n = parseInt(s.replace(/[^0-9]/g, ''));
+      return isNaN(n) ? Infinity : n;
+    };
+    return parseRoll(a.roll) - parseRoll(b.roll);
   });
 
   const fetchFullProfile = async (id: string) => {

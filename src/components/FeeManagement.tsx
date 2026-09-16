@@ -115,7 +115,7 @@ export default function FeeManagement({ students, settings, onUpdate, initialStu
   };
 
   const handlePayMonthlyFees = async () => {
-    if (selectedMonths.length === 0) return;
+    if (selectedMonths.length === 0 || isPaying) return;
     setIsPaying(true);
     const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     
@@ -157,6 +157,8 @@ export default function FeeManagement({ students, settings, onUpdate, initialStu
   };
 
   const handlePay = async (fee: any) => {
+    if (isPaying) return;
+    setIsPaying(true);
     const transactionId = `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     try {
       const response = await fetch("/api/pay-fee", {
@@ -176,6 +178,8 @@ export default function FeeManagement({ students, settings, onUpdate, initialStu
     } catch (err) {
       console.error("Payment failed", err);
       addToast("পেমেন্ট ব্যর্থ হয়েছে", "error");
+    } finally {
+      setIsPaying(false);
     }
   };
 

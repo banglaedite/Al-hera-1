@@ -1134,69 +1134,27 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   });
 
   app.post("/api/site-settings", async (req, res) => {
-    const { 
-      title, description, hero_image, logo_url, contact_phone, 
-      whatsapp_number, facebook_url, announcement, bkash_number, 
-      nagad_number, rocket_number, enable_bkash, enable_nagad, enable_rocket, enable_recruitment, address,
-      smtp_host, smtp_port, smtp_user, smtp_pass, sender_email,
-      firebase_service_account,
-      udyoktapay_api_key, udyoktapay_api_url,
-      show_features_directly, show_food_directly, show_showcase_directly, showcase_content,
-      admission_rules,
-      enable_neon_light, neon_light_color, neon_light_effect,
-      admin_password,
-      youtube_url, muhtamim_signature_url, show_muhtamim_signature,
-      qr_code_url, enable_qr_code, auto_whatsapp, enable_historical_reports,
-      show_routines_directly, bkash_instructions, nagad_instructions, rocket_instructions,
-      payment_special_note, enable_signature, signature_url,
-      popup_enabled, popup_image, popup_link, popup_title, popup_description, popup_duration, popup_show_close,
-      general_rules, show_general_rules
-    } = req.body;
     try {
       const db = getFirestoreInstance();
-      await db.collection("site_settings").doc("1").set({
-        title: title || "", description: description || "", hero_image: hero_image || "", logo_url: logo_url || "", contact_phone: contact_phone || "", 
-        whatsapp_number: whatsapp_number || "", facebook_url: facebook_url || "", announcement: announcement || "", bkash_number: bkash_number || "", 
-        nagad_number: nagad_number || "", rocket_number: rocket_number || "",
-        enable_bkash: enable_bkash ? 1 : 0, enable_nagad: enable_nagad ? 1 : 0, enable_rocket: enable_rocket ? 1 : 0,
-        enable_recruitment: enable_recruitment ? 1 : 0, address: address || "",
-        smtp_host: smtp_host || "", smtp_port: smtp_port || "", smtp_user: smtp_user || "", smtp_pass: smtp_pass || "", sender_email: sender_email || "",
-        firebase_service_account: firebase_service_account || "",
-        udyoktapay_api_key: udyoktapay_api_key || "",
-        udyoktapay_api_url: udyoktapay_api_url || "",
-        show_features_directly: show_features_directly ? 1 : 0, 
-        show_food_directly: show_food_directly ? 1 : 0, 
-        show_showcase_directly: show_showcase_directly ? 1 : 0, 
-        showcase_content: showcase_content || '[]',
-        admission_rules: admission_rules || "",
-        enable_neon_light: enable_neon_light ? 1 : 0,
-        neon_light_color: neon_light_color || "#10b981",
-        neon_light_effect: neon_light_effect || "pulse",
-        admin_password: admin_password || "",
-        youtube_url: youtube_url || "",
-        muhtamim_signature_url: muhtamim_signature_url || "",
-        show_muhtamim_signature: show_muhtamim_signature ? 1 : 0,
-        qr_code_url: qr_code_url || "",
-        enable_qr_code: enable_qr_code ? 1 : 0,
-        auto_whatsapp: auto_whatsapp ? 1 : 0,
-        enable_historical_reports: enable_historical_reports ? 1 : 0,
-        show_routines_directly: show_routines_directly ? 1 : 0,
-        bkash_instructions: bkash_instructions || "",
-        nagad_instructions: nagad_instructions || "",
-        rocket_instructions: rocket_instructions || "",
-        payment_special_note: payment_special_note || "",
-        enable_signature: enable_signature ? 1 : 0,
-        signature_url: signature_url || "",
-        popup_enabled: popup_enabled ? 1 : 0,
-        popup_image: popup_image || "",
-        popup_link: popup_link || "",
-        popup_title: popup_title || "",
-        popup_description: popup_description || "",
-        popup_duration: popup_duration || 10,
-        popup_show_close: popup_show_close ? 1 : 0,
-        general_rules: general_rules || "",
-        show_general_rules: show_general_rules ? 1 : 0
-      }, { merge: true });
+      if (!db) throw new Error("Firestore not initialized");
+
+      const updateData: any = { ...req.body };
+
+      const flags = [
+        "enable_bkash", "enable_nagad", "enable_rocket", "enable_recruitment",
+        "show_features_directly", "show_food_directly", "show_showcase_directly",
+        "enable_neon_light", "show_muhtamim_signature", "enable_qr_code",
+        "auto_whatsapp", "enable_historical_reports", "show_routines_directly",
+        "enable_signature", "popup_enabled", "popup_show_close", "show_general_rules"
+      ];
+      for (const flag of flags) {
+        if (req.body[flag] !== undefined) {
+          updateData[flag] = req.body[flag] ? 1 : 0;
+        }
+      }
+
+      await db.collection("site_settings").doc("1").set(updateData, { merge: true });
+      routeCache.delete("site-settings");
       res.json({ success: true });
     } catch (error) {
       console.error("Error updating site settings:", error);
@@ -2042,6 +2000,30 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
     try {
       const db = getFirestoreInstance();
+      const settingsDoc = await db.collection("site_settings").doc("1").get();
+      const settingsData = settingsDoc.exists ? settingsDoc.data() : {};
+      const ijaraBalance = Number(settingsData?.ijara_balance || 0);
+      const yearlyOpeningBalances = settingsData?.yearly_opening_balances || {};
+
+      let effectiveStartDate: string | undefined = undefined;
+      let yearOpeningBase = ijaraBalance;
+
+      if (start_date) {
+        const reqYear = (start_date as string).substring(0, 4);
+        const yearsWithOpening = Object.keys(yearlyOpeningBalances)
+          .filter(y => yearlyOpeningBalances[y] !== "" && yearlyOpeningBalances[y] !== null && yearlyOpeningBalances[y] !== undefined)
+          .map(y => parseInt(y))
+          .sort((a, b) => b - a);
+
+        const reqYearNum = parseInt(reqYear);
+        const matchYear = yearsWithOpening.find(y => y <= reqYearNum);
+
+        if (matchYear) {
+          yearOpeningBase = Number(yearlyOpeningBalances[matchYear.toString()]) || 0;
+          effectiveStartDate = `${matchYear}-01-01`;
+        }
+      }
+
       let feesQuery: any = db.collection("fees").where("status", "==", "paid");
       let incomeQuery: any = db.collection("income");
       let expenseQuery: any = db.collection("expenses");
@@ -2052,13 +2034,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         expenseQuery = expenseQuery.where("date", ">=", start_date);
       }
       if (end_date) {
-        const End = end_date + "T23:59:59.999Z";
+        const End = (end_date as string) + "T23:59:59.999Z";
         feesQuery = feesQuery.where("paid_date", "<=", End);
         incomeQuery = incomeQuery.where("date", "<=", End);
         expenseQuery = expenseQuery.where("date", "<=", End);
       }
-
-      const sumField = (fieldName: string) => (AggregateField as any).sum(fieldName);
 
       let feeIncome = 0;
       if (class_name) {
@@ -2070,7 +2050,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
           const results = await Promise.all(chunks.map(chunk => {
             let q = db.collection("fees").where("student_id", "in", chunk).where("status", "==", "paid");
             if (start_date) q = q.where("paid_date", ">=", start_date);
-            if (end_date) q = q.where("paid_date", "<=", end_date + "T23:59:59.999Z");
+            if (end_date) q = q.where("paid_date", "<=", (end_date as string) + "T23:59:59.999Z");
             return q.select("amount").get();
           }));
           feeIncome = results.reduce((sum, res) => sum + res.docs.reduce((s, doc) => s + (Number(doc.data().amount) || 0), 0), 0);
@@ -2103,6 +2083,12 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         let pIncQ = db.collection("income").where("date", "<", start_date);
         let pExpQ = db.collection("expenses").where("date", "<", start_date);
 
+        if (effectiveStartDate) {
+          pFeesQ = pFeesQ.where("paid_date", ">=", effectiveStartDate);
+          pIncQ = pIncQ.where("date", ">=", effectiveStartDate);
+          pExpQ = pExpQ.where("date", ">=", effectiveStartDate);
+        }
+
         if (class_name) {
           pIncQ = pIncQ.where("class_name", "==", class_name);
           pExpQ = pExpQ.where("class_name", "==", class_name);
@@ -2111,10 +2097,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
           if (studentIds.length > 0) {
             const chunks = [];
             for (let i = 0; i < studentIds.length; i += 30) chunks.push(studentIds.slice(i, i + 30));
-            const results = await Promise.all(chunks.map(chunk => 
-              db.collection("fees").where("student_id", "in", chunk).where("status", "==", "paid").where("paid_date", "<", start_date)
-                .select("amount").get()
-            ));
+            const results = await Promise.all(chunks.map(chunk => {
+              let q = db.collection("fees").where("student_id", "in", chunk).where("status", "==", "paid").where("paid_date", "<", start_date);
+              if (effectiveStartDate) q = q.where("paid_date", ">=", effectiveStartDate);
+              return q.select("amount").get();
+            }));
             prevIncome = results.reduce((sum, res) => sum + res.docs.reduce((s, doc) => s + (Number(doc.data().amount) || 0), 0), 0);
           }
         } else {
@@ -2132,26 +2119,23 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         prevBalance = prevIncome - prevExpense;
       }
 
-      const settingsDoc = await db.collection("site_settings").doc("1").get();
-      const ijaraBalance = Number(settingsDoc.exists ? settingsDoc.data()?.ijara_balance || 0 : 0);
-
       const result = { 
         totalIncome, 
         feeIncome,
         otherIncome,
         totalExpense, 
-        balance: totalIncome - totalExpense + ijaraBalance,
-        prevBalance: prevBalance + ijaraBalance,
+        balance: totalIncome - totalExpense,
+        prevBalance: yearOpeningBase + prevBalance,
         prevIncome,
         prevExpense,
-        totalBalance: prevBalance + (totalIncome - totalExpense) + ijaraBalance
+        totalBalance: yearOpeningBase + prevBalance + (totalIncome - totalExpense)
       };
 
       routeCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      res.json(result);
-    } catch (error) {
-      console.error("Accounting summary error:", error);
-      res.status(500).json({ error: "Failed to fetch summary" });
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Error fetching accounting summary:", err);
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -2685,10 +2669,6 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       if (!db) throw new Error("Firestore not initialized");
 
       let query: any = db.collection("students");
-      
-      if (className && className !== "All") {
-        query = query.where("class", "==", className);
-      }
 
       if (include_deleted !== 'true') {
         query = query.where("deleted_at", "==", null);
@@ -2698,8 +2678,28 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         query = query.select("name", "roll", "class", "studentId", "photo_url", "student_code");
       }
 
-      const snapshot = await query.limit(search ? 500 : limit + parseInt(offset as string || "0")).get();
+      const snapshot = await query.get();
       let students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+
+      if (className && className !== "All") {
+        const targetCls = (className as string).trim().toLowerCase();
+        students = students.filter(student => {
+          if (!student.class) return false;
+          const sCls = student.class.trim().toLowerCase();
+          if (sCls === targetCls) return true;
+          const cleanS = sCls.replace(/শ্রেণি|শ্রেণী|গ্রুপ|গ্রূপ|class|\s+/g, "");
+          const cleanT = targetCls.replace(/শ্রেণি|শ্রেণী|গ্রুপ|গ্রূপ|class|\s+/g, "");
+          if (cleanS === cleanT && cleanS.length > 0) return true;
+          
+          const isSPlay = cleanS.includes("প্লে") || cleanS.includes("play");
+          const isTPlay = cleanT.includes("প্লে") || cleanT.includes("play");
+          if (isSPlay && isTPlay) return true;
+
+          if ((cleanT === "নার্সারী" || cleanT === "নার্সারি" || cleanT === "nursery") && (cleanS === "নার্সারী" || cleanS === "নার্সারি" || cleanS === "nursery")) return true;
+          if ((cleanT === "হিফজ" || cleanT === "hifz") && (cleanS === "হিফজ" || cleanS === "hifz")) return true;
+          return sCls.includes(targetCls) || targetCls.includes(sCls);
+        });
+      }
 
       // Filter search in memory if provided
       if (search) {
@@ -2714,9 +2714,17 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       // Sort
       students.sort((a, b) => {
         if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
-        const rollA = parseInt(a.roll) || 0;
-        const rollB = parseInt(b.roll) || 0;
-        return rollA - rollB;
+        const parseRollServer = (val: any) => {
+          if (val === undefined || val === null || val === "") return 999999;
+          const banglaDigits: Record<string, string> = {
+            '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+            '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+          };
+          let s = String(val).trim().replace(/[০-৯]/g, (m: string) => banglaDigits[m]);
+          const n = parseInt(s.replace(/[^0-9]/g, ''));
+          return isNaN(n) ? 999999 : n;
+        };
+        return parseRollServer(a.roll) - parseRollServer(b.roll);
       });
 
       // Pagination
@@ -2767,37 +2775,44 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const hifzSnapshot = await db.collection("hifz_records").where("student_id", "==", studentId).get();
       const hifz = hifzSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-      // Calculate Rank - Optimization: Only calculate for the most recent 2 exams if no specific exam is requested
+      // Calculate Rank - Optimization: Only calculate for the most recent exams
       let examStats: any = {};
       try {
         const uniqueExams = [...new Set(results.map((r: any) => `${r.exam_name}|${r.year || new Date().getFullYear().toString()}`))];
-        const recentExams = uniqueExams.slice(0, 3); // Limit to top 3 to save reads
         
-        for (const examKey of (recentExams as string[])) {
+        for (const examKey of (uniqueExams as string[])) {
           const [exam, year] = examKey.split('|');
-          // Important: This is still expensive. In a production app, ranks should be saved in the database.
-          const allExamResultsSnapshot = await db.collection("results")
+          const studentClassName = student.class || student.className || student.class_name || "";
+          
+          let allExamResultsQuery: any = db.collection("results")
             .where("exam_name", "==", exam)
-            .where("class_name", "==", student.class)
-            .where("year", "==", year)
-            .limit(100) // Limit to avoid reading thousands
-            .get();
+            .where("year", "==", String(year));
+            
+          if (studentClassName) {
+            allExamResultsQuery = allExamResultsQuery.where("class_name", "==", studentClassName);
+          }
+          
+          const allExamResultsSnapshot = await allExamResultsQuery.limit(200).get();
           const allExamResults = allExamResultsSnapshot.docs.map(doc => doc.data() as any);
 
-          const studentTotals: any = {};
+          const studentTotals: Record<string, number> = {};
           allExamResults.forEach(r => {
-            studentTotals[r.student_id] = (studentTotals[r.student_id] || 0) + r.marks;
+            studentTotals[r.student_id] = (studentTotals[r.student_id] || 0) + Number(r.marks || 0);
           });
 
-          const sortedTotals = Object.entries(studentTotals).map(([id, total]) => ({ student_id: id, total })).sort((a: any, b: any) => b.total - a.total);
+          const sortedTotals = Object.entries(studentTotals)
+            .map(([id, total]) => ({ student_id: id, total: Number(total) }))
+            .sort((a: any, b: any) => b.total - a.total);
 
           const myRankIndex = sortedTotals.findIndex(m => m.student_id === studentId);
-          const myTotal = studentTotals[studentId] || 0;
-          const highest = sortedTotals.length > 0 ? sortedTotals[0].total : 0;
+          const myTotal = results
+            .filter((r: any) => r.exam_name === exam && (r.year || new Date().getFullYear().toString()) === String(year))
+            .reduce((sum: number, r: any) => sum + Number(r.marks || 0), 0);
+          const highest = sortedTotals.length > 0 ? sortedTotals[0].total : myTotal;
 
           examStats[examKey] = {
             rank: myRankIndex !== -1 ? myRankIndex + 1 : '-',
-            totalStudents: sortedTotals.length,
+            totalStudents: Math.max(sortedTotals.length, 1),
             highestMarks: highest,
             myTotal: myTotal
           };
@@ -4031,7 +4046,9 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
   app.get("/api/parent/device-history/:studentId", async (req, res) => {
     const { studentId } = req.params;
     try {
-      const historySnapshot = await firestore.collection("attendance_history")
+      const db = getFirestoreInstance();
+      if (!db) return res.json([]);
+      const historySnapshot = await db.collection("attendance_history")
         .where("id", "==", studentId)
         .get();
       
@@ -4043,7 +4060,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       res.json(history);
     } catch (error) {
       console.error("Fetch parent history error:", error);
-      res.status(500).json({ error: "Failed to fetch device history" });
+      res.json([]);
     }
   });
 
@@ -4512,84 +4529,93 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
     }
 
     try {
+      const db = getFirestoreInstance();
+      if (!db) {
+        return res.json([]);
+      }
+
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       const startDate = startOfMonth.toISOString().split('T')[0];
 
       if (type === 'amol') {
-        const tasksSnapshot = await firestore.collection("amal_tasks").where("target", "==", "student").get();
+        const tasksSnapshot = await db.collection("amal_tasks").where("target", "==", "student").get();
         const activeTasksCount = tasksSnapshot.docs.length || 1;
         const days = new Date().getDate();
         const totalPossible = activeTasksCount * days;
 
-        const logsSnapshot = await firestore.collection("amal_logs").where("date", ">=", startDate).get();
+        const logsSnapshot = await db.collection("amal_logs").where("date", ">=", startDate).get();
         const userStats: Record<string, number> = {};
         logsSnapshot.docs.forEach(doc => {
           const data = doc.data();
           if (data.user_type !== 'student' || data.task_id === 'submission_record' || data.status !== 'completed') return;
-          userStats[data.user_id] = (userStats[data.user_id] || 0) + 1;
+          if (data.user_id) {
+            userStats[data.user_id] = (userStats[data.user_id] || 0) + 1;
+          }
         });
 
-        const topUserIds = Object.entries(userStats).sort(([, a], [, b]) => b - a).slice(0, 15).map(([id]) => id);
+        const topUserIds = Object.entries(userStats).sort(([, a], [, b]) => b - a).slice(0, 10).map(([id]) => id);
         if (topUserIds.length === 0) {
           routeCache.set(cacheKey, { data: [], timestamp: Date.now() });
           return res.json([]);
         }
 
-        const studentsSnapshot = await firestore.collection("students")
-          .where(admin.firestore.FieldPath.documentId(), 'in', topUserIds)
-          .get();
-        
-        const leaderboard = studentsSnapshot.docs.map(doc => {
-          const s = doc.data();
-          return {
-            id: doc.id,
-            name: s.name,
-            class: s.className || s.class,
-            photo_url: s.photo_url,
-            score: Math.min(100, Math.round(((userStats[doc.id] || 0) / totalPossible) * 100))
-          };
-        }).sort((a, b) => b.score - a.score).slice(0, 10);
+        const studentDocs = await Promise.all(topUserIds.map(id => db.collection("students").doc(id).get()));
+        const leaderboard = studentDocs
+          .filter(doc => doc.exists)
+          .map(doc => {
+            const s = doc.data()!;
+            return {
+              id: doc.id,
+              name: s.name || "শিক্ষার্থী",
+              class: s.className || s.class || "",
+              photo_url: s.photo_url || "",
+              score: Math.min(100, Math.round(((userStats[doc.id] || 0) / totalPossible) * 100))
+            };
+          })
+          .sort((a, b) => b.score - a.score);
         
         routeCache.set(cacheKey, { data: leaderboard, timestamp: Date.now() });
         return res.json(leaderboard);
       } 
       else if (type === 'attendance') {
-        const attendanceSnapshot = await firestore.collection("attendance").where("date", ">=", startDate).get();
+        const attendanceSnapshot = await db.collection("attendance").where("date", ">=", startDate).get();
         const userStats: Record<string, number> = {};
         attendanceSnapshot.docs.forEach(doc => {
           const data = doc.data();
-          if (data.status === 'present') userStats[data.student_id] = (userStats[data.student_id] || 0) + 1;
+          if (data.status === 'present' && data.student_id) {
+            userStats[data.student_id] = (userStats[data.student_id] || 0) + 1;
+          }
         });
 
-        const topUserIds = Object.entries(userStats).sort(([, a], [, b]) => b - a).slice(0, 15).map(([id]) => id);
+        const topUserIds = Object.entries(userStats).sort(([, a], [, b]) => b - a).slice(0, 10).map(([id]) => id);
         if (topUserIds.length === 0) {
           routeCache.set(cacheKey, { data: [], timestamp: Date.now() });
           return res.json([]);
         }
 
-        const studentsSnapshot = await firestore.collection("students")
-          .where(admin.firestore.FieldPath.documentId(), 'in', topUserIds)
-          .get();
-        const days = new Date().getDate();
-        
-        const leaderboard = studentsSnapshot.docs.map(doc => {
-          const s = doc.data();
-          return {
-            id: doc.id,
-            name: s.name,
-            class: s.className || s.class,
-            photo_url: s.photo_url,
-            score: Math.min(100, Math.round(((userStats[doc.id] || 0) / days) * 100))
-          };
-        }).sort((a, b) => b.score - a.score).slice(0, 10);
+        const days = new Date().getDate() || 1;
+        const studentDocs = await Promise.all(topUserIds.map(id => db.collection("students").doc(id).get()));
+        const leaderboard = studentDocs
+          .filter(doc => doc.exists)
+          .map(doc => {
+            const s = doc.data()!;
+            return {
+              id: doc.id,
+              name: s.name || "শিক্ষার্থী",
+              class: s.className || s.class || "",
+              photo_url: s.photo_url || "",
+              score: Math.min(100, Math.round(((userStats[doc.id] || 0) / days) * 100))
+            };
+          })
+          .sort((a, b) => b.score - a.score);
         
         routeCache.set(cacheKey, { data: leaderboard, timestamp: Date.now() });
         return res.json(leaderboard);
       }
 
-      // Default mock logic if no type specified
-      const studentsSnapshot = await firestore.collection("students").where("deleted_at", "==", null).get();
+      // Default logic if no type specified
+      const studentsSnapshot = await db.collection("students").where("deleted_at", "==", null).get();
       const students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       const leaderboard = students.map(s => {
@@ -4607,10 +4633,11 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
         };
       }).sort((a, b) => b.score - a.score).slice(0, 10);
 
+      routeCache.set(cacheKey, { data: leaderboard, timestamp: Date.now() });
       res.json(leaderboard);
     } catch (error) {
       console.error("Leaderboard error:", error);
-      res.status(500).json({ error: "Failed to fetch leaderboard" });
+      res.json([]);
     }
   });
 
@@ -4960,17 +4987,25 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
   app.get("/api/parent/payment-history/:id", async (req, res) => {
     try {
+      const db = getFirestoreInstance();
+      if (!db) return res.json([]);
       const { limit = 20 } = req.query;
-      const snapshot = await firestore!.collection("pending_payments")
+      const snapshot = await db.collection("pending_payments")
         .where("studentId", "==", req.params.id)
-        .orderBy("createdAt", "desc")
-        .limit(Number(limit))
         .get();
-      const history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      history.sort((a: any, b: any) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+      if (limit) {
+        history = history.slice(0, Number(limit));
+      }
       res.json(history);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to fetch payment history" });
+      console.error("Fetch payment history error:", error);
+      res.json([]);
     }
   });
 
