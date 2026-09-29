@@ -4830,7 +4830,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
             ) : (
               filteredStudents.map((s) => (
                 <motion.div 
-                  key={s.id}
+                  key={`student-card-${s.id}`}
                   layoutId={s.id}
                   onClick={() => handleViewProfile(s)}
                   className="group bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:border-emerald-200 hover:bg-white hover:shadow-xl transition-all cursor-pointer relative overflow-hidden"
@@ -5182,7 +5182,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredStudents.map((s) => (
-                      <tr key={s.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <tr key={`attendance-row-${s.id}`} className="group hover:bg-slate-50/50 transition-colors">
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center font-black text-xs">

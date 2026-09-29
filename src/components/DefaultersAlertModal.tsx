@@ -418,7 +418,7 @@ export function DefaultersAlertModal({
 
               return (
                 <div
-                  key={student.id}
+                  key={`defaulter-item-${student.id}`}
                   className={cn(
                     "py-3 sm:py-3.5 px-3 rounded-2xl flex items-center justify-between gap-3 transition-colors",
                     isChecked ? "bg-slate-50/80" : "hover:bg-slate-50/50"

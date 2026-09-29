@@ -42,18 +42,15 @@ export function GuardianBannerSlider({
   // Compute Today's Attendance in Asia/Dhaka timezone
   const todayStr = getDhakaDateString();
   const todayAtt = attendance.find(a => a.date === todayStr);
-  const todayDevice = (deviceHistory || []).find(d => d.date === todayStr);
+  const todayDevices = (deviceHistory || []).filter(d => d.date === todayStr);
+  const latestDevice = todayDevices.length > 0 ? todayDevices[todayDevices.length - 1] : null;
 
-  const isPresent = todayAtt?.status === 'present' || todayDevice?.action === 'check_in' || !!todayAtt?.check_in;
+  const lastAction = latestDevice?.action || (todayAtt?.check_in ? 'check_in' : null);
+  const isPresent = todayAtt?.status === 'present' || lastAction === 'check_in' || !!todayAtt?.check_in;
+  const isCheckout = lastAction === 'check_out';
   const isAbsent = todayAtt?.status === 'absent';
   
-  // Format check-in time
-  let checkInTimeDisplay = "";
-  if (todayDevice?.time) {
-    checkInTimeDisplay = todayDevice.time;
-  } else if (todayAtt?.check_in) {
-    checkInTimeDisplay = todayAtt.check_in;
-  }
+  let timeDisplay = latestDevice?.time || todayAtt?.check_in || "";
 
   // Convert digits to Bangla if needed
   const toBn = (n: any) => {
@@ -67,29 +64,35 @@ export function GuardianBannerSlider({
   // Build Slides Array
   const slides: any[] = [];
 
-  // Slide 1: Attendance Slide (First Slide as requested)
+  // Slide 1: Attendance / Latest Punch Slide (First Slide as requested)
   slides.push({
     id: "attendance",
-    badge: "আজকের উপস্থিতি স্ট্যাটাস",
-    bgGradient: isPresent
-      ? "from-emerald-900 via-teal-900 to-slate-900"
-      : isAbsent
-        ? "from-rose-950 via-rose-900 to-slate-900"
-        : "from-slate-900 via-slate-800 to-teal-950",
-    border: isPresent ? "border-emerald-500/40" : isAbsent ? "border-rose-500/40" : "border-slate-700/50",
-    icon: isPresent ? CheckCircle2 : isAbsent ? XCircle : Clock,
-    iconColor: isPresent ? "text-emerald-400 bg-emerald-500/20" : isAbsent ? "text-rose-400 bg-rose-500/20" : "text-amber-400 bg-amber-500/20",
-    title: isPresent
-      ? `আজ উপস্থিত: ${checkInTimeDisplay ? `${toBn(checkInTimeDisplay)} মিনিটে প্রবেশ` : "ক্লাসে উপস্থিত"}`
-      : isAbsent
-        ? "আজ অনুপস্থিত"
-        : "আজকের উপস্থিতি প্রক্রিয়া চলছে",
-    subtitle: isPresent
-      ? `${student?.name} সময়মতো মাদরাসায় পৌঁছেছে। অভিভাবক হিসেবে নিশ্চিন্ত থাকুন।`
-      : isAbsent
-        ? `${student?.name} আজ ক্লাসে অনুপস্থিত রয়েছে। বিশেষ প্রয়োজনে যোগাযোগ করুন।`
-        : "স্মার্ট কার্ড পাঞ্চ বা শিক্ষকের হাজিরা রেকর্ডের সাথে সাথে লাইভ আপডেট হবে।",
-    tag: isPresent ? "🟢 উপস্থিত" : isAbsent ? "🔴 অনুপস্থিত" : "⏳ প্রক্রিয়াধীন"
+    badge: isCheckout ? "আজকের প্রস্থান স্ট্যাটাস" : "আজকের উপস্থিতি স্ট্যাটাস",
+    bgGradient: isCheckout
+      ? "from-amber-950 via-orange-950 to-slate-900"
+      : isPresent
+        ? "from-emerald-900 via-teal-900 to-slate-900"
+        : isAbsent
+          ? "from-rose-950 via-rose-900 to-slate-900"
+          : "from-slate-900 via-slate-800 to-teal-950",
+    border: isCheckout ? "border-amber-500/40" : isPresent ? "border-emerald-500/40" : isAbsent ? "border-rose-500/40" : "border-slate-700/50",
+    icon: isCheckout ? Clock : isPresent ? CheckCircle2 : isAbsent ? XCircle : Clock,
+    iconColor: isCheckout ? "text-amber-400 bg-amber-500/20" : isPresent ? "text-emerald-400 bg-emerald-500/20" : isAbsent ? "text-rose-400 bg-rose-500/20" : "text-amber-400 bg-amber-500/20",
+    title: isCheckout
+      ? `মাদরাসা থেকে প্রস্থান: ${timeDisplay ? `${toBn(timeDisplay)} মিনিটে` : ""}`
+      : isPresent
+        ? `আজ উপস্থিত: ${timeDisplay ? `${toBn(timeDisplay)} মিনিটে প্রবেশ` : "ক্লাসে উপস্থিত"}`
+        : isAbsent
+          ? "আজ অনুপস্থিত"
+          : "আজকের উপস্থিতি প্রক্রিয়া চলছে",
+    subtitle: isCheckout
+      ? `${student?.name} মাদরাসা থেকে সফলভাবে প্রস্থান করেছে (${toBn(timeDisplay)})।`
+      : isPresent
+        ? `${student?.name} সময়মতো মাদরাসায় পৌঁছেছে। অভিভাবক হিসেবে নিশ্চিন্ত থাকুন।`
+        : isAbsent
+          ? `${student?.name} আজ ক্লাসে অনুপস্থিত রয়েছে। বিশেষ প্রয়োজনে যোগাযোগ করুন।`
+          : "স্মার্ট কার্ড পাঞ্চ বা শিক্ষকের হাজিরা রেকর্ডের সাথে সাথে লাইভ আপডেট হবে।",
+    tag: isCheckout ? "🟠 প্রস্থান সম্পন্ন" : isPresent ? "🟢 উপস্থিত" : isAbsent ? "🔴 অনুপস্থিত" : "⏳ প্রক্রিয়াধীন"
   });
 
   // Slide 2: Latest Notice / Announcements from Admin Panel (Prominently featured)

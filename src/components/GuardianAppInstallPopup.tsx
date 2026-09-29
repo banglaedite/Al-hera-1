@@ -55,18 +55,24 @@ export function GuardianAppInstallPopup() {
     };
   }, []);
 
-  const handleInstallClick = async () => {
+  const handleInstallClick = () => {
+    // Directly trigger APK file download as requested by user
+    const link = document.createElement('a');
+    link.href = '/al_hera_madrasah.apk';
+    link.download = 'al_hera_madrasah.apk';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setIsInstalled(true);
-        setShowPopup(false);
-      }
+      deferredPrompt.userChoice.then((choice: any) => {
+        if (choice.outcome === 'accepted') {
+          setIsInstalled(true);
+          setShowPopup(false);
+        }
+      });
       setDeferredPrompt(null);
-    } else {
-      // Show manual 2-step guide
-      setShowManualGuide(true);
     }
   };
 
@@ -91,8 +97,8 @@ export function GuardianAppInstallPopup() {
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="w-12 h-12 bg-emerald-500/20 text-emerald-300 rounded-2xl flex items-center justify-center border border-emerald-500/40 shrink-0">
-                <Smartphone className="w-6 h-6 animate-bounce" />
+              <div className="w-12 h-12 bg-emerald-500/20 text-emerald-300 rounded-2xl flex items-center justify-center border border-emerald-500/40 shrink-0 overflow-hidden shadow-md">
+                <img src="https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png" alt="মাদরাসা লোগো" className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-emerald-400 tracking-wider">

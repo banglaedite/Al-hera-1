@@ -159,6 +159,26 @@ app.use((req, res, next) => {
   next();
 });
 
+// App Download Route (Serving a mock/placeholder APK as requested)
+app.get("/al_hera_madrasah.apk", (req, res) => {
+  res.setHeader("Content-Type", "application/vnd.android.package-archive");
+  res.setHeader("Content-Disposition", "attachment; filename=al_hera_madrasah.apk");
+  
+  // Send a small valid-ish ZIP structure buffer to act as a placeholder APK
+  const mockApk = Buffer.from([
+    0x50, 0x4B, 0x03, 0x04, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x61, 0x6E,
+    0x64, 0x72, 0x6F, 0x69, 0x64, 0x2E, 0x74, 0x78, 0x74, 0x41, 0x6C, 0x2D, 0x48, 0x65, 0x72, 0x61,
+    0x20, 0x4D, 0x61, 0x64, 0x72, 0x61, 0x73, 0x61, 0x68, 0x20, 0x41, 0x70, 0x70, 0x50, 0x4B, 0x01,
+    0x02, 0x14, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x61, 0x6E, 0x64, 0x72, 0x6F,
+    0x69, 0x64, 0x2E, 0x74, 0x78, 0x74, 0x50, 0x4B, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+    0x01, 0x00, 0x39, 0x00, 0x00, 0x00, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00
+  ]);
+  res.send(mockApk);
+});
+
 // Consolidated Health check
 app.get("/api/health", async (req, res) => {
   try {
@@ -4715,77 +4735,99 @@ function formatBengaliNameForSpeech(name: string): string {
       let targetIds = Array.isArray(person_ids) ? [...person_ids] : [];
       if (id && !targetIds.includes(id)) targetIds.push(id);
       if (person_id && !targetIds.includes(person_id)) targetIds.push(person_id);
+      
       if (targetIds.length === 0) {
         return res.json({ success: true, count: 0, message: "কোনো প্রাপক নির্বাচিত নেই" });
       }
 
+      // Pre-fetch settings once
       const settingsDoc = await db.collection("site_settings").doc("1").get();
       const settings = settingsDoc.data() || {};
-      const defaultText = settings.voice_call_message_text || "আসসালামু আলাইকুম। আপনার সন্তান আজ মাদরাসায় অনুপস্থিত রয়েছে। জরুরি তথ্যের জন্য যোগাযোগ করুন।";
       const now = new Date();
+      const expiresAt = new Date(now.getTime() + 60000).toISOString();
 
-      for (const tId of targetIds) {
-        let studentData: any = null;
-        let sName = type === 'teacher' ? 'শিক্ষক' : 'শিক্ষার্থী';
-        let sClass = '';
-        let sRoll = '';
-        let sPhoto = '';
-        let sPhone = '';
+      // Chunk IDs to avoid Firestore query limits and optimize processing
+      const chunkSize = 10; // Process in smaller batches to prevent timeouts
+      const studentDataMap = new Map<string, any>();
 
-        if (type === 'student') {
-          const sDoc = await db.collection("students").doc(String(tId)).get().catch(() => null);
-          if (sDoc && sDoc.exists) {
-            studentData = sDoc.data();
-            sName = studentData?.name || sName;
-            sClass = studentData?.class || '';
-            sRoll = studentData?.roll || '';
-            sPhoto = studentData?.photo_url || '';
-            sPhone = studentData?.guardian_phone || studentData?.phone || '';
+      // Fetch student data in bulk for efficiency
+      if (type === 'student') {
+        const studentChunks = [];
+        for (let i = 0; i < targetIds.length; i += 30) {
+          studentChunks.push(targetIds.slice(i, i + 30));
+        }
+
+        await Promise.all(studentChunks.map(async (chunk) => {
+          const snap = await db.collection("students")
+            .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
+            .get();
+          snap.forEach(doc => studentDataMap.set(doc.id, doc.data()));
+        }));
+      }
+
+      // Process students in chunks to avoid overwhelming the server or Firestore
+      for (let i = 0; i < targetIds.length; i += chunkSize) {
+        const currentBatch = targetIds.slice(i, i + chunkSize);
+        
+        await Promise.all(currentBatch.map(async (tId) => {
+          const studentData = studentDataMap.get(String(tId));
+          let sName = studentData?.name || (type === 'teacher' ? 'শিক্ষক' : 'শিক্ষার্থী');
+          let sClass = studentData?.class || '';
+          let sRoll = studentData?.roll || '';
+          let sPhoto = studentData?.photo_url || '';
+          let sPhone = studentData?.guardian_phone || studentData?.phone || '';
+
+          const spokenName = formatBengaliNameForSpeech(sName);
+          const defaultText = `সম্মানিত অভিভাবক, আপনার সন্তান ${spokenName} আজকে যথাসময়ে মাদ্রাসায় উপস্থিত হয়নি। অনুগ্রহ করে আপনার সমস্যার কথা জানিয়ে মাদরাসা কর্তৃপক্ষের সাথে যোগাযোগ করুন।`;
+          let itemMessage = (message || defaultText).replace(/^(আসসালামু\s*আলাইকুম|আসসালামুয়ালাইকুম|সালাম)[।,.\s-]*/i, "").trim();
+          itemMessage = itemMessage.replace(/\b(মোঃ|মো\.|মো:|মো\s+)/g, "মোহাম্মদ ");
+
+          const operations = [];
+
+          // 1. Add Call if needed
+          if (action === 'call' && type === 'student') {
+            operations.push(db.collection("active_calls").add({
+              student_id: String(tId),
+              student_name: sName,
+              student_class: sClass,
+              student_roll: sRoll,
+              student_photo: sPhoto,
+              guardian_phone: sPhone,
+              caller: settings.title || settings.name || "আল-হেরা মাদরাসা",
+              status: "ringing",
+              type: "absent",
+              message: itemMessage,
+              audio_url: settings.voice_call_audio_url || null,
+              timestamp: now.toISOString(),
+              expires_at: expiresAt
+            }));
           }
-        }
 
-        const spokenName = formatBengaliNameForSpeech(sName);
-        const defaultText = `সম্মানিত অভিভাবক, আপনার সন্তান ${spokenName} আজকে যথাসময়ে মাদ্রাসায় উপস্থিত হয়নি। অনুগ্রহ করে আপনার সমস্যার কথা জানিয়ে মাদরাসা কর্তৃপক্ষের সাথে যোগাযোগ করুন।`;
-        let itemMessage = (message || defaultText).replace(/^(আসসালামু\s*আলাইকুম|আসসালামুয়ালাইকুম|সালাম)[।,.\s-]*/i, "").trim();
-        itemMessage = itemMessage.replace(/\b(মোঃ|মো\.|মো:|মো\s+)/g, "মোহাম্মদ ");
-
-        if (action === 'call' && type === 'student') {
-          // Trigger live active call
-          await db.collection("active_calls").add({
-            student_id: String(tId),
-            student_name: sName,
-            student_class: sClass,
-            student_roll: sRoll,
-            student_photo: sPhoto,
-            guardian_phone: sPhone,
-            caller: settings.title || settings.name || "আল-হেরা মাদরাসা",
-            status: "ringing",
-            type: "absent",
+          // 2. Record Alert
+          operations.push(db.collection("absence_alerts").add({
+            person_id: tId,
+            type,
+            action,
+            date: date || getDhakaDateTime(now).date,
             message: itemMessage,
-            audio_url: settings.voice_call_audio_url || null,
-            timestamp: now.toISOString(),
-            expires_at: new Date(now.getTime() + 60000).toISOString()
-          }).catch(() => {});
-        }
+            created_at: now.toISOString()
+          }));
 
-        await db.collection("absence_alerts").add({
-          person_id: tId,
-          type,
-          action,
-          date: date || getDhakaDateTime(now).date,
-          message: itemMessage,
-          created_at: now.toISOString()
-        }).catch(() => {});
+          // 3. Add Notice for App visibility
+          operations.push(db.collection("notices").add({
+            title: `🚨 ${action === 'call' ? 'জরুরি ভয়েস কল সতর্কবার্তা' : 'অনুপস্থিতি নোটিফিকেশন'}`,
+            content: itemMessage,
+            target_student_id: tId,
+            date: date || getDhakaDateTime(now).date,
+            allow_poll: false,
+            is_active: 1,
+            created_at: now.toISOString()
+          }));
 
-        await db.collection("notices").add({
-          title: `🚨 ${action === 'call' ? 'জরুরি ভয়েস কল সতর্কবার্তা' : 'অনুপস্থিতি নোটিফিকেশন'}`,
-          content: itemMessage,
-          target_student_id: tId,
-          date: date || getDhakaDateTime(now).date,
-          allow_poll: false,
-          is_active: 1,
-          created_at: now.toISOString()
-        }).catch(() => {});
+          await Promise.all(operations).catch(err => {
+            console.error(`Error in operations for ${tId}:`, err);
+          });
+        }));
       }
 
       res.json({
@@ -4796,7 +4838,7 @@ function formatBengaliNameForSpeech(name: string): string {
       });
     } catch (err: any) {
       console.error("Absent action error:", err);
-      res.json({ success: true, count: 1, message: "নোটিফিকেশন রেকর্ড সম্পন্ন হয়েছে" });
+      res.status(500).json({ error: "নোটিফিকেশন পাঠাতে সমস্যা হয়েছে" });
     }
   });
 

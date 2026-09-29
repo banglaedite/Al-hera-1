@@ -335,10 +335,10 @@ export function SimulatedIncomingCall({
             </p>
           </div>
 
-          {/* Connected Call Live Voice Waveform Visualizer (Without text transcription) */}
+          {/* Connected Call Live Voice Waveform Visualizer & Transcript */}
           {callState === 'connected' && (
-            <div className="space-y-2 w-full max-w-xs pt-3">
-              <div className="flex items-center justify-center gap-1.5 h-10 px-4 py-2 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+            <div className="space-y-6 w-full max-w-sm pt-3">
+              <div className="flex items-center justify-center gap-1.5 h-12 px-4 py-2 bg-slate-800/50 rounded-2xl border border-slate-700/50">
                 {[35, 75, 25, 95, 60, 100, 40, 85, 50, 70, 45, 90, 30].map((h, i) => (
                   <div
                     key={i}
@@ -350,6 +350,30 @@ export function SimulatedIncomingCall({
                   ></div>
                 ))}
               </div>
+
+              {/* Message Subtitles / Transcript */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-emerald-950/40 p-6 rounded-3xl border border-emerald-500/20 backdrop-blur-sm relative text-center"
+              >
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider rounded-full">
+                  বার্তা (Message)
+                </div>
+                <p className="text-emerald-50 font-black text-lg leading-relaxed italic">
+                  "{voiceMessageText}"
+                </p>
+                <div className="mt-4">
+                  <button 
+                    onClick={playTTS}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-slate-950 rounded-xl text-xs font-black hover:bg-emerald-400 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                    আবার শুনুন (Play Audio)
+                  </button>
+                </div>
+              </motion.div>
+
               <p className="text-[11px] text-emerald-400/90 font-bold text-center animate-pulse">
                 {isPlayingAudio ? "🔊 ভয়েস বার্তা প্লে হচ্ছে..." : "কল সংযুক্ত রয়েছে"}
               </p>

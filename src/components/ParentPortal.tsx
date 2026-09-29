@@ -110,8 +110,37 @@ export default function ParentPortal() {
   // Real-time Punch Instant Notification Listener
   const [livePunchNotice, setLivePunchNotice] = useState<any>(null);
 
+  const playIPhoneNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const playTone = (freq: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+        gain.gain.setValueAtTime(0, ctx.currentTime + startTime);
+        gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + startTime);
+        osc.stop(ctx.currentTime + startTime + duration);
+      };
+      playTone(1046.50, 0, 0.12);
+      playTone(1318.51, 0.12, 0.15);
+      playTone(1567.98, 0.27, 0.25);
+    } catch (e) {}
+  };
+
   useEffect(() => {
     if (!student?.id) return;
+
+    // Request notification permission on mount
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
 
     let lastCheckedPunchId = sessionStorage.getItem(`last_notified_punch_${student.id}`) || "";
 
@@ -127,6 +156,7 @@ export default function ParentPortal() {
               lastCheckedPunchId = data.punch.id;
               sessionStorage.setItem(`last_notified_punch_${student.id}`, data.punch.id);
               setLivePunchNotice(data.punch);
+              playIPhoneNotificationSound();
 
               if ('Notification' in window && Notification.permission === 'granted') {
                 try {
