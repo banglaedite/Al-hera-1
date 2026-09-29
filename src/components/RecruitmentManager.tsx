@@ -6,11 +6,8 @@ export function RecruitmentManager() {
 
   useEffect(() => {
     fetch("/api/admin/job-applications")
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(setApplications)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => Array.isArray(data) && setApplications(data))
       .catch(err => console.error("Failed to load job applications:", err));
   }, []);
 

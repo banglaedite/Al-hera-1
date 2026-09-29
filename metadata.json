@@ -1,5 +1,6 @@
 {
   "name": "Al Hera Madrasa Management System",
-  "description": "A comprehensive management system for Al Hera Madrasa including admission, student profiles, and fee management.",
-  "requestFramePermissions": []
+  "description": "আল-হেরা হিফজুল কুরআন মডেল মাদরাসার অফিসিয়াল অভিভাবক ও শিক্ষার্থী পোর্টাল",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

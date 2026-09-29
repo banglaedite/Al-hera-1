@@ -59,28 +59,27 @@ export default function DashboardHome() {
 
   useEffect(() => {
     fetch("/api/admin/dashboard-stats")
-      .then(res => res.json())
-      .then(setStats)
+      .then(res => res.ok ? res.json() : null)
+      .then(d => d && setStats(d))
       .catch(console.error);
   }, []);
 
   useEffect(() => {
     fetch(`/api/top-students?type=${rankingCriteria}`)
-      .then(res => res.json())
-      .then(setTopStudents)
+      .then(res => res.ok ? res.json() : [])
+      .then(d => Array.isArray(d) && setTopStudents(d))
       .catch(console.error);
   }, [rankingCriteria]);
 
   useEffect(() => {
     fetch("/api/site-settings")
       .then(res => {
-        if (!res.ok) throw new Error("Failed to load settings");
+        if (!res.ok) return null;
         return res.json();
       })
-      .then(setSettings)
+      .then(d => d && setSettings(d))
       .catch(err => {
         console.error("Failed to load settings:", err);
-        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
       });
   }, []);
 

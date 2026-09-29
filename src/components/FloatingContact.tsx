@@ -10,11 +10,8 @@ const FloatingContact = () => {
 
   useEffect(() => {
     fetch("/api/site-settings")
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(setSettings)
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => d && setSettings(d))
       .catch(err => console.error("Failed to load settings:", err));
   }, []);
 
@@ -31,7 +28,10 @@ const FloatingContact = () => {
       icon: MessageSquare,
       label: "হোয়াটসঅ্যাপ",
       color: "bg-green-500",
-      href: `https://wa.me/${settings.whatsapp_number?.replace(/[^0-9]/g, '').startsWith('0') ? '88' + settings.whatsapp_number?.replace(/[^0-9]/g, '') : settings.whatsapp_number?.replace(/[^0-9]/g, '')}`,
+      href: (() => {
+        const clean = String(settings.whatsapp_number || '').replace(/[^0-9]/g, '');
+        return clean ? `https://wa.me/${clean.startsWith('0') ? '88' + clean : clean}` : '';
+      })(),
     },
     {
       icon: Facebook,

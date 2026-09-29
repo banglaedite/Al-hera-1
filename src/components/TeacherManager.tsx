@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2, X as CloseIcon, Save } from "lucide-react";
+import { Users, Plus, Edit, Edit2, Trash2, Search, DollarSign, Printer, Download, MessageCircle, Mail, Loader2, X as CloseIcon, Save, CreditCard, CheckCircle2 } from "lucide-react";
 import jsPDF from "jspdf";
 import { toPng } from 'html-to-image';
 import { cn } from "../lib/utils";
@@ -28,6 +28,9 @@ export function TeacherManager({
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
+  const [cardTeacherModal, setCardTeacherModal] = useState<any>(null);
+  const [cardInputCode, setCardInputCode] = useState("");
+  const [savingCard, setSavingCard] = useState(false);
   const [search, setSearch] = useState("");
   const [viewType, setViewType] = useState<'teacher' | 'staff'>('teacher');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -317,13 +320,26 @@ export function TeacherManager({
                 </button>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button 
                 onClick={() => { setSelectedTeacher(teacher); fetchSalaries(teacher.id); setShowSalaryModal(true); }}
-                className="flex-1 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-1.5 text-xs"
               >
                 <DollarSign className="w-4 h-4" /> বেতন
               </button>
+
+              <button 
+                onClick={() => {
+                  setCardTeacherModal(teacher);
+                  setCardInputCode(""); // Always start empty so scanning card does NOT append to pre-existing numbers
+                }}
+                className="py-2 px-3 bg-amber-50 text-amber-800 rounded-xl font-black hover:bg-amber-100 transition-all flex items-center justify-center gap-1 text-xs"
+                title="স্মার্ট কার্ড রেজিস্টার করুন"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>{teacher.biometric_id ? `কার্ড (${teacher.biometric_id})` : 'কার্ড লিঙ্ক'}</span>
+              </button>
+
               <button 
                 onClick={() => { setSelectedTeacher(teacher); setIsEditing(true); setIsAdding(true); }}
                 className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
@@ -887,6 +903,107 @@ export function TeacherManager({
                 <Mail className="w-5 h-5 text-blue-600" />
                 <span className="text-[10px] font-bold text-blue-700">ইমেইল</span>
               </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Teacher Smart Card Registration Modal */}
+      {cardTeacherModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-6 text-center"
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-12 h-12 bg-amber-100 text-amber-800 rounded-2xl flex items-center justify-center">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">{cardTeacherModal.name}</h3>
+                  <p className="text-xs font-bold text-slate-400">স্মার্ট কার্ড রেজিস্ট্রেশন করুন</p>
+                </div>
+              </div>
+              <button onClick={() => setCardTeacherModal(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-bold text-slate-600 text-left">
+                <p>পদবী: <span className="font-black text-slate-900">{cardTeacherModal.qualification || 'শিক্ষক'}</span></p>
+                <p className="mt-1">ফোন: <span className="font-mono font-bold text-slate-900">{cardTeacherModal.phone}</span></p>
+              </div>
+
+              <div className="text-left space-y-1">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-black uppercase text-emerald-700 block">
+                    RFID কার্ড কোড (পাঞ্চ বা টাইপ করুন)
+                  </label>
+                  {cardInputCode && (
+                    <button
+                      type="button"
+                      onClick={() => setCardInputCode("")}
+                      className="text-[11px] font-black text-rose-600 hover:text-rose-800 bg-rose-50 px-2 py-0.5 rounded-md"
+                    >
+                      ✕ ক্লিয়ার
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={cardInputCode}
+                  onChange={(e) => setCardInputCode(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="কার্ড ছোঁয়ালেই এখানে খালি জায়গায় নম্বর আসবে..."
+                  autoFocus
+                  className="w-full p-4 bg-emerald-50/50 border-2 border-emerald-500/40 rounded-2xl outline-none font-mono font-black text-lg text-slate-900 text-center"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCardTeacherModal(null)}
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black text-xs"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="button"
+                  disabled={!cardInputCode.trim() || savingCard}
+                  onClick={async () => {
+                    setSavingCard(true);
+                    try {
+                      const res = await fetch("/api/admin/biometric/register", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          type: "teacher",
+                          id: cardTeacherModal.id,
+                          biometric_id: cardInputCode.trim()
+                        })
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        addToast(`${cardTeacherModal.name}-এর স্মার্ট কার্ড সফলভাবে সেট করা হয়েছে`, "success");
+                        setCardTeacherModal(null);
+                        fetchTeachers();
+                      } else {
+                        addToast(data.error || "সেট করতে সমস্যা হয়েছে", "error");
+                      }
+                    } catch (e) {
+                      addToast("সার্ভার সমস্যা", "error");
+                    } finally {
+                      setSavingCard(false);
+                    }
+                  }}
+                  className="flex-1 py-3.5 bg-emerald-900 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-2xl font-black text-xs shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {savingCard ? "সেভ হচ্ছে..." : "কার্ড সেভ করুন"}
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

@@ -60,7 +60,11 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
   };
 
   const handleRegister = async (type: 'student' | 'teacher', id: string, biometricId: string) => {
-    if (!biometricId) {
+    if (!id || !id.trim()) {
+      addToast("সঠিক আইডেন্টিফায়ার খুঁজে পাওয়া যায়নি", "error");
+      return;
+    }
+    if (biometricId === undefined || biometricId === null) {
       addToast("বায়োমেট্রিক আইডি প্রদান করুন", "error");
       return;
     }
@@ -208,8 +212,8 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
 </div></div>
                   ) : filteredStudents.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 font-bold">কোন ছাত্র পাওয়া যায়নি</div>
-                  ) : filteredStudents.map(student => (
-                    <div key={student.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  ) : filteredStudents.map((student, idx) => (
+                    <div key={`biometric-student-${student.id}-${idx}`} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <img src={student.photo_url || `https://ui-avatars.com/api/?name=${student.name}`} className="w-12 h-12 rounded-xl object-cover" />
                         <div>
@@ -259,8 +263,8 @@ export function BiometricManager({ addToast }: { addToast: (message: string, typ
 </div></div>
                   ) : filteredTeachers.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 font-bold">কোন শিক্ষক পাওয়া যায়নি</div>
-                  ) : filteredTeachers.map(teacher => (
-                    <div key={teacher.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  ) : filteredTeachers.map((teacher, idx) => (
+                    <div key={`biometric-teacher-${teacher.id}-${idx}`} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <img src={teacher.photo_url || `https://ui-avatars.com/api/?name=${teacher.name}`} className="w-12 h-12 rounded-xl object-cover" />
                         <div>

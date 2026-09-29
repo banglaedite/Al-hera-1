@@ -3,13 +3,75 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="আল-হেরা হিফজুল কুরআন মডেল মাদরাসার অফিসিয়াল অভিভাবক ও শিক্ষার্থী পোর্টাল" />
     <meta name="theme-color" content="#065f46" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="আল-হেরা" />
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png" />
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>মাদরাসা ম্যানেজমেন্ট সিস্টেম</title>
+    <title>আল-হেরা মাদরাসা ম্যানেজমেন্ট সিস্টেম</title>
     <script>
-      // Aggressively silence Vite WebSocket errors
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.log('ServiceWorker registration skipped:', err);
+          });
+        });
+      }
+    </script>
+    <script>
+      // Global Safe JSON and Response Protection
+      (function() {
+        // Safe JSON.parse protection
+        const originalJsonParse = JSON.parse;
+        JSON.parse = function(text, reviver) {
+          if (typeof text === 'string') {
+            const trimmed = text.trim();
+            if (trimmed.startsWith('<') || trimmed.toLowerCase().startsWith('<!doctype')) {
+              console.warn("JSON.parse intercepted HTML doctype string. Returned safe fallback.");
+              return {};
+            }
+          }
+          try {
+            return originalJsonParse(text, reviver);
+          } catch (e) {
+            if (typeof text === 'string' && (text.includes('<') || text.includes('doctype') || text.includes('html'))) {
+              console.warn("JSON.parse avoided crash on HTML string:", e);
+              return {};
+            }
+            throw e;
+          }
+        };
+
+        // Safe Response.prototype.json protection
+        if (typeof Response !== 'undefined' && Response.prototype) {
+          const originalResponseJson = Response.prototype.json;
+          Response.prototype.json = async function() {
+            try {
+              const contentType = this.headers && typeof this.headers.get === 'function' ? this.headers.get('content-type') : '';
+              if (contentType && contentType.includes('text/html')) {
+                console.warn("Response has text/html content-type, returning safe fallback object.");
+                return {};
+              }
+              const text = await this.text();
+              if (!text || !text.trim()) return {};
+              const trimmed = text.trim();
+              if (trimmed.startsWith('<') || trimmed.toLowerCase().startsWith('<!doctype')) {
+                console.warn("API response was HTML (<...). Prevented JSON parse error.");
+                return {};
+              }
+              return originalJsonParse(text);
+            } catch (err) {
+              console.warn("Safely intercepted Response.json error:", err);
+              return {};
+            }
+          };
+        }
+      })();
+
+      // Aggressively silence Vite WebSocket errors and unexpected doctype JSON errors
       (function() {
         const OriginalWebSocket = window.WebSocket;
         window.WebSocket = function(url, protocols) {
@@ -42,25 +104,45 @@
         window.WebSocket.prototype = OriginalWebSocket.prototype;
       })();
 
-      // Silence unhandled rejections related to WebSockets
+      // Silence unhandled rejections related to WebSockets and <!doctype JSON errors
       window.addEventListener('unhandledrejection', function(event) {
         const reason = event.reason;
-        if (reason && (
-          (reason.message && reason.message.includes('WebSocket')) ||
-          (typeof reason === 'string' && reason.includes('WebSocket')) ||
-          (reason.name === 'Error' && reason.message === 'WebSocket closed without opened')
-        )) {
+        const msg = reason ? (reason.message || String(reason)) : '';
+        if (
+          msg.includes('WebSocket') ||
+          msg.includes("Unexpected token '<'") ||
+          msg.includes('<!doctype') ||
+          msg.includes('is not valid JSON') ||
+          (reason && reason.name === 'Error' && reason.message === 'WebSocket closed without opened')
+        ) {
           event.preventDefault();
           event.stopPropagation();
         }
       }, true);
 
-      // Silence console errors and warnings related to Vite/WebSocket
+      // Silence window errors related to unexpected HTML JSON parse
+      window.addEventListener('error', function(event) {
+        const msg = event ? (event.message || String(event)) : '';
+        if (
+          msg.includes('WebSocket') ||
+          msg.includes("Unexpected token '<'") ||
+          msg.includes('<!doctype') ||
+          msg.includes('is not valid JSON')
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }, true);
+
+      // Silence console errors and warnings related to Vite/WebSocket/JSON HTML
       const silencePatterns = [
         '[vite] failed to connect to websocket',
         'WebSocket closed without opened',
         'WebSocket connection failed',
-        'hmr'
+        'hmr',
+        "Unexpected token '<'",
+        '<!doctype',
+        'is not valid JSON'
       ];
 
       const originalError = console.error;

@@ -12,7 +12,7 @@ export function RoutineManager() {
 
   const fetchRoutines = () => {
     fetch("/api/routines")
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : [])
       .then(data => {
         if (Array.isArray(data)) setRoutines(data);
       })

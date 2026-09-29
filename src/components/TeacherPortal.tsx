@@ -44,11 +44,8 @@ export default function TeacherPortal() {
 
   useEffect(() => {
     fetch("/api/site-settings")
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(setSettings)
+      .then(res => res.ok ? res.json() : null)
+      .then(d => d && setSettings(d))
       .catch(err => console.error("Failed to load settings:", err));
     
     const savedIdentifier = localStorage.getItem("teacherPhone");

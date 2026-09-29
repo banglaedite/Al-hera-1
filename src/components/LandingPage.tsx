@@ -65,7 +65,25 @@ const toBn = (n: number | string) => n ? n.toString().replace(/\d/g, d => '০�
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem("siteSettings");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.title) return parsed;
+      }
+    } catch (e) {}
+    return {
+      title: "আল-হেরা মাদ্রাসা মধুপুর",
+      description: "জেনারেল এবং মাদ্রাসার সমন্বয়ে আপনার সন্তান হয়ে উঠবে সকল বিষয়ে দক্ষ ও অভিজ্ঞ ।",
+      hero_image: "https://i.postimg.cc/3r0cV1jx/MUSLIMBONGO-PC-Ver.jpg",
+      contact_phone: "+880 1725-003651",
+      whatsapp_number: "01725003651",
+      facebook_url: "https://www.facebook.com/share/1Abk8iHagA/",
+      announcement: "আদর্শ ছাত্র গড়ার নির্ভরযোগ্য প্রতিষ্ঠান",
+      logo_url: "https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png"
+    };
+  });
   const [features, setFeatures] = useState<any[]>([]);
   const [foodMenu, setFoodMenu] = useState<any[]>([]);
   const [showcaseItems, setShowcaseItems] = useState<any[]>([]);
@@ -81,20 +99,11 @@ const LandingPage = () => {
   const [visibleNotices, setVisibleNotices] = useState(6);
 
   useEffect(() => {
-    const controller = new AbortController();
     let isCancelled = false;
 
     const fetchLeaderboard = async () => {
       try {
-        const timeoutId = setTimeout(() => {
-          try { controller.abort("Timeout"); } catch (e) {}
-        }, 8000);
-
-        const res = await fetch(`/api/leaderboard?type=${leaderboardType}`, {
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
+        const res = await fetch(`/api/leaderboard?type=${leaderboardType}`);
         if (!res.ok) {
           if (!isCancelled) setLeaderboard([]);
           return;
@@ -105,11 +114,6 @@ const LandingPage = () => {
           setLeaderboard(data);
         }
       } catch (err: any) {
-        if (isCancelled || err?.name === 'AbortError' || err?.message?.includes('abort')) {
-          // Cleanly ignore abort / unmount cancellations
-          return;
-        }
-        console.warn("Could not load leaderboard:", err?.message || err);
         if (!isCancelled) setLeaderboard([]);
       }
     };
@@ -118,7 +122,6 @@ const LandingPage = () => {
 
     return () => {
       isCancelled = true;
-      try { controller.abort("Cleanup"); } catch (e) {}
     };
   }, [leaderboardType]);
 
@@ -132,21 +135,21 @@ const LandingPage = () => {
       return;
     }
 
-    const fetchWithTimeout = async (url: string, timeout = 15000, retries = 3): Promise<Response> => {
+    const fetchWithTimeout = async (url: string, timeout = 5000, retries = 1): Promise<Response> => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);
       try {
         const res = await fetch(url, { signal: controller.signal });
         clearTimeout(id);
         if (!res.ok && res.status >= 500 && retries > 0) {
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 600));
           return fetchWithTimeout(url, timeout, retries - 1);
         }
         return res;
       } catch (err) {
         clearTimeout(id);
         if (retries > 0 && (err instanceof Error && (err.name === 'AbortError' || err.message.includes('fetch')))) {
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 600));
           return fetchWithTimeout(url, timeout, retries - 1);
         }
         throw err;
@@ -154,38 +157,30 @@ const LandingPage = () => {
     };
 
     fetchWithTimeout("/api/site-settings")
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      .then(async (res) => {
+        if (!res.ok) return null;
         return res.json();
       })
       .then(data => {
         if (data && data.title) {
           setSettings(data);
-        } else {
-          throw new Error("Invalid settings data");
+          try {
+            localStorage.setItem("siteSettings", JSON.stringify(data));
+          } catch (e) {}
         }
       })
       .catch((err) => {
         console.error("Failed to load settings:", err);
-        setSettings({
-          title: 'মাদরাসা',
-          description: 'আমাদের মাদরাসায় আপনাকে স্বাগতম।',
-          hero_image: 'https://picsum.photos/seed/madrasa/1920/1080',
-          contact_phone: '01700000000',
-          whatsapp_number: '01700000000',
-          facebook_url: '#',
-          announcement: 'স্বাগতম',
-          logo_url: null
-        });
       });
 
     fetchWithTimeout("/api/features")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setFeatures(data.filter((f: any) => f.is_active !== 0));
-        } else {
-          throw new Error("Invalid features data");
         }
       })
       .catch((err) => {
@@ -198,12 +193,13 @@ const LandingPage = () => {
       });
 
     fetchWithTimeout("/api/food-menu")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setFoodMenu(data);
-        } else {
-          throw new Error("Invalid food menu data");
         }
       })
       .catch((err) => {
@@ -215,12 +211,13 @@ const LandingPage = () => {
       });
 
     fetchWithTimeout("/api/showcase-items")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setShowcaseItems(data);
-        } else {
-          throw new Error("Invalid showcase data");
         }
       })
       .catch((err) => {
@@ -232,7 +229,10 @@ const LandingPage = () => {
       });
 
     fetchWithTimeout("/api/notices")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setNotices(data.filter((n: any) => n.is_active !== 0));
@@ -241,7 +241,10 @@ const LandingPage = () => {
       .catch(err => console.error("Failed to load notices:", err));
 
     fetchWithTimeout("/api/routines")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setRoutines(data);
@@ -249,28 +252,6 @@ const LandingPage = () => {
       })
       .catch(err => console.error("Failed to load routines:", err));
   }, []);
-
-  if (!settings) {
-    const cachedSettings = localStorage.getItem("siteSettings");
-    let cachedLogo = "https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png";
-    if (cachedSettings) {
-      try {
-        const parsed = JSON.parse(cachedSettings);
-        if (parsed.logo_url) cachedLogo = parsed.logo_url;
-      } catch(e) {}
-    }
-
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-24 w-24 border-t-4 border-b-4 border-emerald-600"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <img src={cachedLogo} className="w-12 h-12 object-contain" alt="Loading..." />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="relative bg-white font-sans selection:bg-emerald-200 selection:text-emerald-900">
@@ -1181,7 +1162,15 @@ const LandingPage = () => {
                   <Phone className="w-5 h-5 text-emerald-600 group-hover:scale-110 transition-transform" />
                   <span className="font-medium text-slate-700">{settings.contact_phone}</span>
                 </a>
-                <a href={`https://wa.me/${settings.whatsapp_number?.replace(/[^0-9]/g, '').startsWith('0') ? '88' + settings.whatsapp_number?.replace(/[^0-9]/g, '') : settings.whatsapp_number?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl hover:bg-emerald-50 transition-colors group">
+                <a 
+                  href={(() => {
+                    const clean = String(settings?.whatsapp_number || '').replace(/[^0-9]/g, '');
+                    return clean ? `https://wa.me/${clean.startsWith('0') ? '88' + clean : clean}` : '#';
+                  })()} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-emerald-50 transition-colors group"
+                >
                   <MessageSquare className="w-5 h-5 text-emerald-600 group-hover:scale-110 transition-transform" />
                   <span className="font-medium text-slate-700">হোয়াটসঅ্যাপ</span>
                 </a>

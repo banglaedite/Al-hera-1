@@ -28,6 +28,9 @@ import LandingPage from "./components/LandingPage";
 import FloatingContact from "./components/FloatingContact";
 import { NoticeBoard } from "./components/NoticeBoard";
 import { ToastProvider } from "./components/ToastContext";
+import { RFIDTerminal } from "./components/RFIDTerminal";
+import { SecretLogoTrigger } from "./components/SecretLogoTrigger";
+import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { cn } from "./lib/utils";
 
 import { useToast } from "./components/ToastContext";
@@ -114,6 +117,7 @@ const Navbar = ({ settings }: { settings: any }) => {
 
   const navItems = [
     { name: "হোম", path: "/dashboard", icon: Home },
+    { name: "কার্ড পাঞ্চ", path: "/rfid-terminal", icon: CreditCard },
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
     { name: "রেজাল্ট", path: "/parent?tab=results", icon: BookOpen },
     { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
@@ -124,20 +128,7 @@ const Navbar = ({ settings }: { settings: any }) => {
     <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <div className="flex items-center gap-3">
-            {settings?.logo_url ? (
-               <div className="p-1.5 rounded-xl shadow-lg bg-white border border-slate-100 flex items-center justify-center">
-                 <img src={settings.logo_url} alt="Logo" className="w-8 h-8 object-contain" />
-               </div>
-            ) : (
-               <div className="bg-emerald-900 p-2 rounded-xl shadow-lg shadow-emerald-900/20">
-                 <GraduationCap className="w-6 h-6 text-white" />
-               </div>
-            )}
-            <span className="text-2xl font-black tracking-tight font-display text-emerald-900 drop-shadow-sm bg-clip-text text-transparent bg-gradient-to-r from-emerald-900 to-emerald-600">
-              {settings?.title || "মাদরাসা"}
-            </span>
-          </div>
+          <SecretLogoTrigger logoUrl={settings?.logo_url} title={settings?.title} />
           
           <div className="hidden md:block">
             <div className="flex items-center space-x-2">
@@ -261,7 +252,29 @@ const GlobalPopup = () => {
               </button>
             )}
 
-            {settings.popup_image && (
+            {(settings.popup_video_url || settings.popup_video) ? (
+              <div className="relative overflow-hidden aspect-video bg-slate-950">
+                {(settings.popup_video_url || settings.popup_video).includes("youtube.com") || (settings.popup_video_url || settings.popup_video).includes("youtu.be") ? (
+                  <iframe
+                    src={(settings.popup_video_url || settings.popup_video)
+                      .replace("watch?v=", "embed/")
+                      .replace("youtu.be/", "youtube.com/embed/")}
+                    title="Announcement Video"
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    src={settings.popup_video_url || settings.popup_video}
+                    controls
+                    autoPlay
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </div>
+            ) : settings.popup_image ? (
               <div className="relative group overflow-hidden h-48 sm:h-64">
                 <img 
                   src={settings.popup_image} 
@@ -276,7 +289,7 @@ const GlobalPopup = () => {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
 
             <div className="p-8 text-center">
               {settings.popup_title && (
@@ -314,6 +327,24 @@ const GlobalPopup = () => {
   );
 };
 
+const RFIDTerminalWrapper = () => {
+  const { addToast } = useToast();
+  const [settings, setSettings] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d && setSettings(d))
+      .catch((e) => console.error(e));
+  }, []);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <RFIDTerminal settings={settings} addToast={addToast} />
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <Router>
@@ -325,6 +356,7 @@ export default function App() {
             <main>
               <Routes>
                 <Route path="/" element={<LandingPage />} />
+                <Route path="/rfid-terminal" element={<RFIDTerminalWrapper />} />
                 <Route path="/admission" element={<div className="max-w-7xl mx-auto px-4 py-12"><AdmissionForm /></div>} />
                 <Route path="/students" element={<div className="max-w-7xl mx-auto px-4 py-12"><StudentSearch /></div>} />
                 <Route path="/fees" element={<div className="max-w-7xl mx-auto px-4 py-12"><FeeManagement /></div>} />
@@ -336,6 +368,7 @@ export default function App() {
             </main>
             
             <FloatingContact />
+            <PWAInstallPrompt />
           </div>
         </SiteSettingsProvider>
       </ToastProvider>

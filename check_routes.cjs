@@ -1,35 +1,34 @@
 const fs = require('fs');
-const content = fs.readFileSync('server.ts', 'utf8');
-const lines = content.split('\n');
+const path = require('path');
 
-let inRoute = false;
-let routeLine = 0;
-let hasTry = false;
-let braceCount = 0;
-
-for (let i = 0; i < lines.length; i++) {
-  const line = lines[i];
-  
-  if (!inRoute && line.match(/app\.(get|post|put|delete)\(.*async/)) {
-    inRoute = true;
-    routeLine = i + 1;
-    hasTry = false;
-    braceCount = 0;
-  }
-  
-  if (inRoute) {
-    if (line.includes('{')) braceCount += (line.match(/\{/g) || []).length;
-    if (line.includes('}')) braceCount -= (line.match(/\}/g) || []).length;
-    
-    if (line.includes('try {') || line.includes('try{') || line.includes('try  {')) {
-      hasTry = true;
+function walk(dir) {
+  let results = [];
+  const list = fs.readdirSync(dir);
+  list.forEach(file => {
+    const full = path.join(dir, file);
+    const stat = fs.statSync(full);
+    if (stat && stat.isDirectory()) {
+      results = results.concat(walk(full));
+    } else if (file.endsWith('.tsx') || file.endsWith('.ts')) {
+      results.push(full);
     }
-    
-    if (braceCount === 0 && i >= routeLine) {
-      if (!hasTry) {
-        console.log(`Missing try-catch at line ${routeLine}: ${lines[routeLine-1].trim()}`);
-      }
-      inRoute = false;
-    }
-  }
+  });
+  return results;
 }
+
+const files = walk('src');
+const fetchRegex = /fetch\(\s*([`'"][^`'"]+[`'"])/g;
+const matches = [];
+
+files.forEach(f => {
+  const content = fs.readFileSync(f, 'utf8');
+  let m;
+  while ((m = fetchRegex.exec(content)) !== null) {
+    matches.push({ file: f, url: m[1] });
+  }
+});
+
+console.log(`Found ${matches.length} fetch calls in src/`);
+const apiCalls = matches.filter(m => m.url.includes('/api/'));
+console.log(`API calls: ${apiCalls.length}`);
+apiCalls.forEach(a => console.log(`${a.file} -> ${a.url}`));

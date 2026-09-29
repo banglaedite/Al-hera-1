@@ -30,10 +30,16 @@ import {
   Coffee,
   Utensils,
   Award,
-  Hash
+  Hash,
+  PhoneOff,
+  PhoneCall,
+  X
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useToast } from "./ToastContext";
+import { SimulatedIncomingCall } from "./SimulatedIncomingCall";
+import { GuardianBannerSlider } from "./GuardianBannerSlider";
+import { GuardianAppInstallPopup } from "./GuardianAppInstallPopup";
 
 export default function ParentPortal() {
   const { addToast } = useToast();
@@ -48,6 +54,105 @@ export default function ParentPortal() {
   const [notices, setNotices] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [hifzSettings, setHifzSettings] = useState<any>(null);
+
+  // Simulated Voice Incoming Call State
+  const [showIncomingCall, setShowIncomingCall] = useState(false);
+  const [activeCallData, setActiveCallData] = useState<any>(null);
+  const [missedCallNotice, setMissedCallNotice] = useState<string | null>(null);
+
+  // Real-time In-App Voice Call Listener (Admin Panel -> Guardian App)
+  useEffect(() => {
+    if (!student?.id) return;
+
+    // Request notification permission if not yet decided
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      try {
+        Notification.requestPermission();
+      } catch (e) {}
+    }
+
+    const checkActiveCalls = async () => {
+      try {
+        const res = await fetch(`/api/parent/active-call/${student.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.active && data.call) {
+            setActiveCallData(data.call);
+            setShowIncomingCall(true);
+
+            // Trigger system push notification with vibration
+            if ('Notification' in window && Notification.permission === 'granted') {
+              try {
+                const notif = new Notification(`📞 ${data.call.caller || "মাদরাসা অফিস"} থেকে ভয়েস কল আসছে...`, {
+                  body: `${student.name}-এর জরুরি কল। রিসিভ করতে স্পর্শ করুন।`,
+                  icon: settings?.logo_url || '/favicon.ico',
+                  tag: `call-${data.call.id}`,
+                  requireInteraction: true
+                });
+                notif.onclick = () => {
+                  window.focus();
+                  notif.close();
+                };
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {
+        // quiet catch
+      }
+    };
+
+    checkActiveCalls();
+    const interval = setInterval(checkActiveCalls, 3500);
+    return () => clearInterval(interval);
+  }, [student?.id, settings?.logo_url]);
+
+  // Real-time Punch Instant Notification Listener
+  const [livePunchNotice, setLivePunchNotice] = useState<any>(null);
+
+  useEffect(() => {
+    if (!student?.id) return;
+
+    let lastCheckedPunchId = sessionStorage.getItem(`last_notified_punch_${student.id}`) || "";
+
+    const checkLatestPunch = async () => {
+      try {
+        const res = await fetch(`/api/parent/latest-punch/${student.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.punch && data.punch.id !== lastCheckedPunchId) {
+            const punchTime = new Date(data.punch.timestamp || Date.now()).getTime();
+            const now = Date.now();
+            if (now - punchTime < 180000 || !lastCheckedPunchId) {
+              lastCheckedPunchId = data.punch.id;
+              sessionStorage.setItem(`last_notified_punch_${student.id}`, data.punch.id);
+              setLivePunchNotice(data.punch);
+
+              if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                  const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
+                  const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
+                  const notif = new Notification(title, {
+                    body,
+                    icon: settings?.logo_url || '/favicon.ico',
+                    tag: `punch-${data.punch.id}`
+                  });
+                  notif.onclick = () => {
+                    window.focus();
+                    notif.close();
+                  };
+                } catch (e) {}
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkLatestPunch();
+    const punchInterval = setInterval(checkLatestPunch, 4000);
+    return () => clearInterval(punchInterval);
+  }, [student?.id, settings?.logo_url]);
   const [hifzStartDate, setHifzStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
   const [hifzEndDate, setHifzEndDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [error, setError] = useState("");
@@ -262,18 +367,12 @@ export default function ParentPortal() {
 
   useEffect(() => {
     fetch("/api/site-settings")
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(setSettings)
+      .then(res => res.ok ? res.json() : null)
+      .then(d => d && setSettings(d))
       .catch(err => console.error("Failed to load settings:", err));
     fetch("/api/admin/settings/hifz")
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(setHifzSettings)
+      .then(res => res.ok ? res.json() : null)
+      .then(d => d && setHifzSettings(d))
       .catch(err => console.error("Failed to load hifz settings:", err));
     
     // Auto login if identifier exists in localStorage
@@ -300,7 +399,7 @@ export default function ParentPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invoice_id: invoiceId })
       })
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : { success: false })
       .then(data => {
         if (data.success) {
           setPaymentMessage(data.message);
@@ -644,6 +743,20 @@ export default function ParentPortal() {
 
         const hifzSettingsData = hifzSettingsRes.ok ? await hifzSettingsRes.json().catch(() => ({})) : {};
         setHifzSettings(hifzSettingsData);
+
+        // Check for Automated Incoming Call for Absent Student
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        const todayAtt = Array.isArray(profileData.attendance) ? profileData.attendance.find((a: any) => a.date === todayStr) : null;
+        const isAbsentToday = !todayAtt || todayAtt.status === 'absent' || (!todayAtt.check_in && todayAtt.status !== 'present');
+
+        const callHandledKey = `voice_call_handled_${data.id}_${todayStr}`;
+        const alreadyHandledToday = sessionStorage.getItem(callHandledKey) || localStorage.getItem(callHandledKey);
+
+        if (settingsData?.voice_call_enabled && isAbsentToday && !alreadyHandledToday) {
+          setTimeout(() => {
+            setShowIncomingCall(true);
+          }, 1500);
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -652,6 +765,39 @@ export default function ParentPortal() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCallDecline = async (isTimeout: boolean) => {
+    setShowIncomingCall(false);
+    if (activeCallData?.id) {
+      fetch("/api/parent/call/response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ call_id: activeCallData.id, status: isTimeout ? "missed" : "declined" })
+      }).catch(() => {});
+    }
+    if (!student) return;
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    sessionStorage.setItem(`voice_call_handled_${student.id}_${todayStr}`, 'true');
+    const noticeMsg = activeCallData?.message || settings?.voice_call_missed_notice_text || 
+      `জরুরী অনুপস্থিতি নোটিশ: আপনার সন্তান ${student.name} আজ মাদরাসায় অনুপস্থিত রয়েছে। জরুরি তথ্যের জন্য যোগাযোগ করুন।`;
+    setMissedCallNotice(noticeMsg);
+    setActiveCallData(null);
+    addToast(isTimeout ? "কল টাইমআউট হয়েছে" : "কল কেটে দেওয়া হয়েছে", "info");
+  };
+
+  const handleCallAccept = async () => {
+    if (activeCallData?.id) {
+      fetch("/api/parent/call/response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ call_id: activeCallData.id, status: "accepted" })
+      }).catch(() => {});
+    }
+    if (!student) return;
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    sessionStorage.setItem(`voice_call_handled_${student.id}_${todayStr}`, 'true');
+    addToast("কল সংযুক্ত হয়েছে", "success");
   };
 
   const fetchFullProfile = async (sId: string) => {
@@ -799,23 +945,116 @@ export default function ParentPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="min-h-screen bg-slate-50 font-sans relative">
+      {/* Simulated Voice Call Overlay */}
+      <AnimatePresence>
+        {showIncomingCall && (
+          <SimulatedIncomingCall
+            student={student}
+            settings={{
+              ...settings,
+              voice_call_message_text: activeCallData?.message || settings?.voice_call_message_text,
+              voice_call_audio_url: activeCallData?.audio_url || settings?.voice_call_audio_url,
+              title: activeCallData?.caller || settings?.title || "আল-হেরা মাদরাসা"
+            }}
+            onAccept={handleCallAccept}
+            onDecline={handleCallDecline}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
-          <div>
-            <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">প্যারেন্ট পোর্টাল</h1>
-            <p className="text-slate-500 font-medium">আপনার সন্তানের সব আপডেট এখানে দেখুন</p>
-          </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-6 py-3 bg-white text-rose-600 rounded-2xl font-bold hover:bg-rose-50 transition-all shadow-sm border border-rose-100 self-start"
-          >
-            <LogOut className="w-4 h-4" /> লগ আউট
-          </button>
+        {/* Missed Call Notice Banner */}
+        <AnimatePresence>
+          {missedCallNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="p-6 bg-rose-50 border-2 border-rose-200 rounded-3xl mb-8 flex items-start gap-4 shadow-md relative"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                <PhoneOff className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 bg-rose-200 text-rose-800 rounded-full text-[10px] font-black uppercase">
+                    মিসড কল অ্যালার্ট
+                  </span>
+                  <span className="text-xs font-bold text-rose-500">আজকের অনুপস্থিতি নোটিফিকেশন</span>
+                </div>
+                <h4 className="font-black text-rose-900 text-base">জরুরী অনুপস্থিতি সতর্কতা বার্তা</h4>
+                <p className="text-sm font-bold text-rose-700 leading-relaxed">{missedCallNotice}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMissedCallNotice(null)}
+                className="p-2 text-rose-400 hover:text-rose-700 rounded-xl hover:bg-rose-100 transition-colors"
+                title="বন্ধ করুন"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* App Install Bottom Popup */}
+        <GuardianAppInstallPopup />
+
+        {/* Live Punch Instant Notification Banner */}
+        <AnimatePresence>
+          {livePunchNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="p-6 bg-emerald-50 border-2 border-emerald-300 rounded-3xl mb-6 flex items-center gap-4 shadow-xl relative overflow-hidden"
+            >
+              <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-emerald-500/10 rounded-full blur-xl pointer-events-none"></div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                <CheckCircle2 className="w-6 h-6 animate-bounce" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 bg-emerald-200 text-emerald-900 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    {livePunchNotice.action === 'check_in' ? '🟢 সফল প্রবেশ আপডেট' : '🟠 সফল প্রস্থান আপডেট'}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-emerald-600">{livePunchNotice.time}</span>
+                </div>
+                <h4 className="font-black text-emerald-950 text-base">
+                  {student.name} আজ মাদরাসায় {livePunchNotice.action === 'check_in' ? 'প্রবেশ করেছে (Check-In)' : 'প্রস্থান করেছে (Check-Out)'}
+                </h4>
+                <p className="text-xs font-bold text-emerald-800">
+                  কার্ড পাঞ্চ করার সাথে সাথে তাৎক্ষণিক আপডেট সম্পন্ন হয়েছে।
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLivePunchNotice(null)}
+                className="p-2 text-emerald-600 hover:text-emerald-900 rounded-xl hover:bg-emerald-100 transition-colors"
+                title="বন্ধ করুন"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Luminous Banner Slider (Today's Attendance, Notices, Fees) at Very Top */}
+        <div className="mb-4">
+          <GuardianBannerSlider 
+            student={student}
+            attendance={attendance}
+            deviceHistory={deviceHistory}
+            notices={notices}
+            fees={fees}
+            settings={settings}
+            onOpenNotifications={() => setActiveTab("notices")}
+          />
         </div>
 
-        {/* Tabs */}
-        <div className="flex overflow-x-auto gap-3 mb-10 pb-2 scrollbar-hide">
+        {/* Medium-Sized Smooth Scrollable Navigation Bar */}
+        <div className="flex overflow-x-auto gap-2 mb-6 pb-2 scrollbar-thin select-none touch-pan-x">
           {student.isTeacher ? [
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "amal", label: "আমার আমল", icon: Heart },
@@ -823,20 +1062,18 @@ export default function ParentPortal() {
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
             { id: "payment-history", label: "বেতন হিস্টোরি", icon: CreditCard },
             { id: "notices", label: "নোটিশ", icon: Bell }
-          ].map((tab: any) => (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              key={tab.id}
+          ].map((tab: any, tIdx: number) => (
+            <button
+              key={`teacher-tab-${tab.id}-${tIdx}`}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "relative flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
+                "relative flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap border shrink-0",
                 activeTab === tab.id 
-                  ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
-                  : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
+                  ? "bg-emerald-900 text-white shadow-md shadow-emerald-900/20 border-emerald-900" 
+                  : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"
               )}
             >
-              <tab.icon className="w-5 h-5" />
+              <tab.icon className="w-4 h-4" />
               {tab.label}
               {tab.id === "notices" && notices.some(n => {
                 const noticeDate = new Date(n.created_at);
@@ -844,9 +1081,9 @@ export default function ParentPortal() {
                 yesterday.setDate(yesterday.getDate() - 1);
                 return noticeDate >= yesterday;
               }) && (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
               )}
-            </motion.button>
+            </button>
           )) : [
             { id: "overview", label: "একনজরে", icon: LayoutDashboard },
             { id: "attendance", label: "হাজিরা", icon: CheckCircle2 },
@@ -858,20 +1095,18 @@ export default function ParentPortal() {
             { id: "payment", label: "পেমেন্ট", icon: CreditCard },
             { id: "payment-history", label: "পেমেন্ট হিস্টোরি", icon: History },
             student.is_hifz ? { id: "hifz", label: "হিফজ ট্র্যাকিং", icon: GraduationCap } : null
-          ].filter(Boolean).map((tab: any) => (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              key={tab.id}
+          ].filter(Boolean).map((tab: any, tIdx: number) => (
+            <button
+              key={`student-tab-${tab.id}-${tIdx}`}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "relative flex items-center gap-3 px-8 py-4 rounded-3xl font-black transition-all whitespace-nowrap border",
+                "relative flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap border shrink-0",
                 activeTab === tab.id 
-                  ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20 border-emerald-900" 
-                  : "bg-white text-slate-500 hover:bg-slate-50 border-slate-200"
+                  ? "bg-emerald-900 text-white shadow-md shadow-emerald-900/20 border-emerald-900" 
+                  : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"
               )}
             >
-              <tab.icon className="w-5 h-5" />
+              <tab.icon className="w-4 h-4" />
               {tab.label}
               {tab.id === "notices" && notices.some(n => {
                 const noticeDate = new Date(n.created_at);
@@ -879,27 +1114,26 @@ export default function ParentPortal() {
                 yesterday.setDate(yesterday.getDate() - 1);
                 return noticeDate >= yesterday;
               }) && (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-rose-500 shadow-sm border-2 border-white z-10 animate-pulse"></span>
               )}
-            </motion.button>
+            </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Profile Card (Left) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Profile Card (Left) - Medium Sized */}
             <div className="lg:col-span-1">
               <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className={cn(
-                  "bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 sticky top-24",
-                  activeTab !== 'overview' && "hidden lg:block opacity-60 hover:opacity-100 transition-all"
+                  "bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-slate-100 sticky top-20",
+                  activeTab !== 'overview' && "hidden lg:block opacity-75 hover:opacity-100 transition-all"
                 )}
               >
                 <div className="flex flex-col items-center text-center">
-                  <div className="relative group">
-                    <div className="absolute inset-0 bg-emerald-500 rounded-[2.5rem] rotate-6 scale-105 opacity-20 group-hover:rotate-12 transition-transform"></div>
-                    <div className="w-40 h-40 rounded-[2.5rem] overflow-hidden shadow-2xl bg-slate-100 mb-8 border-4 border-white relative z-10 transition-transform group-hover:scale-105">
+                  <div className="relative group mb-4">
+                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-md bg-slate-100 border-2 border-emerald-500/20 relative z-10 transition-transform group-hover:scale-105">
                       <img 
                         src={student.photo_url || `https://picsum.photos/seed/${student.id}/200`} 
                         alt={student.name} 
@@ -908,38 +1142,38 @@ export default function ParentPortal() {
                       />
                     </div>
                   </div>
-                  <h3 className="text-3xl font-black text-slate-900 mb-2">{student.name}</h3>
-                  <div className="flex flex-wrap justify-center gap-2 mb-8">
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-1.5">{student.name}</h3>
+                  <div className="flex flex-wrap justify-center gap-1.5 mb-5">
                     {student.isTeacher ? (
-                      <span className="text-emerald-700 font-black text-sm bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-100">
+                      <span className="text-emerald-700 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
                         {student.qualification || "শিক্ষক"}
                       </span>
                     ) : (
                       <>
-                        <span className="text-emerald-700 font-black text-sm bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-100">
+                        <span className="text-emerald-700 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
                           {student.class} শ্রেণী
                         </span>
-                        <span className="text-blue-700 font-black text-sm bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100">
+                        <span className="text-blue-700 font-bold text-xs bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
                           রোল: {toBn(student.roll)}
                         </span>
                       </>
                     )}
                   </div>
                   
-                  <div className="w-full space-y-4 pt-8 border-t border-slate-100 text-left">
+                  <div className="w-full space-y-2.5 pt-4 border-t border-slate-100 text-left text-xs sm:text-sm">
                     <div className="flex justify-between items-center group">
-                      <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">{student.isTeacher ? "শিক্ষক আইডি" : "স্টুডেন্ট আইডি"}</span>
-                      <span className="font-black text-slate-900 bg-slate-50 px-3 py-1 rounded-lg group-hover:bg-slate-100 transition-colors">{student.id}</span>
+                      <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{student.isTeacher ? "শিক্ষক আইডি" : "স্টুডেন্ট আইডি"}</span>
+                      <span className="font-bold text-slate-900 bg-slate-50 px-2.5 py-1 rounded-lg group-hover:bg-slate-100 transition-colors">{student.id}</span>
                     </div>
                     {student.student_code && (
                       <div className="flex justify-between items-center group">
-                        <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">ইউনিক কোড</span>
-                        <span className="font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg group-hover:bg-emerald-100 transition-colors">{student.student_code}</span>
+                        <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">ইউনিক কোড</span>
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg group-hover:bg-emerald-100 transition-colors">{student.student_code}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center group">
-                      <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">মোবাইল</span>
-                      <span className="font-black text-rose-600 bg-rose-50 px-3 py-1 rounded-lg group-hover:bg-rose-100 transition-colors">{toBn(student.phone)}</span>
+                      <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">মোবাইল</span>
+                      <span className="font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg group-hover:bg-rose-100 transition-colors">{toBn(student.phone)}</span>
                     </div>
                   </div>
                 </div>
@@ -947,25 +1181,26 @@ export default function ParentPortal() {
             </div>
 
           {/* Main Content Area (Right) */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6">
             <AnimatePresence mode="wait">
               {activeTab === "overview" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+
                     {amalRankings.length > 0 && userAmalStats && (
-                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-[2.5rem] p-8 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-lg shadow-orange-500/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-                        <div className="relative z-10 flex items-center gap-6">
-                          <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center border-4 border-white/30 backdrop-blur-sm">
-                            <Trophy className="w-10 h-10 text-white" />
+                        <div className="relative z-10 flex items-center gap-4">
+                          <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center border-2 border-white/30 backdrop-blur-sm">
+                            <Trophy className="w-7 h-7 text-white" />
                           </div>
                           <div>
-                            <h3 className="text-2xl font-black mb-1">মাসিক লিডারবোর্ড</h3>
-                            <p className="text-amber-100 font-medium">আপনার বর্তমান অবস্থান: <span className="font-black text-white text-xl">#{userAmalStats.rank}</span></p>
+                            <h3 className="text-lg sm:text-xl font-black mb-0.5">মাসিক লিডারবোর্ড</h3>
+                            <p className="text-amber-100 font-medium text-xs sm:text-sm">আপনার বর্তমান অবস্থান: <span className="font-black text-white text-base">#{userAmalStats.rank}</span></p>
                           </div>
                         </div>
-                        <div className="relative z-10 bg-white/20 px-8 py-4 rounded-3xl backdrop-blur-sm border border-white/30 text-center min-w-[150px]">
-                          <div className="text-sm text-amber-100 font-bold uppercase tracking-wider mb-1">মোট পয়েন্ট</div>
-                          <div className="text-4xl font-black">{toBn(userAmalStats.completed || userAmalStats.score)}</div>
+                        <div className="relative z-10 bg-white/20 px-6 py-3 rounded-2xl backdrop-blur-sm border border-white/30 text-center min-w-[130px]">
+                          <div className="text-xs text-amber-100 font-bold uppercase tracking-wider mb-0.5">মোট পয়েন্ট</div>
+                          <div className="text-2xl sm:text-3xl font-black">{toBn(userAmalStats.completed || userAmalStats.score)}</div>
                         </div>
                       </div>
                     )}
@@ -987,9 +1222,9 @@ export default function ParentPortal() {
 
 
                   {/* Personal Info Section */}
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                      <User className="w-5 h-5 text-emerald-600" /> ব্যক্তিগত তথ্য
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <User className="w-4 h-4 text-emerald-600" /> ব্যক্তিগত তথ্য
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div className="space-y-1">
@@ -1027,9 +1262,9 @@ export default function ParentPortal() {
                     </div>
                   </div>
 
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                      <Bell className="w-5 h-5 text-emerald-600" /> সাম্প্রতিক আপডেট
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-emerald-600" /> সাম্প্রতিক আপডেট
                     </h3>
                     <div className="space-y-4">
                       {results.length > 0 ? (
@@ -1052,10 +1287,10 @@ export default function ParentPortal() {
               )}
 
                {activeTab === "attendance" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                     <div>
-                      <h3 className="text-2xl font-bold text-slate-900">হাজিরা রিপোর্ট</h3>
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-900">হাজিরা রিপোর্ট</h3>
                       <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl mt-4">
                         <button onClick={() => setAttendanceViewMode('today')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'today' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>আজ</button>
                         <button onClick={() => setAttendanceViewMode('week')} className={cn("px-4 py-2 rounded-xl text-xs font-black transition-all", attendanceViewMode === 'week' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>৭ দিন</button>
@@ -1102,12 +1337,12 @@ export default function ParentPortal() {
                         for(let d = maxDay; d >= 1; d--) daysToShow.push(d);
                       }
 
-                      const daysJSX = daysToShow.map(d => {
+                      const daysJSX = daysToShow.map((d, dIdx) => {
                         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                         const record = attendance.find(a => a.date === dateStr);
                         
                         return (
-                          <div key={d} className={cn(
+                          <div key={`cal-day-${d}-${dateStr}-${dIdx}`} className={cn(
                             "p-4 rounded-2xl border flex flex-col items-center justify-center transition-all",
                             record?.status === 'present' 
                               ? "bg-emerald-50 border-emerald-100 text-emerald-700" 
@@ -1170,10 +1405,10 @@ export default function ParentPortal() {
               )}
 
               {activeTab === "device-history" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                     <div>
-                      <h3 className="text-2xl font-bold text-slate-900">স্মার্ট হাজিরা লগ</h3>
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-900">স্মার্ট হাজিরা লগ</h3>
                       <div className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-[10px] font-bold inline-block mt-1">
                         ডিভাইস এন্ট্রি (প্রবেশ ও প্রস্থান)
                       </div>
@@ -1240,10 +1475,10 @@ export default function ParentPortal() {
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-6"
                 >
-                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                       <div>
-                        <h3 className="text-2xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
+                        <h3 className="text-lg sm:text-xl font-black text-slate-900 mb-1">দৈনিক আমল</h3>
                         <p className="text-slate-500 font-bold">আপনার আমলগুলো প্রতিদিন রেকর্ড করুন</p>
                       </div>
                       <input 
@@ -1422,10 +1657,10 @@ export default function ParentPortal() {
 
               {activeTab === "student-amal" && student.isTeacher && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                       <div>
-                        <h3 className="text-2xl font-black text-slate-900 mb-1">ছাত্রদের আমল</h3>
+                        <h3 className="text-lg sm:text-xl font-black text-slate-900 mb-1">ছাত্রদের আমল</h3>
                         <p className="text-slate-500 font-bold">ছাত্রদের আমলগুলো দেখুন ও টিক দিন</p>
                       </div>
                       <div className="flex gap-4">
@@ -1532,9 +1767,9 @@ export default function ParentPortal() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <div className="mb-8">
-                <h3 className="text-2xl font-black text-slate-900 mb-1">সিলেবাস ও রুটিন</h3>
+            <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm">
+              <div className="mb-6">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 mb-1">সিলেবাস ও রুটিন</h3>
                 <p className="text-slate-500 font-bold">আপনার প্রয়োজনীয় সব রুটিন ও সিলেবাস এখানে পাবেন</p>
               </div>
 
@@ -1572,14 +1807,14 @@ export default function ParentPortal() {
 
 
               {activeTab === "results" && (
-                <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
-                  <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100 relative overflow-hidden">
+                <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500 opacity-[0.03] rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
                     
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 relative z-10">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 relative z-10">
                       <div>
-                        <h3 className="text-3xl font-black text-slate-900 mb-2">পরীক্ষার ফলাফল</h3>
-                        <p className="text-slate-500 font-bold">সকল পরীক্ষার বিস্তারিত ফলাফল ও মার্কশিট</p>
+                        <h3 className="text-lg sm:text-xl font-black text-slate-900 mb-1">পরীক্ষার ফলাফল</h3>
+                        <p className="text-slate-500 font-bold text-xs sm:text-sm">সকল পরীক্ষার বিস্তারিত ফলাফল ও মার্কশিট</p>
                       </div>
                       <div className="flex flex-wrap gap-4">
                         {fullProfile && selectedResultExam && getPublishedExamKeys().includes(selectedResultExam) && (
@@ -1588,12 +1823,12 @@ export default function ParentPortal() {
                             whileTap={{ scale: 0.95 }}
                             onClick={() => downloadPDF('student-marksheet-template', `Marksheet_${student.name}.pdf`)}
                             disabled={downloading}
-                            className="flex items-center gap-3 px-8 py-4 bg-emerald-900 text-white rounded-2xl font-black text-sm hover:bg-emerald-950 transition-all shadow-xl shadow-emerald-900/20 disabled:opacity-50"
+                            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-900 text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-emerald-950 transition-all shadow-md shadow-emerald-900/20 disabled:opacity-50"
                           >
                             {downloading ? (
-                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
-                              <Download className="w-5 h-5" />
+                              <Download className="w-4 h-4" />
                             )}
                             মার্কশিট ডাউনলোড
                           </motion.button>
@@ -1606,7 +1841,7 @@ export default function ParentPortal() {
 
                       if (publishedExamKeys.length === 0) {
                         return (
-                          <div className="text-center py-16 bg-slate-50/50 rounded-[2.5rem] border border-dashed border-slate-200 p-8 my-6">
+                          <div className="text-center py-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 p-6 my-4">
                             <div className="w-16 h-16 bg-slate-100 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
                               <BookOpen className="w-8 h-8" />
                             </div>
@@ -1896,9 +2131,9 @@ export default function ParentPortal() {
               )}
 
               {activeTab === "payment" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-2xl font-bold text-slate-900">বাকি মাসের পেমেন্ট</h3>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900">বাকি মাসের পেমেন্ট</h3>
                     <select 
                       value={selectedYear} 
                       onChange={(e) => { setSelectedYear(e.target.value); setSelectedPayMonths([]); }}
@@ -1906,7 +2141,7 @@ export default function ParentPortal() {
                     >
                       {[...Array(5)].map((_, i) => {
                         const y = new Date().getFullYear() - 2 + i;
-                        return <option key={y} value={y}>{y}</option>;
+                        return <option key={`pay-year-opt-${y}-${i}`} value={y}>{y}</option>;
                       })}
                     </select>
                   </div>
@@ -2040,9 +2275,9 @@ export default function ParentPortal() {
               )}
 
               {activeTab === "payment-history" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <h3 className="text-2xl font-bold text-slate-900">{student.isTeacher ? "বেতন হিস্টোরি" : "পেমেন্ট হিস্টোরি"}</h3>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900">{student.isTeacher ? "বেতন হিস্টোরি" : "পেমেন্ট হিস্টোরি"}</h3>
                     <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
                        <label className="text-xs font-black text-slate-500">তারিখ:</label>
                        <input 
@@ -2157,9 +2392,9 @@ export default function ParentPortal() {
               )}
 
               {activeTab === "hifz" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <h3 className="text-2xl font-bold text-slate-900">হিফজ ট্র্যাকিং</h3>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900">হিফজ ট্র্যাকিং</h3>
                     {hifzSettings?.guardian_view_enabled && (
                       <div className="flex gap-2">
                         <input type="date" value={hifzStartDate} onChange={e => setHifzStartDate(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
@@ -2205,7 +2440,7 @@ export default function ParentPortal() {
 
                   <div className="space-y-6">
                     {hifzRecords.filter(r => !hifzSettings?.guardian_view_enabled || (r.date >= hifzStartDate && r.date <= hifzEndDate)).length > 0 ? hifzRecords.filter(r => !hifzSettings?.guardian_view_enabled || (r.date >= hifzStartDate && r.date <= hifzEndDate)).map((rec, i) => (
-                      <div key={i} className="p-6 border border-slate-100 rounded-3xl space-y-4">
+                      <div key={`hifz-parent-rec-${rec.id || rec.date || i}-${i}`} className="p-6 border border-slate-100 rounded-3xl space-y-4">
                         <div className="flex justify-between items-center border-b border-slate-50 pb-4">
                           <span className="font-bold text-slate-900">{new Date(rec.date).toLocaleDateString('bn-BD')}</span>
                         </div>
@@ -2214,7 +2449,7 @@ export default function ParentPortal() {
                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">সবক</p>
                             <div className="text-sm font-bold text-emerald-700">
                               {rec.sabok?.map((s: any, idx: number) => (
-                                <div key={idx}>{s.reading} (পৃষ্ঠা {s.page})</div>
+                                <div key={`hifz-sabok-item-${idx}-${s.page}`}>{s.reading} (পৃষ্ঠা {s.page})</div>
                               ))}
                             </div>
                           </div>
@@ -2244,8 +2479,8 @@ export default function ParentPortal() {
               )}
 
               {activeTab === "notices" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-8">নোটিশ বোর্ড</h3>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-6">নোটিশ বোর্ড</h3>
                   <div className="space-y-6">
                     {voteMessage && (
                       <motion.div
@@ -2260,7 +2495,7 @@ export default function ParentPortal() {
                       </motion.div>
                     )}
                     {notices.length > 0 ? notices.map((notice, i) => (
-                      <div key={i} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                      <div key={`parent-notice-card-${notice.id || i}-${i}`} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                         <div className="flex justify-between items-start mb-4">
                           <h4 className="text-lg font-bold text-slate-900">{notice.title}</h4>
                           <span className="text-[10px] font-black text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-100">
@@ -2383,6 +2618,20 @@ export default function ParentPortal() {
               )}
             </AnimatePresence>
           </div>
+        </div>
+
+        {/* Bottom Logout Button */}
+        <div className="mt-10 pt-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 pb-8">
+          <div className="text-center sm:text-left">
+            <p className="font-bold text-slate-800 text-sm">{student.name} - {student.isTeacher ? "শিক্ষক পোর্টাল" : "প্যারেন্ট পোর্টাল"}</p>
+            <p className="text-xs text-slate-400">প্রয়োজনে মাদরাসা কর্তৃপক্ষের সাথে যোগাযোগ করুন</p>
+          </div>
+          <button 
+            onClick={handleLogout}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-white text-rose-600 rounded-2xl font-black text-sm hover:bg-rose-50 transition-all shadow-sm border border-rose-200 active:scale-95"
+          >
+            <LogOut className="w-4 h-4" /> লগ আউট করুন
+          </button>
         </div>
       </div>
 

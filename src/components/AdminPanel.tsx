@@ -37,6 +37,11 @@ import { AmalManager } from "./AmalManager";
 import { AllStudentsManager } from "./AllStudentsManager";
 import { DatabaseResetManager } from "./DatabaseResetManager";
 import { HifzManager } from "./HifzManager";
+import { SecretCallModal } from "./SecretCallModal";
+import { RFIDTerminal } from "./RFIDTerminal";
+import { AbsentAlertModal } from "./AbsentAlertModal";
+import { DefaultersAlertModal } from "./DefaultersAlertModal";
+import { getDhakaDateString, getDhakaTimeString } from "../utils/dhakaDate";
 import { 
   LayoutDashboard, 
   Users, 
@@ -95,7 +100,16 @@ import {
   LogOut,
   Globe,
   RefreshCw,
-  ArrowRightLeft
+  ArrowRightLeft,
+  PhoneCall,
+  Mic,
+  MicOff,
+  Play,
+  Square,
+  Upload,
+  Volume2,
+  Radio,
+  Sparkles
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import jsPDF from "jspdf";
@@ -708,8 +722,7 @@ export default function AdminPanel() {
     { id: "teachers", label: "শিক্ষক ও স্টাফ", icon: Users, permission: "teachers" },
     { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "all_teachers" },
     { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
-    { id: "device-attendance", label: "স্মার্ট ডিভাইস হাজিরা", icon: History, permission: "device_attendance" },
-    { id: "biometric", label: "বায়োমেট্রিক হাজিরা", icon: Fingerprint, permission: "biometric" },
+    { id: "rfid-terminal", label: "স্মার্ট কার্ড টার্মিনাল", icon: CreditCard, permission: "biometric" },
     { id: "accounting", label: "আয়-ব্যয়", icon: ArrowRightLeft, permission: "accounting" },
     { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fees" },
     { id: "history", label: "হিস্টোরি", icon: Clock, permission: "history" },
@@ -784,7 +797,7 @@ export default function AdminPanel() {
         <aside className="w-full md:w-64 space-y-2 print:hidden">
           <button
             onClick={() => {
-              if (window.clearAppCache) window.clearAppCache();
+              if (typeof (window as any).clearAppCache === 'function') (window as any).clearAppCache();
               window.location.reload();
             }}
             className="w-full flex items-center justify-between px-6 py-4 rounded-2xl font-bold transition-all bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 mb-6 shadow-sm group"
@@ -931,9 +944,9 @@ export default function AdminPanel() {
                 </motion.div>
               )}
 
-              {activeTab === "biometric" && (
-                <motion.div key="biometric" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <BiometricManager addToast={addToast} />
+              {(activeTab === "rfid-terminal" || activeTab === "biometric" || activeTab === "device-attendance") && (
+                <motion.div key="rfid-terminal" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <RFIDTerminal settings={settings} addToast={addToast} />
                 </motion.div>
               )}
 
@@ -1704,7 +1717,7 @@ function ClassManagerModal({ isOpen, onClose, classes, fetchClasses }: any) {
                   title="সিরিয়াল"
                 >
                   {Array.from({length: Math.max(classes.length + 5, 20)}).map((_, i) => (
-                    <option key={i} value={i}>{toBn(i)}</option>
+                    <option key={`class-order-opt-${c.id || index}-${i}`} value={i}>{toBn(i)}</option>
                   ))}
                 </select>
                 
@@ -2091,36 +2104,19 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
 
 function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasses }: any) {
   const { addToast } = useToast();
+  const [activeCategory, setActiveCategory] = useState<'identity' | 'voice_audio' | 'academic' | 'fees' | 'popups' | 'devices_app' | 'security'>('identity');
   const [saving, setSaving] = useState(false);
-  const [testingEmail, setTestingEmail] = useState(false);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTarget, setRecordingTarget] = useState<string>('card_punch');
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+  // Modals state
   const [showClassModal, setShowClassModal] = useState(false);
   const [showSubAdminModal, setShowSubAdminModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-
-  const handleAdvancedSettingsClick = () => {
-    setShowPasswordModal(true);
-  };
-
-  const handlePasswordSubmit = async () => {
-    try {
-      const res = await fetch("/api/admin/verify-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: passwordInput.trim() })
-      });
-      if (res.ok) {
-        setShowAdvancedSettings(true);
-        setShowPasswordModal(false);
-        setPasswordInput("");
-      } else {
-        addToast("ভুল পাসওয়ার্ড বা অনুমতি নেই", "error");
-      }
-    } catch (error) {
-      addToast("সমস্যা হয়েছে", "error");
-    }
-  };
+  const [showSecretCallModal, setShowSecretCallModal] = useState(false);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -2144,491 +2140,903 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
     }
   };
 
-  if (!settings) return <div className="flex justify-center py-12"><div className="relative flex items-center justify-center w-12 h-12">
-  <div className="absolute inset-0 rounded-full border-[3px] border-emerald-100"></div>
-  <div className="absolute inset-0 rounded-full border-t-[3px] border-t-emerald-500 border-b-[3px] border-b-rose-500 animate-spin"></div>
-  <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
-</div></div>;
+  // Natural Bengali Male Voice AI Test Function
+  const testNaturalMaleVoice = (sampleText: string) => {
+    if (!('speechSynthesis' in window)) {
+      addToast("আপনার ব্রাউজারে ভয়েস সিন্থেসিস সাপোর্ট করে না", "error");
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const textToSpeak = sampleText || "আসসালামু আলাইকুম। এটি আল-হেরা মাদরাসা ভয়েস সিস্টেমের পরীক্ষা। ধন্যবাদ।";
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = 'bn-BD';
+
+    const pitch = settings?.voice_pitch ? Number(settings.voice_pitch) : 0.85;
+    const rate = settings?.voice_rate ? Number(settings.voice_rate) : 0.88;
+
+    utterance.pitch = pitch;
+    utterance.rate = rate;
+
+    const voices = window.speechSynthesis.getVoices();
+    const bnVoice = voices.find(v => 
+      (v.lang.includes('bn') || v.lang.includes('BN') || v.name.toLowerCase().includes('bengali') || v.name.toLowerCase().includes('bangla')) &&
+      (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('google'))
+    ) || voices.find(v => v.lang.includes('bn') || v.lang.includes('BN'));
+
+    if (bnVoice) {
+      utterance.voice = bnVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+    addToast("পুরুষ কণ্ঠ AI ভয়েস প্লে হচ্ছে...", "info");
+  };
+
+  // Browser Microphone Voice Recorder
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      const chunks: BlobPart[] = [];
+
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          setRecordedAudioUrl(base64Audio);
+          addToast("ভয়েস সফলভাবে রেকর্ড হয়েছে! 'এই ভয়েস সেভ করুন' বাটনে ক্লিক করুন", "success");
+        };
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      addToast("মাইক্রোফোন পারমিশন পাওয়া যায়নি বা অডিও ডিভাইস যুক্ত নেই", "error");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const applyRecordedAudioToSetting = (fieldKey: string) => {
+    if (!recordedAudioUrl) return;
+    setSettings({ ...settings, [fieldKey]: recordedAudioUrl });
+    addToast("রেকর্ড করা ভয়েস সফলভাবে সেট করা হয়েছে", "success");
+    setRecordedAudioUrl(null);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, fieldKey: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      addToast("ফাইল সাইজ সর্বোচ্চ 5MB হতে পারবে", "error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setSettings({ ...settings, [fieldKey]: result });
+      addToast("অডিও ফাইল সফলভাবে যুক্ত করা হয়েছে", "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (!settings) return <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
+
+  const CATEGORIES = [
+    { id: 'identity', label: 'মাদ্রাসার পরিচিতি ও লোগো', desc: 'নাম, ঠিকানা, ফোন, লোগো ও নিয়ন থিম', icon: GraduationCap, color: 'bg-emerald-600 text-white' },
+    { id: 'voice_audio', label: 'ভয়েস কল ও এআই অডিও', desc: 'ধন্যবাদ বার্তা, তাগাদা কল ও AI পুরুষ কণ্ঠ', icon: PhoneCall, color: 'bg-rose-600 text-white' },
+    { id: 'academic', label: 'শ্রেণি, বিভাগ ও একাডেমিক', desc: 'শ্রেণির অর্ডার, মুহতামিম বাণী ও নিয়মাবলী', icon: BookOpen, color: 'bg-blue-600 text-white' },
+    { id: 'fees', label: 'অনলাইন ফি ও পেমেন্ট', desc: 'বিকাশ, নগদ, রকেট ও প্রারম্ভিক জের', icon: CreditCard, color: 'bg-amber-600 text-white' },
+    { id: 'popups', label: 'পপআপ ও স্লাইড বোর্ড', desc: 'স্লাইড বোর্ড ব্যানার, নোটিশ ও ভিডিও পপআপ', icon: Bell, color: 'bg-purple-600 text-white' },
+    { id: 'devices_app', label: 'ডিভাইস, নোটিফিকেশন ও সেবা', desc: 'WhatsApp, QR কোড ও হোমপেজ সেকশন', icon: Radio, color: 'bg-teal-600 text-white' },
+    { id: 'security', label: 'সিকিউরিটি ও সাব-এডমিন', desc: 'পাসওয়ার্ড, সাব-এডমিন ও ফায়ারবেস সিঙ্ক', icon: ShieldCheck, color: 'bg-slate-800 text-white' },
+  ];
 
   return (
-    <>
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 relative">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <h3 className="text-2xl font-bold text-slate-900">ওয়েবসাইট সেটিংস</h3>
-        <div className="flex gap-3">
-          <button type="button" onClick={() => setShowClassModal(true)} className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
-            <BookOpen className="w-5 h-5" /> ক্লাস ম্যানেজমেন্ট
-          </button>
-          <button type="button" onClick={() => setShowSubAdminModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all">
-            <Users className="w-5 h-5" /> সাব-এডমিন
-          </button>
-        </div>
-      </div>
-      
-      <div className="space-y-6">
-        <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl mb-4">
-          <h4 className="text-lg font-black text-emerald-900 mb-2 flex items-center gap-2">
-            <BookOpen className="w-5 h-5" /> ক্লাসের সিরিয়াল বা অর্ডার সেট করুন
-          </h4>
-          <p className="text-sm text-emerald-700 font-bold mb-4">
-            ওয়েবসাইটের সব জায়গায় (রেজাল্ট, বেতন ইত্যাদি) ক্লাসগুলো যে সিরিয়ালে দেখাবে তা এখান থেকে নিয়ন্ত্রণ করুন।
-            'ক্লাস ম্যানেজমেন্ট' বাটনে ক্লিক করে ওপর-নিচ অ্যারো কি দিয়ে সিরিয়াল ঠিক করুন।
-          </p>
-          <button type="button" onClick={() => setShowClassModal(true)} className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
-            <Settings2 className="w-5 h-5" /> ক্লাস সিরিয়াল সেট করুন
+    <div className="space-y-8">
+      {/* Category Tile Navigation Grid */}
+      <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-100 gap-4">
+          <div>
+            <h3 className="text-2xl font-black text-slate-900">সেটিংস ক্যাটাগরি প্যানেল</h3>
+            <p className="text-xs font-bold text-slate-400 mt-0.5">সহজে কাজ করার জন্য নিচের বাটনগুলোতে ক্লিক করে আলাদা সেটিংসে প্রবেশ করুন</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSubmit()}
+            disabled={saving}
+            className="px-6 py-3 bg-emerald-900 hover:bg-emerald-800 text-white font-black rounded-2xl text-xs transition-all shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? "সেভ হচ্ছে..." : "সকল সেটিংস সেভ করুন"}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">প্রতিষ্ঠানের নাম</label>
-            <input value={settings.title || ""} onChange={(e) => setSettings({...settings, title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">ঠিকানা</label>
-            <textarea value={settings.address || ""} onChange={(e) => setSettings({...settings, address: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">অ্যাডমিন পাসওয়ার্ড (Admin Password)</label>
-            <input 
-              type="password"
-              value={settings.admin_password || ""} 
-              onChange={(e) => setSettings({...settings, admin_password: e.target.value})} 
-              className="w-full p-4 bg-slate-50 border rounded-2xl" 
-              placeholder="পাসওয়ার্ড পরিবর্তন করুন"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">বিকাশ নম্বর</label>
-            <input value={settings.bkash_number || ""} onChange={(e) => setSettings({...settings, bkash_number: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">নগদ নম্বর</label>
-            <input value={settings.nagad_number || ""} onChange={(e) => setSettings({...settings, nagad_number: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">রকেট নম্বর</label>
-            <input value={settings.rocket_number || ""} onChange={(e) => setSettings({...settings, rocket_number: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">বিকাশ পেমেন্ট চালু করুন</label>
-            <input type="checkbox" checked={!!settings.enable_bkash} onChange={(e) => setSettings({...settings, enable_bkash: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">নগদ পেমেন্ট চালু করুন</label>
-            <input type="checkbox" checked={!!settings.enable_nagad} onChange={(e) => setSettings({...settings, enable_nagad: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">রকেট পেমেন্ট চালু করুন</label>
-            <input type="checkbox" checked={!!settings.enable_rocket} onChange={(e) => setSettings({...settings, enable_rocket: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">ইযারা (Opening Balance)</label>
-            <input 
-              type="number" 
-              value={settings.ijara_balance || 0} 
-              onChange={(e) => setSettings({...settings, ijara_balance: Number(e.target.value)})} 
-              className="w-full p-4 bg-slate-50 border rounded-2xl" 
-            />
-          </div>
-          <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-4 my-2">
-            <div>
-              <h4 className="text-base font-black text-slate-900">বিগত বছরের প্রারম্ভিক জের (Yearly Opening Balances)</h4>
-              <p className="text-xs text-slate-500 font-bold mt-1">
-                এখানে বিভিন্ন বছরের শুরুর ব্যালেন্স সংরক্ষণ করুন (যেমন ২০২৩, ২০২৪)। উক্ত বছরের হিসেব-নিকাশ এই প্রারম্ভিক জের থেকেই শুরু হবে।
-              </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            const isActive = activeCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setActiveCategory(cat.id as any)}
+                className={cn(
+                  "p-4 rounded-2xl text-left transition-all flex flex-col justify-between border-2 group",
+                  isActive
+                    ? "bg-slate-900 text-white border-slate-900 shadow-xl scale-[1.02]"
+                    : "bg-slate-50 text-slate-700 border-slate-100 hover:border-slate-300 hover:bg-white"
+                )}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-sm", cat.color)}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  {isActive && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-black text-xs sm:text-sm leading-tight">{cat.label}</h4>
+                  <p className={cn("text-[10px] font-bold mt-1 line-clamp-1", isActive ? "text-slate-300" : "text-slate-400")}>
+                    {cat.desc}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Active Category Settings Content Container */}
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 relative">
+        {/* CATEGORY 1: Identity & Logos */}
+        {activeCategory === 'identity' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-4">
+              <GraduationCap className="w-6 h-6 text-emerald-600" /> মাদ্রাসার পরিচিতি, লোগো ও থিম
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">প্রতিষ্ঠানের নাম</label>
+                <input value={settings.title || ""} onChange={(e) => setSettings({...settings, title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">যোগাযোগ ফোন নম্বর</label>
+                <input value={settings.contact_phone || ""} onChange={(e) => setSettings({...settings, contact_phone: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">ঠিকানা</label>
+                <textarea value={settings.address || ""} onChange={(e) => setSettings({...settings, address: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold h-20" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">প্রতিষ্ঠানের বর্ণনা</label>
+                <textarea value={settings.description || ""} onChange={(e) => setSettings({...settings, description: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold h-24" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">লোগো ইউআরএল (PNG)</label>
+                <input value={settings.logo_url || ""} onChange={(e) => setSettings({...settings, logo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" placeholder="https://example.com/logo.png" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">মাদরাসা নামের টেক্সট লোগো ইউআরএল (PNG)</label>
+                <input value={settings.name_logo_url || ""} onChange={(e) => setSettings({...settings, name_logo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" placeholder="https://example.com/name_logo.png" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">হিরো ইমেজ ইউআরএল (URL)</label>
+                <input value={settings.hero_image || ""} onChange={(e) => setSettings({...settings, hero_image: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">মাদরাসা গেইট ইমেজ ইউআরএল (URL)</label>
+                <input value={settings.gate_image_url || ""} onChange={(e) => setSettings({...settings, gate_image_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2 p-4 bg-emerald-50/60 rounded-3xl border border-emerald-100 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" id="neon_light" checked={!!settings.enable_neon_light} onChange={(e) => setSettings({...settings, enable_neon_light: e.target.checked ? 1 : 0})} className="w-6 h-6 accent-emerald-600" />
+                  <label htmlFor="neon_light" className="text-sm font-black text-emerald-900">লোগোর নিচে নিয়ন লাইট ইফেক্ট চালু করুন</label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-black text-slate-600">রঙ:</label>
+                  <input type="color" value={settings.neon_light_color || "#00ff00"} onChange={(e) => setSettings({...settings, neon_light_color: e.target.value})} className="w-10 h-10 rounded-xl cursor-pointer" />
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              {['2023', '2024', '2025', '2026'].map((yr) => (
-                <div key={yr} className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
-                  <label className="text-xs font-black text-slate-700 flex items-center justify-between">
-                    <span>{yr} সালের প্রারম্ভিক জের</span>
-                    <span className="text-[10px] text-emerald-600 font-bold">৳ BDT</span>
-                  </label>
-                  <input 
-                    type="number"
-                    placeholder="0"
-                    value={settings.yearly_opening_balances?.[yr] ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
+          </motion.div>
+        )}
+
+        {/* CATEGORY 2: Voice Calls & AI Audio Configuration */}
+        {activeCategory === 'voice_audio' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <PhoneCall className="w-6 h-6 text-rose-600" /> ভয়েস কল, বার্তা ও অডিও কনফিগারেশন
+                </h3>
+                <p className="text-xs font-bold text-slate-400 mt-0.5">
+                  কার্ড পাঞ্চ, বেতন দান ও তাগাদা কলের জন্য যেকোনো লেখা, ভয়েস রেকর্ড বা অডিও ফাইল সেট করুন
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => testNaturalMaleVoice("আসসালামু আলাইকুম। এটি প্রাকৃতিক পুরুষ কণ্ঠ AI ভয়েসের পরীক্ষা। ধন্যবাদ।")}
+                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
+              >
+                <Volume2 className="w-4 h-4 fill-slate-950" />
+                🔊 রিয়েল পুরুষ কণ্ঠ AI টেস্ট করুন
+              </button>
+            </div>
+
+            {/* AI Natural Male Voice Pitch & Speed Controls */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-6 rounded-3xl border border-amber-200/80 space-y-4">
+              <div className="flex items-center gap-2 text-amber-900 font-black text-sm">
+                <Sparkles className="w-5 h-5 text-amber-600" />
+                <span>এআই রিয়েল পুরুষ কণ্ঠ টিউন (Natural Human Male AI Voice Engine)</span>
+              </div>
+              <p className="text-xs font-bold text-amber-800">
+                রোবটিক সাউন্ড দূর করার জন্য গলার স্কেল ও গতি স্বাভাবিক টিউন করা হয়েছে। আপনার পছন্দ অনুযায়ী টিউন কমাতে/বাড়াতে পারেন।
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                <div>
+                  <div className="flex justify-between text-xs font-black text-slate-700 mb-1">
+                    <span>গলার পিচ / স্কেল (Voice Pitch - গাম্ভীর্য)</span>
+                    <span className="text-amber-700">{settings.voice_pitch || 0.85}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.2"
+                    step="0.05"
+                    value={settings.voice_pitch || 0.85}
+                    onChange={(e) => setSettings({ ...settings, voice_pitch: parseFloat(e.target.value) })}
+                    className="w-full accent-amber-600"
+                  />
+                  <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1">
+                    <span>গম্ভীর পুরুষ কণ্ঠ (0.5)</span>
+                    <span>স্বাভাবিক (0.85)</span>
+                    <span>চিকন কণ্ঠ (1.2)</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-black text-slate-700 mb-1">
+                    <span>কথার গতি (Voice Speed)</span>
+                    <span className="text-amber-700">{settings.voice_rate || 0.88}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.2"
+                    step="0.05"
+                    value={settings.voice_rate || 0.88}
+                    onChange={(e) => setSettings({ ...settings, voice_rate: parseFloat(e.target.value) })}
+                    className="w-full accent-amber-600"
+                  />
+                  <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1">
+                    <span>ধীর ও স্পষ্ট (0.6)</span>
+                    <span>স্বাভাবিক মানব গতি (0.88)</span>
+                    <span>দ্রুত (1.2)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Microphone Live Voice Recorder Section */}
+            <div className="bg-slate-900 text-white p-6 rounded-3xl space-y-4 shadow-xl border border-slate-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-rose-500/20 text-rose-400 rounded-xl flex items-center justify-center border border-rose-500/30">
+                    <Mic className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-sm text-white">সরাসরি মাইক্রোফোনে ভয়েস রেকর্ডার</h4>
+                    <p className="text-xs text-slate-400 font-bold">ব্রাউজার থেকে নিজের গলায় অডিও রেকর্ড করে যেকোনো মেসেজে সেট করুন</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={recordingTarget}
+                    onChange={(e) => setRecordingTarget(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 text-white text-xs font-black p-2.5 rounded-xl outline-none"
+                  >
+                    <option value="card_punch">কার্ড পাঞ্চ বার্তা</option>
+                    <option value="fee_paid">বেতন পরিশোধ বার্তা</option>
+                    <option value="absence">অনুপস্থিতি তাগাদা কল</option>
+                    <option value="defaulter">বকেয়া তাগাদা কল</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                {!isRecording ? (
+                  <button
+                    type="button"
+                    onClick={startRecording}
+                    className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-rose-600/30"
+                  >
+                    <Mic className="w-4 h-4" />
+                    রেকর্ড শুরু করুন
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={stopRecording}
+                    className="px-5 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 animate-bounce"
+                  >
+                    <Square className="w-4 h-4 fill-slate-950" />
+                    রেকর্ড বন্ধ করুন (রেকর্ডিং হচ্ছে...)
+                  </button>
+                )}
+
+                {recordedAudioUrl && (
+                  <div className="flex items-center gap-3 bg-slate-800 p-2 rounded-xl border border-slate-700">
+                    <audio src={recordedAudioUrl} controls className="h-8 max-w-xs" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetKey = recordingTarget === 'card_punch' ? 'card_punch_audio_url'
+                          : recordingTarget === 'fee_paid' ? 'fee_paid_audio_url'
+                          : recordingTarget === 'absence' ? 'voice_call_audio_url'
+                          : 'defaulter_voice_call_audio_url';
+
+                        applyRecordedAudioToSetting(targetKey);
+                      }}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black rounded-lg text-xs flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      এই ভয়েস সেভ করুন
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Messages Settings Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+              {/* 1. Card Punch Message */}
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                    ১. কার্ড পাঞ্চ ধন্যবাদ বার্তা
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => testNaturalMaleVoice(settings.card_punch_thank_you_text || "জাজাকাল্লাহু খাইরান! আপনার প্রবেশ সফল হয়েছে।")}
+                    className="p-2 text-emerald-700 hover:bg-emerald-100 rounded-xl"
+                    title="প্লে পরীক্ষা করুন"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">টেক্সট বার্তা (AI পুরুষ কণ্ঠ দিয়ে পড়া হবে)</label>
+                  <textarea
+                    value={settings.card_punch_thank_you_text || "জাজাকাল্লাহু খাইরান! আপনার প্রবেশ সফল হয়েছে।"}
+                    onChange={(e) => setSettings({ ...settings, card_punch_thank_you_text: e.target.value })}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs h-20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">কাস্টম অডিও ফাইল আপলোড (MP3/WAV)</label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleFileUpload(e, 'card_punch_audio_url')}
+                    className="w-full text-xs font-bold text-slate-600"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Fee Paid Message */}
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ২. বেতন পরিশোধ ধন্যবাদ বার্তা
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => testNaturalMaleVoice(settings.fee_paid_thank_you_text || "জাজাকাল্লাহু খাইরান! আপনার সন্তানের বেতন সফলভাবে গৃহীত হয়েছে।")}
+                    className="p-2 text-emerald-700 hover:bg-emerald-100 rounded-xl"
+                    title="প্লে পরীক্ষা করুন"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">টেক্সট বার্তা (AI পুরুষ কণ্ঠ দিয়ে পড়া হবে)</label>
+                  <textarea
+                    value={settings.fee_paid_thank_you_text || "জাজাকাল্লাহু খাইরান! আপনার সন্তানের বেতন সফলভাবে গৃহীত হয়েছে।"}
+                    onChange={(e) => setSettings({ ...settings, fee_paid_thank_you_text: e.target.value })}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs h-20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">কাস্টম অডিও ফাইল আপলোড (MP3/WAV)</label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleFileUpload(e, 'fee_paid_audio_url')}
+                    className="w-full text-xs font-bold text-slate-600"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Absence Alert Call Message */}
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                    <PhoneCall className="w-4 h-4 text-rose-600" />
+                    ৩. মাদরাসায় অনুপস্থিতি তাগাদা কল বার্তা
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => testNaturalMaleVoice(settings.voice_call_message_text || "আসসালামু আলাইকুম। আপনার সন্তান আজ মাদরাসায় উপস্থিত হয়নি।")}
+                    className="p-2 text-rose-700 hover:bg-rose-100 rounded-xl"
+                    title="প্লে পরীক্ষা করুন"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">কল ডায়ালগের জন্য টেক্সট বার্তা</label>
+                  <textarea
+                    value={settings.voice_call_message_text || ""}
+                    onChange={(e) => setSettings({ ...settings, voice_call_message_text: e.target.value })}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs h-20"
+                    placeholder="যেমন: আসসালামু আলাইকুম। আপনার সন্তান আজ উপস্থিত হয়নি..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">কাস্টম অডিও ফাইল আপলোড (MP3/WAV)</label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleFileUpload(e, 'voice_call_audio_url')}
+                    className="w-full text-xs font-bold text-slate-600"
+                  />
+                </div>
+              </div>
+
+              {/* 4. Due Fee Alert Message */}
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                    <PhoneCall className="w-4 h-4 text-amber-600" />
+                    ৪. বকেয়া বেতন তাগাদা কল বার্তা
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => testNaturalMaleVoice(settings.defaulter_voice_call_text || "আসসালামু আলাইকুম। আপনার সন্তানের বেতন বকেয়া রয়েছে।")}
+                    className="p-2 text-amber-700 hover:bg-amber-100 rounded-xl"
+                    title="প্লে পরীক্ষা করুন"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">বকেয়া তাগাদার জন্য টেক্সট বার্তা</label>
+                  <textarea
+                    value={settings.defaulter_voice_call_text || ""}
+                    onChange={(e) => setSettings({ ...settings, defaulter_voice_call_text: e.target.value })}
+                    className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs h-20"
+                    placeholder="যেমন: আসসালামু আলাইকুম। আপনার সন্তানের বেতন বকেয়া রয়েছে..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">কাস্টম অডিও ফাইল আপলোড (MP3/WAV)</label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleFileUpload(e, 'defaulter_voice_call_audio_url')}
+                    className="w-full text-xs font-bold text-slate-600"
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* CATEGORY 3: Academic & Classes */}
+        {activeCategory === 'academic' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-4">
+              <BookOpen className="w-6 h-6 text-blue-600" /> শ্রেণি, বিভাগ ও একাডেমিক রুলস
+            </h3>
+
+            <div className="bg-blue-50 border border-blue-100 p-6 rounded-3xl flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h4 className="font-black text-blue-900 text-base">ক্লাস অর্ডার ও ক্রমানুসারে সাজানো</h4>
+                <p className="text-xs font-bold text-blue-700 mt-0.5">সব জায়গায় ক্লাসগুলোর সিরিয়াল নিয়ন্ত্রণ করতে এখানে চাপ দিন</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowClassModal(true)}
+                className="px-6 py-3 bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-black text-xs shadow-md"
+              >
+                <Settings2 className="w-4 h-4 inline mr-1" />
+                ক্লাস সিরিয়াল পরিবর্তন
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">সাধারণ নিয়মনীতি (General Rules)</label>
+                <textarea value={settings.general_rules || ""} onChange={(e) => setSettings({...settings, general_rules: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold h-32" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">ভর্তির নিয়মনীতি (Admission Rules)</label>
+                <textarea value={settings.admission_rules || ""} onChange={(e) => setSettings({...settings, admission_rules: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold h-32" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">মুহতামিমের বাণী চালু করুন</label>
+                <input type="checkbox" checked={!!settings.show_muhtamim_msg} onChange={(e) => setSettings({...settings, show_muhtamim_msg: e.target.checked ? 1 : 0})} className="w-6 h-6 accent-emerald-600" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">মুহতামিমের নাম ও পদবী</label>
+                <input value={settings.muhtamim_name_title || ""} onChange={(e) => setSettings({...settings, muhtamim_name_title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">মুহতামিম সাহেবের বাণী</label>
+                <textarea value={settings.muhtamim_msg || ""} onChange={(e) => setSettings({...settings, muhtamim_msg: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold h-24" />
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* CATEGORY 4: Online Fees & Payment */}
+        {activeCategory === 'fees' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-4">
+              <CreditCard className="w-6 h-6 text-amber-600" /> অনলাইন মোবাইল ব্যাংকিং ও ফি সেটআপ
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-3 p-5 bg-amber-50/50 rounded-2xl border border-amber-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-amber-900">বিকাশ (bKash)</label>
+                  <input type="checkbox" checked={!!settings.enable_bkash} onChange={(e) => setSettings({...settings, enable_bkash: e.target.checked ? 1 : 0})} className="w-5 h-5 accent-emerald-600" />
+                </div>
+                <input value={settings.bkash_number || ""} onChange={(e) => setSettings({...settings, bkash_number: e.target.value})} placeholder="01XXXXXXXXX" className="w-full p-3 bg-white border rounded-xl font-bold text-sm" />
+              </div>
+
+              <div className="space-y-3 p-5 bg-orange-50/50 rounded-2xl border border-orange-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-orange-900">নগদ (Nagad)</label>
+                  <input type="checkbox" checked={!!settings.enable_nagad} onChange={(e) => setSettings({...settings, enable_nagad: e.target.checked ? 1 : 0})} className="w-5 h-5 accent-emerald-600" />
+                </div>
+                <input value={settings.nagad_number || ""} onChange={(e) => setSettings({...settings, nagad_number: e.target.value})} placeholder="01XXXXXXXXX" className="w-full p-3 bg-white border rounded-xl font-bold text-sm" />
+              </div>
+
+              <div className="space-y-3 p-5 bg-purple-50/50 rounded-2xl border border-purple-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-purple-900">রকেট (Rocket)</label>
+                  <input type="checkbox" checked={!!settings.enable_rocket} onChange={(e) => setSettings({...settings, enable_rocket: e.target.checked ? 1 : 0})} className="w-5 h-5 accent-emerald-600" />
+                </div>
+                <input value={settings.rocket_number || ""} onChange={(e) => setSettings({...settings, rocket_number: e.target.value})} placeholder="01XXXXXXXXX" className="w-full p-3 bg-white border rounded-xl font-bold text-sm" />
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded-3xl space-y-4">
+              <h4 className="text-base font-black text-slate-900">বছরের প্রারম্ভিক জের (Yearly Opening Balances)</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {['2023', '2024', '2025', '2026'].map((yr) => (
+                  <div key={yr} className="bg-white p-3 rounded-2xl border border-slate-200 space-y-1">
+                    <label className="text-xs font-bold text-slate-600 block">{yr} জের (৳)</label>
+                    <input
+                      type="number"
+                      value={settings.yearly_opening_balances?.[yr] ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings({
+                          ...settings,
+                          yearly_opening_balances: {
+                            ...(settings.yearly_opening_balances || {}),
+                            [yr]: val === "" ? "" : Number(val)
+                          }
+                        });
+                      }}
+                      className="w-full p-2 bg-slate-50 border rounded-xl font-black text-sm text-slate-900"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* CATEGORY 5: Popups & Slide Board Broadcast */}
+        {activeCategory === 'popups' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+            <div className="space-y-4">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-4">
+                <Bell className="w-6 h-6 text-purple-600" /> স্লাইড বোর্ড কাস্টমাইজেশন (প্যারেন্টস পোর্টাল স্লাইডার)
+              </h3>
+              <p className="text-xs sm:text-sm font-medium text-slate-500">
+                প্যারেন্টস পোর্টালের সবার উপরে থাকা স্লাইড বোর্ডে নিজস্ব ব্যানার, নোটিশ, ছবি ও লিংক যুক্ত করুন।
+              </p>
+
+              {/* Add New Custom Slide Form */}
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-3xl space-y-4">
+                <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-600" /> নতুন স্লাইড ব্যানার যুক্ত করুন
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">স্লাইড শিরোনাম (Title)</label>
+                    <input 
+                      id="new_slide_title"
+                      placeholder="যেমন: বার্ষিক পুরস্কার বিতরণী অনুষ্ঠান" 
+                      className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">স্লাইড ব্যাজ / ট্যাগ (Badge)</label>
+                    <input 
+                      id="new_slide_badge"
+                      placeholder="যেমন: বিশেষ ঘোষণা / অনুষ্ঠান" 
+                      defaultValue="বিশেষ ঘোষণা"
+                      className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">স্লাইড বিস্তারিত বিবরণ (Description)</label>
+                    <textarea 
+                      id="new_slide_content"
+                      placeholder="স্লাইডের বিস্তারিত বার্তা লিখুন..." 
+                      className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold h-20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">ব্যানার ছবি ইউআরএল (Image URL - ঐচ্ছিক)</label>
+                    <input 
+                      id="new_slide_image"
+                      placeholder="https://... (ছবি লিংক)" 
+                      className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">অ্যাকশন লিংক ইউআরএল (Action Link - ঐচ্ছিক)</label>
+                    <input 
+                      id="new_slide_link"
+                      placeholder="https://... (ক্লিক লিংক)" 
+                      className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const titleElem = document.getElementById("new_slide_title") as HTMLInputElement;
+                      const badgeElem = document.getElementById("new_slide_badge") as HTMLInputElement;
+                      const contentElem = document.getElementById("new_slide_content") as HTMLTextAreaElement;
+                      const imgElem = document.getElementById("new_slide_image") as HTMLInputElement;
+                      const linkElem = document.getElementById("new_slide_link") as HTMLInputElement;
+
+                      if (!titleElem?.value?.trim()) {
+                        addToast("অনুগ্রহ করে স্লাইড শিরোনাম লিখুন", "error");
+                        return;
+                      }
+
+                      const newSlide = {
+                        id: `slide_${Date.now()}`,
+                        title: titleElem.value.trim(),
+                        badge: badgeElem?.value?.trim() || "বিশেষ ঘোষণা",
+                        subtitle: contentElem?.value?.trim() || "",
+                        image_url: imgElem?.value?.trim() || "",
+                        link: linkElem?.value?.trim() || "",
+                        tag: "✨ ঘোষণা",
+                        active: true,
+                        created_at: new Date().toISOString()
+                      };
+
+                      const currentSlides = Array.isArray(settings.custom_slides) ? [...settings.custom_slides] : [];
                       setSettings({
                         ...settings,
-                        yearly_opening_balances: {
-                          ...(settings.yearly_opening_balances || {}),
-                          [yr]: val === "" ? "" : Number(val)
-                        }
+                        custom_slides: [newSlide, ...currentSlides]
                       });
+
+                      titleElem.value = "";
+                      if (contentElem) contentElem.value = "";
+                      if (imgElem) imgElem.value = "";
+                      if (linkElem) linkElem.value = "";
+                      addToast("স্লাইড তালিকায় যুক্ত হয়েছে! 'সব সেটিংস সেভ করুন' বাটনে চাপুন।", "success");
                     }}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                  />
+                    className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" /> স্লাইড যোগ করুন
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">শিক্ষক নিয়োগ চালু করুন</label>
-            <input type="checkbox" checked={!!settings.enable_recruitment} onChange={(e) => setSettings({...settings, enable_recruitment: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">বৈশিষ্ট্য (Features) সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_features_directly} onChange={(e) => setSettings({...settings, show_features_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">খাবার মেনু সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_food_directly} onChange={(e) => setSettings({...settings, show_food_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">একাডেমিক শোকেস সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_showcase_directly} onChange={(e) => setSettings({...settings, show_showcase_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">সিলেবাস ও রুটিন সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_routines_directly} onChange={(e) => setSettings({...settings, show_routines_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">সাধারণ নিয়মাবলী সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_general_rules} onChange={(e) => setSettings({...settings, show_general_rules: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">ভর্তির নিয়মাবলী সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_admission_rules} onChange={(e) => setSettings({...settings, show_admission_rules: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">নোটিশ বোর্ড সরাসরি হোমপেজে দেখান</label>
-            <input type="checkbox" checked={!!settings.show_notices_directly} onChange={(e) => setSettings({...settings, show_notices_directly: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">লোগোর নিচে নিয়ন লাইট চালু করুন</label>
-            <input type="checkbox" checked={!!settings.enable_neon_light} onChange={(e) => setSettings({...settings, enable_neon_light: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">নিয়ন লাইটের রঙ (যেমন: #00ff00)</label>
-            <input value={settings.neon_light_color || "#00ff00"} onChange={(e) => setSettings({...settings, neon_light_color: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">নিয়ন লাইটের ইফেক্ট</label>
-            <select value={settings.neon_light_effect || "pulse"} onChange={(e) => setSettings({...settings, neon_light_effect: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-              <option value="rotate">ঘুরবে (Rotate)</option>
-              <option value="pulse">জ্বলবে-নিভবে (Pulse)</option>
-              <option value="glow">গ্লো (Glow)</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">লোগো ইউআরএল (PNG)</label>
-            <input value={settings.logo_url || ""} onChange={(e) => setSettings({...settings, logo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/logo.png" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মাদরাসা নামের লোগো ইউআরএল (PNG)</label>
-            <input value={settings.name_logo_url || ""} onChange={(e) => setSettings({...settings, name_logo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/madrasa_name.png" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মাদরাসা নামের লোগোর উচ্চতা (px)</label>
-            <input type="number" value={settings.name_logo_height || 80} onChange={(e) => setSettings({...settings, name_logo_height: Number(e.target.value)})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">সাধারণ নিয়মনীতি (General Rules)</label>
-            <textarea 
-              value={settings.general_rules || ""} 
-              onChange={(e) => setSettings({...settings, general_rules: e.target.value})} 
-              className="w-full p-4 bg-slate-50 border rounded-2xl h-48"
-              placeholder="এখানে মাদরাসার সাধারণ নিয়মনীতি লিখুন..."
-            />
-          </div>
-          
-          <div className="col-span-1 md:col-span-2 h-px bg-slate-100 my-4" />
-          <h4 className="col-span-1 md:col-span-2 text-lg font-black text-slate-900 mb-2">মুহতামিমের বাণী সেটিংস</h4>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মুহতামিমের বাণীর সেকশন চালু করুন</label>
-            <input type="checkbox" checked={!!settings.show_muhtamim_msg} onChange={(e) => setSettings({...settings, show_muhtamim_msg: e.target.checked ? 1 : 0})} className="w-6 h-6 ml-2" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মুহতামিমের ছবির ইউআরএল</label>
-            <input value={settings.muhtamim_photo_url || ""} onChange={(e) => setSettings({...settings, muhtamim_photo_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/muhtamim.png" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মুহতামিমের বাণী</label>
-            <textarea value={settings.muhtamim_msg || ""} onChange={(e) => setSettings({...settings, muhtamim_msg: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-32" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মুহতামিমের নাম ও পদবী</label>
-            <input value={settings.muhtamim_name_title || ""} onChange={(e) => setSettings({...settings, muhtamim_name_title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="মুহতামিম সাহেবের নাম ও পদবী" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">বাণীর টেমপ্লেট</label>
-            <select value={settings.muhtamim_msg_template || "modern"} onChange={(e) => setSettings({...settings, muhtamim_msg_template: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-              <option value="modern">আধুনিক (Modern)</option>
-              <option value="classic">ক্লাসিক (Classic)</option>
-              <option value="premium">প্রিমিয়াম (Premium)</option>
-            </select>
-          </div>
-          <div className="space-y-2 flex items-center gap-3">
-            <input type="checkbox" id="auto_whatsapp" checked={!!settings.auto_whatsapp} onChange={(e) => setSettings({...settings, auto_whatsapp: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
-            <label htmlFor="auto_whatsapp" className="text-sm font-bold text-slate-700">অটোমেটিক হোয়াটসঅ্যাপে রশিদ পাঠানো চালু করুন</label>
-          </div>
-          <div className="space-y-2 flex items-center gap-3">
-            <input type="checkbox" id="enable_qr_code" checked={!!settings.enable_qr_code} onChange={(e) => setSettings({...settings, enable_qr_code: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
-            <label htmlFor="enable_qr_code" className="text-sm font-bold text-slate-700">রশিদ ও মার্কশিটে কিউআর কোড (QR Code) দেখান</label>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">কিউআর কোড ইউআরএল (QR Code URL)</label>
-            <input value={settings.qr_code_url || ""} onChange={(e) => setSettings({...settings, qr_code_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/qr.png" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">ঘোষণা (Announcement)</label>
-            <input value={settings.announcement || ""} onChange={(e) => setSettings({...settings, announcement: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-bold text-slate-700">প্রতিষ্ঠানের বর্ণনা</label>
-            <textarea value={settings.description || ""} onChange={(e) => setSettings({...settings, description: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-24" />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-bold text-slate-700">ভর্তির নিয়মাবলী (প্রতিটি নিয়ম নতুন লাইনে লিখুন)</label>
-            <textarea value={settings.admission_rules || ""} onChange={(e) => setSettings({...settings, admission_rules: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-32" placeholder="১. আবেদন ফর্মে প্রদত্ত সকল তথ্য অবশ্যই সঠিক হতে হবে।&#10;২. ছাত্রের পাসপোর্ট সাইজের ছবি আপলোড করতে হবে।" />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-bold text-slate-700">একাডেমিক শোকেস (JSON Format)</label>
-            <textarea value={settings.showcase_content || ""} onChange={(e) => setSettings({...settings, showcase_content: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-32 font-mono text-xs" placeholder='[{"type": "video", "url": "https://www.youtube.com/watch?v=...", "title": "ভিডিও টাইটেল", "description": "ভিডিও বর্ণনা"}]' />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">হিরো ইমেজ (URL)</label>
-            <input value={settings.hero_image || ""} onChange={(e) => setSettings({...settings, hero_image: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মাদরাসা গেইট ইমেজ (URL)</label>
-            <input value={settings.gate_image_url || ""} onChange={(e) => setSettings({...settings, gate_image_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/gate.jpg" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মাদরাসা মাঠ/প্রাঙ্গণ ইমেজ (URL)</label>
-            <input value={settings.campus_image_url || ""} onChange={(e) => setSettings({...settings, campus_image_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/campus.jpg" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">যোগাযোগ ফোন</label>
-            <input value={settings.contact_phone || ""} onChange={(e) => setSettings({...settings, contact_phone: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">হোয়াটসঅ্যাপ নম্বর</label>
-            <input value={settings.whatsapp_number || ""} onChange={(e) => setSettings({...settings, whatsapp_number: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">ফেসবুক পেজ লিঙ্ক</label>
-            <input value={settings.facebook_url || ""} onChange={(e) => setSettings({...settings, facebook_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">ইউটিউব চ্যানেল লিঙ্ক</label>
-            <input value={settings.youtube_url || ""} onChange={(e) => setSettings({...settings, youtube_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">মুহতামিম সাহেবের স্বাক্ষর (PNG URL)</label>
-            <input value={settings.muhtamim_signature_url || ""} onChange={(e) => setSettings({...settings, muhtamim_signature_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/signature.png" />
-          </div>
-          <div className="space-y-2 flex items-center gap-3">
-            <input type="checkbox" id="show_signature" checked={!!settings.show_muhtamim_signature} onChange={(e) => setSettings({...settings, show_muhtamim_signature: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
-            <label htmlFor="show_signature" className="text-sm font-bold text-slate-700">রশিদে মুহতামিম সাহেবের স্বাক্ষর দেখান</label>
-          </div>
-          <div className="space-y-2 flex items-center gap-3">
-            <input type="checkbox" id="enable_historical_reports" checked={!!settings.enable_historical_reports} onChange={(e) => setSettings({...settings, enable_historical_reports: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
-            <label htmlFor="enable_historical_reports" className="text-sm font-bold text-slate-700">অভিভাবকদের জন্য পুরাতন রেজাল্ট দেখার অনুমতি দিন</label>
-          </div>
-        </div>
+              </div>
 
-        {/* Global Popup Settings */}
-        <div className="border-t border-slate-100 pt-8 mt-8">
-          <h4 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-emerald-600" /> গ্লোবাল পপআপ সেটিংস (Global Popup)
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2 flex items-center gap-3">
-              <input type="checkbox" id="popup_enabled" checked={!!settings.popup_enabled} onChange={(e) => setSettings({...settings, popup_enabled: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
-              <label htmlFor="popup_enabled" className="text-sm font-bold text-slate-700 font-black">পপআপ অপশন চালু করুন (Enable Popup)</label>
-            </div>
-            <div className="space-y-2 flex items-center gap-3">
-              <input type="checkbox" id="popup_show_close" checked={!!settings.popup_show_close} onChange={(e) => setSettings({...settings, popup_show_close: e.target.checked ? 1 : 0})} className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500" />
-              <label htmlFor="popup_show_close" className="text-sm font-bold text-slate-700 font-black">ক্লোজ বাটন দেখান (Show Close Button)</label>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700">পপআপ শিরোনাম (Title)</label>
-              <input value={settings.popup_title || ""} onChange={(e) => setSettings({...settings, popup_title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="যেমন: নতুন ঘোষণা!" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700">পপআপ ছবি ইউআরএল (Image URL)</label>
-              <input value={settings.popup_image || ""} onChange={(e) => setSettings({...settings, popup_image: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/popup.jpg" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700">ছবির লিঙ্ক (Image Click Link)</label>
-              <input value={settings.popup_link || ""} onChange={(e) => setSettings({...settings, popup_link: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="https://example.com/more-info" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700">পপআপ কতক্ষণ দেখাবে (সেকেন্ডে)</label>
-              <input type="number" value={settings.popup_duration || 10} onChange={(e) => setSettings({...settings, popup_duration: parseInt(e.target.value) || 0})} className="w-full p-4 bg-slate-50 border rounded-2xl" placeholder="10" />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-bold text-slate-700">বিস্তারিত তথ্য (Description)</label>
-              <textarea value={settings.popup_description || ""} onChange={(e) => setSettings({...settings, popup_description: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl h-24" placeholder="পপআপের বিস্তারিত বর্ণনা এখানে লিখুন..." />
-            </div>
-          </div>
-        </div>
+              {/* Existing Custom Slides List */}
+              {Array.isArray(settings.custom_slides) && settings.custom_slides.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider">বিদ্যমান কাস্টম স্লাইডসমূহ ({settings.custom_slides.length}টি)</h4>
+                  <div className="space-y-2">
+                    {settings.custom_slides.map((cs: any, idx: number) => (
+                      <div key={cs.id || idx} className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {cs.image_url ? (
+                            <img src={cs.image_url} alt="Slide" className="w-12 h-12 rounded-xl object-cover border" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                              <Sparkles className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h5 className="font-bold text-slate-900 text-sm truncate">{cs.title}</h5>
+                            <p className="text-xs text-slate-500 line-clamp-1">{cs.subtitle || cs.badge}</p>
+                          </div>
+                        </div>
 
-        <div className="border-t border-slate-100 pt-8 flex justify-between items-center">
-          <button 
-            type="button" 
-            onClick={() => handleSubmit()} 
-            className="px-10 py-4 bg-emerald-900 text-white rounded-2xl font-black hover:bg-emerald-800 transition-all shadow-lg shadow-emerald-900/20"
-          >
-            {saving ? "সেভ হচ্ছে..." : "সেটিংস সেভ করুন"}
-          </button>
-          <button type="button" onClick={handleAdvancedSettingsClick} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all">
-            Advanced Settings (Firebase & Payment)
-          </button>
-        </div>
-          {showAdvancedSettings && (
-            <div className="mt-8 space-y-8">
-              <div className="border-t border-slate-100 pt-8">
-                <h4 className="text-lg font-black text-slate-900 mb-4">ফায়ারবেস (Firebase) অটো-সিঙ্ক সেটিংস</h4>
-                <p className="text-sm text-slate-500 mb-4 font-bold">
-                  আপনার ডাটাবেসটি ফায়ারবেস (Firestore)-এ অটোমেটিক সেভ করার জন্য আপনার ফায়ারবেস প্রজেক্টের Service Account JSON ফাইলের ভেতরের সব লেখা কপি করে নিচের বক্সে পেস্ট করুন।
-                </p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = settings.custom_slides.filter((_: any, i: number) => i !== idx);
+                              setSettings({ ...settings, custom_slides: updated });
+                              addToast("স্লাইড মুছে ফেলা হয়েছে", "info");
+                            }}
+                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors text-xs font-bold"
+                            title="মুছে ফেলুন"
+                          >
+                            মুছুন
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* General Popup Settings */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-indigo-600" /> অভিভাবক পপআপ নোটিশ ও ভিডিও বার্তা
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2 flex items-center gap-3">
+                  <input type="checkbox" id="popup_enabled" checked={!!settings.popup_enabled} onChange={(e) => setSettings({...settings, popup_enabled: e.target.checked ? 1 : 0})} className="w-6 h-6 accent-emerald-600" />
+                  <label htmlFor="popup_enabled" className="text-sm font-black text-slate-800">পপআপ অপশন চালু করুন</label>
+                </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Firebase Service Account JSON</label>
-                  <textarea 
-                    value={settings.firebase_service_account} 
-                    onChange={(e) => setSettings({...settings, firebase_service_account: e.target.value})} 
-                    className="w-full p-4 bg-slate-50 border rounded-2xl h-48 font-mono text-xs" 
-                    placeholder='{"type": "service_account", "project_id": "...", ...}' 
-                  />
-                </div>
-              </div>
-              <div className="border-t border-slate-100 pt-8">
-                <h4 className="text-lg font-black text-slate-900 mb-4">ম্যানুয়াল পেমেন্ট নম্বর (Manual Payment)</h4>
-                <p className="text-sm text-slate-500 mb-4 font-bold">
-                  আপনার পার্সোনাল বিকাশ, নগদ এবং রকেট নম্বর দিন যেখানে অভিভাবকরা টাকা পাঠাবে।
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">বিকাশ নম্বর (Personal)</label>
-                    <input 
-                      value={settings.bkash_number || ""} 
-                      onChange={(e) => setSettings({...settings, bkash_number: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl" 
-                      placeholder="01XXXXXXXXX" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">নগদ নম্বর (Personal)</label>
-                    <input 
-                      value={settings.nagad_number || ""} 
-                      onChange={(e) => setSettings({...settings, nagad_number: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl" 
-                      placeholder="01XXXXXXXXX" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">রকেট নম্বর (Personal)</label>
-                    <input 
-                      value={settings.rocket_number || ""} 
-                      onChange={(e) => setSettings({...settings, rocket_number: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl" 
-                      placeholder="01XXXXXXXXX" 
-                    />
-                  </div>
+                  <label className="text-xs font-black uppercase text-slate-500 block">পপআপ টাইটেল</label>
+                  <input value={settings.popup_title || ""} onChange={(e) => setSettings({...settings, popup_title: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">বিকাশ পেমেন্ট নিয়মাবলী</label>
-                    <textarea 
-                      value={settings.bkash_instructions || ""} 
-                      onChange={(e) => setSettings({...settings, bkash_instructions: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl h-32" 
-                      placeholder="কিভাবে পেমেন্ট করবে তার নিয়ম..." 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">নগদ পেমেন্ট নিয়মাবলী</label>
-                    <textarea 
-                      value={settings.nagad_instructions || ""} 
-                      onChange={(e) => setSettings({...settings, nagad_instructions: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl h-32" 
-                      placeholder="কিভাবে পেমেন্ট করবে তার নিয়ম..." 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">রকেট পেমেন্ট নিয়মাবলী</label>
-                    <textarea 
-                      value={settings.rocket_instructions || ""} 
-                      onChange={(e) => setSettings({...settings, rocket_instructions: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl h-32" 
-                      placeholder="কিভাবে পেমেন্ট করবে তার নিয়ম..." 
-                    />
-                  </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">পপআপ বর্ণনা</label>
+                  <textarea value={settings.popup_description || ""} onChange={(e) => setSettings({...settings, popup_description: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold h-24" />
                 </div>
 
-                <div className="mt-6 space-y-2">
-                  <label className="text-sm font-bold text-slate-700">বিশেষ দ্রষ্টব্য (পেমেন্ট পেজের নিচে দেখাবে)</label>
-                  <textarea 
-                    value={settings.payment_special_note || ""} 
-                    onChange={(e) => setSettings({...settings, payment_special_note: e.target.value})} 
-                    className="w-full p-4 bg-slate-50 border rounded-2xl h-24" 
-                    placeholder="বিশেষ দ্রষ্টব্য..." 
-                  />
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">ছবি ইউআরএল (Image URL)</label>
+                  <input value={settings.popup_image || ""} onChange={(e) => setSettings({...settings, popup_image: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
                 </div>
-                <div className="mt-6 border-t border-slate-100 pt-8">
-                  <h4 className="text-lg font-black text-slate-900 mb-4">মুহতামিম সাহেবের স্বাক্ষর</h4>
-                  <div className="flex items-center gap-4 mb-4">
-                    <input type="checkbox" checked={!!settings.enable_signature} onChange={(e) => setSettings({...settings, enable_signature: e.target.checked ? 1 : 0})} className="w-6 h-6" />
-                    <label className="text-sm font-bold text-slate-700">স্বাক্ষর চালু করুন</label>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">স্বাক্ষরের ছবি (PNG URL)</label>
-                    <input 
-                      value={settings.signature_url || ""} 
-                      onChange={(e) => setSettings({...settings, signature_url: e.target.value})} 
-                      className="w-full p-4 bg-slate-50 border rounded-2xl" 
-                      placeholder="https://example.com/signature.png" 
-                    />
-                  </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-slate-500 block">ইউটিউব / এমপি৪ ভিডিও লিংক (Video URL)</label>
+                  <input value={settings.popup_video_url || settings.popup_video || ""} onChange={(e) => setSettings({...settings, popup_video_url: e.target.value, popup_video: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" placeholder="https://www.youtube.com/watch?v=..." />
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          </motion.div>
+        )}
 
-        <div className="border-t border-slate-100 pt-8 mt-8">
-          <h3 className="text-xl font-bold text-slate-900 mb-6">ক্যাটাগরি ম্যানেজমেন্ট</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <CategoryManager type="income" />
-            <CategoryManager type="expense" />
-          </div>
-        </div>
+        {/* CATEGORY 6: Devices, Notifications & App Services */}
+        {activeCategory === 'devices_app' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-4">
+              <Radio className="w-6 h-6 text-teal-600" /> ডিভাইস, নোটিফিকেশন ও সার্ভিসেস
+            </h3>
 
-        <LoadingButton loading={saving} onClick={() => handleSubmit()} className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold">
-          <Save className="w-5 h-5" /> সেটিংস সেভ করুন
-        </LoadingButton>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2 flex items-center gap-3">
+                <input type="checkbox" id="auto_wa" checked={!!settings.auto_whatsapp} onChange={(e) => setSettings({...settings, auto_whatsapp: e.target.checked ? 1 : 0})} className="w-6 h-6 accent-emerald-600" />
+                <label htmlFor="auto_wa" className="text-sm font-black text-slate-800">অটোমেটিক হোয়াটসঅ্যাপে রিসিট পাঠানো চালু রাখুন</label>
+              </div>
+
+              <div className="space-y-2 flex items-center gap-3">
+                <input type="checkbox" id="enable_qr" checked={!!settings.enable_qr_code} onChange={(e) => setSettings({...settings, enable_qr_code: e.target.checked ? 1 : 0})} className="w-6 h-6 accent-emerald-600" />
+                <label htmlFor="enable_qr" className="text-sm font-black text-slate-800">রশিদে কিউআর কোড দেখান</label>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-black uppercase text-slate-500 block">কিউআর কোড ইউআরএল (QR Code Image URL)</label>
+                <input value={settings.qr_code_url || ""} onChange={(e) => setSettings({...settings, qr_code_url: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" />
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* CATEGORY 7: Security & Sub-Admins */}
+        {activeCategory === 'security' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-4">
+              <ShieldCheck className="w-6 h-6 text-slate-800" /> সিকিউরিটি, এডমিন পাসওয়ার্ড ও সাব-এডমিন
+            </h3>
+
+            <div className="flex flex-wrap items-center gap-4 pb-4">
+              <button
+                type="button"
+                onClick={() => setShowSubAdminModal(true)}
+                className="px-6 py-3 bg-indigo-900 hover:bg-indigo-800 text-white font-black rounded-2xl text-xs shadow-md flex items-center gap-2"
+              >
+                <Users className="w-4 h-4" /> সাব-এডমিন এক্সেস কনট্রোল
+              </button>
+            </div>
+
+            <div className="space-y-2 max-w-md">
+              <label className="text-xs font-black uppercase text-slate-500 block">এডমিন সিক্রেট পাসওয়ার্ড (Admin Password)</label>
+              <input
+                type="password"
+                value={settings.admin_password || ""}
+                onChange={(e) => setSettings({...settings, admin_password: e.target.value})}
+                className="w-full p-4 bg-slate-50 border rounded-2xl font-bold"
+                placeholder="পাসওয়ার্ড পরিবর্তন করুন"
+              />
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      <AnimatePresence>
-        {showPasswordModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden p-8">
-              <h3 className="text-xl font-black text-slate-900 mb-4">পাসওয়ার্ড দিন</h3>
-              <input 
-                type="password" 
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className="w-full p-4 bg-slate-50 border rounded-2xl mb-6"
-                placeholder="পাসওয়ার্ড"
-                autoFocus
-                onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
-              />
-              <div className="flex gap-4">
-                <button onClick={() => setShowPasswordModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all">বাতিল</button>
-                <button onClick={handlePasswordSubmit} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200">নিশ্চিত করুন</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Categories & Class Order Modals */}
+      <div className="border-t border-slate-100 pt-8 mt-8">
+        <h3 className="text-xl font-black text-slate-900 mb-6">আয় ও ব্যয় ক্যাটাগরি সেটআপ</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <CategoryManager type="income" />
+          <CategoryManager type="expense" />
+        </div>
+      </div>
+
+      <div className="mt-8 pt-4 border-t border-slate-100">
+        <LoadingButton loading={saving} onClick={() => handleSubmit()} className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold hover:bg-emerald-800 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2">
+          <Save className="w-5 h-5" /> সকল সেটিংস সেভ করুন
+        </LoadingButton>
+      </div>
 
       <ClassManagerModal 
         isOpen={showClassModal} 
@@ -2641,7 +3049,15 @@ function SettingsManager({ settings, setSettings, onUpdate, classes, fetchClasse
         isOpen={showSubAdminModal} 
         onClose={() => setShowSubAdminModal(false)} 
       />
-    </>
+
+      <SecretCallModal
+        isOpen={showSecretCallModal}
+        onClose={() => setShowSecretCallModal(false)}
+        settings={settings}
+        onUpdate={onUpdate}
+        addToast={addToast}
+      />
+    </div>
   );
 }
 
@@ -3884,7 +4300,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                         const record = fullProfile.attendance.find((a: any) => a.date === dateStr);
                         days.push(
-                          <div key={d} className={cn(
+                          <div key={`cal-day-profile-${dateStr}-${d}`} className={cn(
                             "aspect-square rounded-xl border flex flex-col items-center justify-center text-[10px] font-black transition-all",
                             record?.status === 'present' ? "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200" : 
                             record?.status === 'absent' ? "bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-200" : "bg-slate-50 text-slate-400 border-slate-100"
@@ -4468,7 +4884,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
 
 function AttendanceManager({ settings, classesList }: { settings: any, classesList: string[] }) {
   const { addToast } = useToast();
-  const [date, setDate] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`);
+  const [date, setDate] = useState(() => getDhakaDateString());
   const [selectedClass, setSelectedClass] = useState("");
   const [students, setStudents] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, any>>({});
@@ -4477,6 +4893,10 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
   const [notifying, setNotifying] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
   const [filter, setFilter] = useState<'all' | 'present' | 'absent'>('all');
+
+  // Absent Call & Notification Modal State
+  const [showAbsentModal, setShowAbsentModal] = useState(false);
+  const [absentModalAction, setAbsentModalAction] = useState<'notification' | 'call'>('notification');
 
   const classes = ["All", ...classesList];
 
@@ -4559,6 +4979,58 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
     }
   };
 
+  const handleStudentCall = async (s: any) => {
+    try {
+      const res = await fetch("/api/admin/call/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: s.id,
+          type: 'absent',
+          message: `সম্মানিত অভিভাবক, আপনার সন্তান ${s.name} (${s.class ? s.class + ' শ্রেণী' : ''}) আজ মাদরাসায় যথাসময়ে উপস্থিত হয়নি। মাদরাসা কর্তৃপক্ষকে কারণ অবহিত করার অনুরোধ রইল। ধন্যবাদ।`
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(`📞 ${s.name}-এর অভিভাবকের অ্যাপে সরাসরি এআই ভয়েস কল পাঠানো হয়েছে (রিং হচ্ছে...)`, "success");
+      } else {
+        addToast(data.error || "কল সংযোগ করতে সমস্যা হয়েছে", "error");
+      }
+    } catch (e) {
+      addToast("সার্ভার সংযোগ সমস্যা হয়েছে", "error");
+    }
+  };
+
+  const handleStudentNotify = async (s: any) => {
+    try {
+      await fetch("/api/admin/notify/absent-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: 'student',
+          person_ids: [s.id],
+          action: 'notification',
+          date,
+          message: `সম্মানিত অভিভাবক, আপনার সন্তান ${s.name} (${s.class ? s.class + ' শ্রেণী' : ''}) আজ (${date}) তারিখে মাদরাসায় অনুপস্থিত রয়েছে। বিস্তারিত তথ্যের জন্য মাদরাসায় যোগাযোগ করুন।`
+        })
+      });
+      addToast(`🔔 ${s.name}-এর অভিভাবকের অ্যাপে অনুপস্থিতি নোটিফিকেশন সরাসরি পাঠানো হয়েছে`, "success");
+    } catch (e) {
+      addToast("নোটিফিকেশন পাঠাতে সমস্যা হয়েছে", "error");
+    }
+  };
+
+  const absentStudents = students
+    .filter(s => (attendance as any)[s.id]?.status === 'absent' || (!(attendance as any)[s.id]?.status && !(attendance as any)[s.id]?.check_in))
+    .map(s => ({
+      id: s.id,
+      name: s.name,
+      roll: s.roll,
+      class: s.class,
+      phone: s.guardian_phone || s.phone || s.guardian_mobile,
+      photo_url: s.photo_url
+    }));
+
   const filteredStudents = students.filter(s => {
     if (filter === "all") return true;
     return (attendance as any)[s.id]?.status === filter;
@@ -4567,11 +5039,52 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
   return (
     <div className="space-y-6">
       <PrintHeader settings={settings} />
+
+      {/* Absent Alert Modal */}
+      <AbsentAlertModal
+        isOpen={showAbsentModal}
+        onClose={() => setShowAbsentModal(false)}
+        type="student"
+        date={date}
+        initialAction={absentModalAction}
+        absentList={absentStudents}
+        className={selectedClass}
+      />
+
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 print:shadow-none print:border-0 print:p-0">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 print:hidden">
           <div>
-            <h3 className="text-3xl font-black text-slate-900">স্মার্ট হাজিরা ব্যবস্থাপনা</h3>
-            <p className="text-slate-500 font-bold mt-1">ডিভাইস এন্ট্রি ও ম্যানুয়াল হাজিরা</p>
+            <div className="flex items-center gap-3">
+              <h3 className="text-3xl font-black text-slate-900">স্মার্ট হাজিরা ব্যবস্থাপনা</h3>
+              {/* After saving, prominent top Notification and Call buttons */}
+              {hasSaved && (
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in duration-300">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAbsentModalAction('notification');
+                      setShowAbsentModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                  >
+                    <Bell className="w-4 h-4" />
+                    <span>অনুপস্থিতি নোটিফিকেশন ({toBn(absentStudents.length)})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAbsentModalAction('call');
+                      setShowAbsentModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition-all"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    <span>ভয়েস কল করুন ({toBn(absentStudents.length)})</span>
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-slate-500 font-bold mt-1">ডিভাইস এন্ট্রি ও ম্যানুয়াল হাজিরা (বাংলাদেশ ঢাকা সময়)</p>
           </div>
           <div className="flex flex-wrap gap-4 w-full">
             <div className="relative w-full md:w-48 shrink-0">
@@ -4663,6 +5176,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                       <th className="text-left py-4 px-4 font-black text-slate-400 uppercase text-xs tracking-wider">ছাত্রের তথ্য</th>
                       <th className="text-center py-4 px-4 font-black text-slate-400 uppercase text-xs tracking-wider">চেক-ইন</th>
                       <th className="text-center py-4 px-4 font-black text-slate-400 uppercase text-xs tracking-wider">চেক-আউট</th>
+                      <th className="text-center py-4 px-4 font-black text-slate-400 uppercase text-xs tracking-wider print:hidden">কল ও বার্তা</th>
                       <th className="text-right py-4 px-4 font-black text-slate-400 uppercase text-xs tracking-wider print:hidden">অবস্থা</th>
                     </tr>
                   </thead>
@@ -4676,7 +5190,9 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                             </div>
                             <div>
                               <p className="font-black text-slate-900 text-sm">{s.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {s.studentId || s.id}</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase">
+                                ID: {s.studentId || s.id} {s.guardian_phone || s.phone ? `• 📞 ${s.guardian_phone || s.phone}` : ''}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -4690,6 +5206,28 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                           <div className="inline-flex items-center gap-2 px-3 py-1 bg-rose-50 text-rose-700 rounded-lg font-bold text-xs">
                             <Clock className="w-3 h-3" />
                             {attendance[s.id]?.check_out || "--:--"}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center print:hidden">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStudentCall(s)}
+                              title={`${s.name}-এর অভিভাবককে কল করুন`}
+                              className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 transition-all active:scale-90 border border-purple-100 shadow-sm"
+                            >
+                              <PhoneCall className="w-3.5 h-3.5 text-purple-600" />
+                              <span>কল</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStudentNotify(s)}
+                              title={`${s.name}-এর অভিভাবককে নোটিফিকেশন পাঠান`}
+                              className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center gap-1 transition-all active:scale-90 border border-emerald-100 shadow-sm"
+                            >
+                              <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>নোটিশ</span>
+                            </button>
                           </div>
                         </td>
                         <td className="py-4 px-4 text-right print:hidden">
@@ -4762,11 +5300,16 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
 
 function TeacherAttendanceManager({ settings }: { settings: any }) {
   const { addToast } = useToast();
-  const [date, setDate] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`);
+  const [date, setDate] = useState(() => getDhakaDateString());
   const [teachers, setTeachers] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
+
+  // Absent Call & Notification Modal State
+  const [showTeacherAbsentModal, setShowTeacherAbsentModal] = useState(false);
+  const [teacherAbsentModalAction, setTeacherAbsentModalAction] = useState<'notification' | 'call'>('notification');
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -4777,10 +5320,15 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
       const teachersData = Array.isArray(data) ? data : [];
       setTeachers(teachersData);
       const initialAttendance: Record<string, string> = {};
+      let hasAnySaved = false;
       teachersData.forEach((t: any) => {
-        if (t.status) initialAttendance[t.id] = t.status;
+        if (t.status) {
+          initialAttendance[t.id] = t.status;
+          hasAnySaved = true;
+        }
       });
       setAttendance(initialAttendance);
+      setHasSaved(hasAnySaved);
     } catch (err) {
       console.error("Failed to fetch teacher attendance:", err);
       addToast("শিক্ষক উপস্থিতি লোড করতে সমস্যা হয়েছে", "error");
@@ -4806,17 +5354,67 @@ function TeacherAttendanceManager({ settings }: { settings: any }) {
       body: JSON.stringify({ date, records })
     });
     setSaving(false);
+    setHasSaved(true);
     addToast("শিক্ষক হাজিরা সফলভাবে সংরক্ষিত হয়েছে", "success");
   };
+
+  const absentTeachers = teachers
+    .filter(t => attendance[t.id] === 'absent' || !attendance[t.id])
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      designation: t.designation || t.qualification || "শিক্ষক",
+      phone: t.phone,
+      photo_url: t.photo_url
+    }));
 
   return (
     <div className="space-y-6">
       <PrintHeader settings={settings} />
+
+      {/* Teacher Absent Alert Modal */}
+      <AbsentAlertModal
+        isOpen={showTeacherAbsentModal}
+        onClose={() => setShowTeacherAbsentModal(false)}
+        type="teacher"
+        date={date}
+        initialAction={teacherAbsentModalAction}
+        absentList={absentTeachers}
+      />
+
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 print:shadow-none print:border-0 print:p-0">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 print:hidden">
           <div>
-            <h3 className="text-3xl font-black text-slate-900">শিক্ষক হাজিরা ব্যবস্থাপনা</h3>
-            <p className="text-slate-500 font-bold mt-1">তারিখ নির্বাচন করে শিক্ষকদের হাজিরা নিন</p>
+            <div className="flex items-center gap-3">
+              <h3 className="text-3xl font-black text-slate-900">শিক্ষক হাজিরা ব্যবস্থাপনা</h3>
+              {hasSaved && (
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in duration-300">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherAbsentModalAction('notification');
+                      setShowTeacherAbsentModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                  >
+                    <Bell className="w-4 h-4" />
+                    <span>অনুপস্থিতি নোটিফিকেশন ({toBn(absentTeachers.length)})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherAbsentModalAction('call');
+                      setShowTeacherAbsentModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-purple-600/20 active:scale-95 transition-all"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    <span>ভয়েস কল করুন ({toBn(absentTeachers.length)})</span>
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-slate-500 font-bold mt-1">তারিখ নির্বাচন করে শিক্ষকদের হাজিরা নিন (বাংলাদেশ ঢাকা সময়)</p>
           </div>
           <div className="flex gap-4">
             <div className="relative w-48">
@@ -6746,7 +7344,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
   useEffect(() => {
     if (selectedClass && selectedClass !== "All") {
       fetch("/api/students?className=" + encodeURIComponent(selectedClass) + "&limit=500")
-        .then(res => res.json())
+        .then(res => res.ok ? res.json() : [])
         .then(data => {
           if (Array.isArray(data)) setFetchedClassStudents(data);
         })
@@ -6791,6 +7389,10 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
   const [statusClassFilter, setStatusClassFilter] = useState<string>("All");
+
+  // Defaulters Alert & Call Modal State
+  const [showDefaultersModal, setShowDefaultersModal] = useState(false);
+  const [defaultersModalAction, setDefaultersModalAction] = useState<'notification' | 'call'>('notification');
 
   const fetchFeeSetups = async () => {
     try {
@@ -7255,6 +7857,14 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
 
   return (
     <div className="space-y-8">
+      {/* Defaulters Alert & Voice Call Modal */}
+      <DefaultersAlertModal
+        isOpen={showDefaultersModal}
+        onClose={() => setShowDefaultersModal(false)}
+        classesList={classesList}
+        initialAction={defaultersModalAction}
+      />
+
       <ConfirmModal 
         isOpen={!!confirmApprove} 
         message="আপনি কি নিশ্চিত যে এই পেমেন্টটি এপ্রুভ করতে চান?" 
@@ -7267,25 +7877,53 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
         onConfirm={executeRejectPending} 
         onCancel={() => setConfirmReject(null)} 
       />
-      <div className="flex gap-4 bg-white p-2 rounded-2xl w-fit shadow-sm border border-slate-100">
-        <button 
-          onClick={() => setActiveTab("collection")}
-          className={cn("px-6 py-2 rounded-xl font-bold transition-all", activeTab === "collection" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
-        >
-          বেতন আদায়
-        </button>
-        <button 
-          onClick={() => setActiveTab("pending")}
-          className={cn("px-6 py-2 rounded-xl font-bold transition-all", activeTab === "pending" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
-        >
-          অনলাইন পেমেন্ট
-        </button>
-        <button 
-          onClick={() => setActiveTab("setup")}
-          className={cn("px-6 py-2 rounded-xl font-bold transition-all", activeTab === "setup" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
-        >
-          ফি সেটআপ
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex gap-2 sm:gap-4 bg-white p-2 rounded-2xl w-fit shadow-sm border border-slate-100">
+          <button 
+            onClick={() => setActiveTab("collection")}
+            className={cn("px-4 sm:px-6 py-2 rounded-xl font-bold transition-all text-xs sm:text-sm", activeTab === "collection" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
+          >
+            বেতন আদায়
+          </button>
+          <button 
+            onClick={() => setActiveTab("pending")}
+            className={cn("px-4 sm:px-6 py-2 rounded-xl font-bold transition-all text-xs sm:text-sm", activeTab === "pending" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
+          >
+            অনলাইন পেমেন্ট
+          </button>
+          <button 
+            onClick={() => setActiveTab("setup")}
+            className={cn("px-4 sm:px-6 py-2 rounded-xl font-bold transition-all text-xs sm:text-sm", activeTab === "setup" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}
+          >
+            ফি সেটআপ
+          </button>
+        </div>
+
+        {/* Top Voice Call and Notification Action Buttons for Fee Reminders as requested */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setDefaultersModalAction('notification');
+              setShowDefaultersModal(true);
+            }}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-blue-600/20 active:scale-95 transition-all"
+          >
+            <Bell className="w-4 h-4" />
+            <span>বকেয়া নোটিফিকেশন</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDefaultersModalAction('call');
+              setShowDefaultersModal(true);
+            }}
+            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-amber-600/20 active:scale-95 transition-all"
+          >
+            <PhoneCall className="w-4 h-4" />
+            <span>বকেয়া ভয়েস কল</span>
+          </button>
+        </div>
       </div>
 
       {activeTab === "pending" && (
@@ -8063,7 +8701,7 @@ function TransactionHistory({ settings }: { settings: any }) {
     if (endDate) params.append("end_date", endDate);
     
     fetch(`/api/admin/history?${params.toString()}`)
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : [])
       .then(data => {
         const sortedData = Array.isArray(data) 
           ? [...data].sort((a, b) => new Date(b.timestamp || b.date || 0).getTime() - new Date(a.timestamp || a.date || 0).getTime())
@@ -9078,6 +9716,7 @@ function NoticeManager({ notices, onUpdate }: any) {
 
 function DeviceAttendanceManager({ settings }: { settings: any }) {
   const { addToast } = useToast();
+  const [subTab, setSubTab] = useState<'rfid' | 'zkteco'>('rfid');
   const [deviceId, setDeviceId] = useState("");
   const [type, setType] = useState<"student" | "teacher" | "guardian">("student");
   const [loading, setLoading] = useState(false);
@@ -9144,7 +9783,37 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="flex flex-wrap gap-3 border-b border-slate-200 pb-4">
+        <button
+          type="button"
+          onClick={() => setSubTab('rfid')}
+          className={cn(
+            "px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2",
+            subTab === 'rfid'
+              ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          )}
+        >
+          <CreditCard className="w-4 h-4" /> USB RFID / কার্ড পাঞ্চ লাইভ টার্মিনাল
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('zkteco')}
+          className={cn(
+            "px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2",
+            subTab === 'zkteco'
+              ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          )}
+        >
+          <Settings2 className="w-4 h-4" /> ZKTeco ও নেটওয়ার্ক ডিভাইস গাইড
+        </button>
+      </div>
+
+      {subTab === 'rfid' ? (
+        <RFIDTerminal settings={settings} addToast={addToast} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
             <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
@@ -9264,6 +9933,7 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

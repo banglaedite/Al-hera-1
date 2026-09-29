@@ -32,11 +32,8 @@ export default function AdmissionForm() {
 
   useEffect(() => {
     fetch("/api/site-settings")
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(data => setSettings(data))
+      .then(res => res.ok ? res.json() : null)
+      .then(data => data && setSettings(data))
       .catch(err => console.error("Failed to load settings:", err));
   }, []);
 

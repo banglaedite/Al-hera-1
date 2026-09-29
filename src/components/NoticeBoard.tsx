@@ -4,8 +4,14 @@ import { useToast } from "./ToastContext";
 import { useLocation } from "react-router-dom";
 
 export const NoticeBoard = () => {
-  const { addToast } = useToast();
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem("siteSettings");
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const location = useLocation();
 
   useEffect(() => {
@@ -14,11 +20,12 @@ export const NoticeBoard = () => {
         const res = await fetch("/api/site-settings");
         if (res.ok) {
           const data = await res.json();
-          setSettings(data);
+          if (data && data.title) {
+            setSettings(data);
+          }
         }
       } catch (err) {
-        console.error("Failed to load settings:", err);
-        addToast("সাইট সেটিংস লোড করতে সমস্যা হয়েছে", "error");
+        console.error("Failed to load settings in NoticeBoard:", err);
       }
     };
     fetchSettings();

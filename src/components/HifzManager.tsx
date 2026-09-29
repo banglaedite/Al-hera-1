@@ -864,7 +864,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                               className="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl focus:border-emerald-500 transition-all font-bold text-slate-700"
                             >
                               {Array.from({ length: 30 }, (_, i) => (
-                                <option key={i + 1} value={i + 1}>পারা {i + 1}</option>
+                                <option key={`sabok-para-${i + 1}`} value={i + 1}>পারা {i + 1}</option>
                               ))}
                             </select>
                           </div>
@@ -1005,7 +1005,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                             >
                               <option value="">সিঙ্গেল পারা</option>
                               {Array.from({ length: 30 }, (_, i) => (
-                                <option key={i + 1} value={i + 1}>পারা {i + 1}</option>
+                                <option key={`amukhta-single-para-${i + 1}`} value={i + 1}>পারা {i + 1}</option>
                               ))}
                             </select>
                           </div>
@@ -1048,7 +1048,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                                 >
                                   <option value="">নির্বাচন করুন</option>
                                   {Array.from({ length: 30 }, (_, i) => (
-                                    <option key={i + 1} value={i + 1}>পারা {i + 1}</option>
+                                    <option key={`amukhta-from-para-${i + 1}`} value={i + 1}>পারা {i + 1}</option>
                                   ))}
                                 </select>
                               </div>
@@ -1061,7 +1061,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                                 >
                                   <option value="">নির্বাচন করুন</option>
                                   {Array.from({ length: 30 }, (_, i) => (
-                                    <option key={i + 1} value={i + 1}>পারা {i + 1}</option>
+                                    <option key={`amukhta-to-para-${i + 1}`} value={i + 1}>পারা {i + 1}</option>
                                   ))}
                                 </select>
                               </div>
@@ -1096,7 +1096,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                             >
                               <option value="">নির্বাচন করুন</option>
                               {Array.from({ length: 30 }, (_, i) => (
-                                <option key={i + 1} value={i + 1}>পারা {i + 1}</option>
+                                <option key={`tilawat-from-para-${i + 1}`} value={i + 1}>পারা {i + 1}</option>
                               ))}
                             </select>
                           </div>
@@ -1109,7 +1109,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                             >
                               <option value="">নির্বাচন করুন</option>
                               {Array.from({ length: 30 }, (_, i) => (
-                                <option key={i + 1} value={i + 1}>পারা {i + 1}</option>
+                                <option key={`tilawat-to-para-${i + 1}`} value={i + 1}>পারা {i + 1}</option>
                               ))}
                             </select>
                           </div>
@@ -1136,7 +1136,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                               const isSelected = sabina.paras.includes(p);
                               return (
                                 <button
-                                  key={p}
+                                  key={`sabina-para-btn-${p}`}
                                   type="button"
                                   onClick={() => {
                                     const newParas = isSelected 
