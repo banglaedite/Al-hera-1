@@ -40,11 +40,13 @@ import { useToast } from "./ToastContext";
 import { SimulatedIncomingCall } from "./SimulatedIncomingCall";
 import { GuardianBannerSlider } from "./GuardianBannerSlider";
 import { GuardianAppInstallPopup } from "./GuardianAppInstallPopup";
+import { playIPhoneNotificationSound } from "../utils/audio";
 
 export default function ParentPortal() {
   const { addToast } = useToast();
   const [identifier, setIdentifier] = useState(() => localStorage.getItem("guardianPhone") || "");
   const [loading, setLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!!localStorage.getItem("guardianPhone"));
   const [student, setStudent] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [deviceHistory, setDeviceHistory] = useState<any[]>([]);
@@ -56,83 +58,10 @@ export default function ParentPortal() {
   const [hifzSettings, setHifzSettings] = useState<any>(null);
 
   // Simulated Voice Incoming Call State
-  const [showIncomingCall, setShowIncomingCall] = useState(false);
-  const [activeCallData, setActiveCallData] = useState<any>(null);
   const [missedCallNotice, setMissedCallNotice] = useState<string | null>(null);
-
-  // Real-time In-App Voice Call Listener (Admin Panel -> Guardian App)
-  useEffect(() => {
-    if (!student?.id) return;
-
-    // Request notification permission if not yet decided
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      try {
-        Notification.requestPermission();
-      } catch (e) {}
-    }
-
-    const checkActiveCalls = async () => {
-      try {
-        const res = await fetch(`/api/parent/active-call/${student.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.active && data.call) {
-            setActiveCallData(data.call);
-            setShowIncomingCall(true);
-
-            // Trigger system push notification with vibration
-            if ('Notification' in window && Notification.permission === 'granted') {
-              try {
-                const notif = new Notification(`📞 ${data.call.caller || "মাদরাসা অফিস"} থেকে ভয়েস কল আসছে...`, {
-                  body: `${student.name}-এর জরুরি কল। রিসিভ করতে স্পর্শ করুন।`,
-                  icon: settings?.logo_url || '/favicon.ico',
-                  tag: `call-${data.call.id}`,
-                  requireInteraction: true
-                });
-                notif.onclick = () => {
-                  window.focus();
-                  notif.close();
-                };
-              } catch (e) {}
-            }
-          }
-        }
-      } catch (e) {
-        // quiet catch
-      }
-    };
-
-    checkActiveCalls();
-    const interval = setInterval(checkActiveCalls, 3500);
-    return () => clearInterval(interval);
-  }, [student?.id, settings?.logo_url]);
 
   // Real-time Punch Instant Notification Listener
   const [livePunchNotice, setLivePunchNotice] = useState<any>(null);
-
-  const playIPhoneNotificationSound = () => {
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      const playTone = (freq: number, startTime: number, duration: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
-        gain.gain.setValueAtTime(0, ctx.currentTime + startTime);
-        gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + startTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + startTime);
-        osc.stop(ctx.currentTime + startTime + duration);
-      };
-      playTone(1046.50, 0, 0.12);
-      playTone(1318.51, 0.12, 0.15);
-      playTone(1567.98, 0.27, 0.25);
-    } catch (e) {}
-  };
 
   useEffect(() => {
     if (!student?.id) return;
@@ -408,7 +337,11 @@ export default function ParentPortal() {
     // Auto login if identifier exists in localStorage
     const savedIdentifier = localStorage.getItem("guardianPhone");
     if (savedIdentifier) {
-      handleLogin(null, savedIdentifier);
+      handleLogin(null, savedIdentifier).finally(() => {
+        setIsCheckingAuth(false);
+      });
+    } else {
+      setIsCheckingAuth(false);
     }
 
     // Handle Deep Linking to Tabs
@@ -723,6 +656,9 @@ export default function ParentPortal() {
 
       setStudent({ ...data, isTeacher });
       localStorage.setItem("guardianPhone", loginIdentifier);
+      if (!isTeacher) {
+        localStorage.setItem("studentData", JSON.stringify(data));
+      }
       fetchFullProfile(data.id);
       
       if (isTeacher) {
@@ -795,39 +731,6 @@ export default function ParentPortal() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCallDecline = async (isTimeout: boolean) => {
-    setShowIncomingCall(false);
-    if (activeCallData?.id) {
-      fetch("/api/parent/call/response", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ call_id: activeCallData.id, status: isTimeout ? "missed" : "declined" })
-      }).catch(() => {});
-    }
-    if (!student) return;
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    sessionStorage.setItem(`voice_call_handled_${student.id}_${todayStr}`, 'true');
-    const noticeMsg = activeCallData?.message || settings?.voice_call_missed_notice_text || 
-      `জরুরী অনুপস্থিতি নোটিশ: আপনার সন্তান ${student.name} আজ মাদরাসায় অনুপস্থিত রয়েছে। জরুরি তথ্যের জন্য যোগাযোগ করুন।`;
-    setMissedCallNotice(noticeMsg);
-    setActiveCallData(null);
-    addToast(isTimeout ? "কল টাইমআউট হয়েছে" : "কল কেটে দেওয়া হয়েছে", "info");
-  };
-
-  const handleCallAccept = async () => {
-    if (activeCallData?.id) {
-      fetch("/api/parent/call/response", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ call_id: activeCallData.id, status: "accepted" })
-      }).catch(() => {});
-    }
-    if (!student) return;
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    sessionStorage.setItem(`voice_call_handled_${student.id}_${todayStr}`, 'true');
-    addToast("কল সংযুক্ত হয়েছে", "success");
   };
 
   const fetchFullProfile = async (sId: string) => {
@@ -908,6 +811,21 @@ export default function ParentPortal() {
     setIdentifier("");
   };
 
+  if (isCheckingAuth && !student) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#064e3b]">
+        <div className="text-center space-y-6">
+          <div className="relative flex items-center justify-center w-20 h-20 mx-auto">
+            <div className="absolute inset-0 rounded-full border-[4px] border-emerald-500/20"></div>
+            <div className="absolute inset-0 rounded-full border-t-[4px] border-t-emerald-400 animate-spin"></div>
+            <Users className="w-8 h-8 text-emerald-400" />
+          </div>
+          <p className="text-emerald-100 font-black tracking-widest animate-pulse">প্রবেশ করা হচ্ছে...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!student) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -976,23 +894,6 @@ export default function ParentPortal() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans relative">
-      {/* Simulated Voice Call Overlay */}
-      <AnimatePresence>
-        {showIncomingCall && (
-          <SimulatedIncomingCall
-            student={student}
-            settings={{
-              ...settings,
-              voice_call_message_text: activeCallData?.message || settings?.voice_call_message_text,
-              voice_call_audio_url: activeCallData?.audio_url || settings?.voice_call_audio_url,
-              title: activeCallData?.caller || settings?.title || "আল-হেরা মাদরাসা"
-            }}
-            onAccept={handleCallAccept}
-            onDecline={handleCallDecline}
-          />
-        )}
-      </AnimatePresence>
-
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Missed Call Notice Banner */}
         <AnimatePresence>

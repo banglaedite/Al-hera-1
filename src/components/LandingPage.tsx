@@ -126,15 +126,9 @@ const LandingPage = () => {
   }, [leaderboardType]);
 
   useEffect(() => {
-    // Check if user is already logged in and redirect
-    if (localStorage.getItem("isAdmin") === "true") {
-      navigate("/secret-admin-access");
-      return;
-    } else if (localStorage.getItem("guardianPhone")) {
-      navigate("/parent");
-      return;
-    }
-
+    // Check if user is already logged in - but DON'T auto-redirect away from landing page
+    // as requested by user to allow viewing the landing page even when logged in.
+    
     const fetchWithTimeout = async (url: string, timeout = 5000, retries = 1): Promise<Response> => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeout);

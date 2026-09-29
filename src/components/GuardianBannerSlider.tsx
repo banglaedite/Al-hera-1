@@ -66,7 +66,7 @@ export function GuardianBannerSlider({
 
   // Slide 1: Attendance / Latest Punch Slide (First Slide as requested)
   slides.push({
-    id: "attendance",
+    id: `attendance-slide-${isPresent ? 'present' : 'absent'}-${timeDisplay || 'none'}`,
     badge: isCheckout ? "আজকের প্রস্থান স্ট্যাটাস" : "আজকের উপস্থিতি স্ট্যাটাস",
     bgGradient: isCheckout
       ? "from-amber-950 via-orange-950 to-slate-900"
@@ -99,7 +99,7 @@ export function GuardianBannerSlider({
   if (Array.isArray(notices) && notices.length > 0) {
     const activeNotice = notices[0];
     slides.push({
-      id: `notice-${activeNotice.id || 'latest'}`,
+      id: `notice-slide-${activeNotice.id || 'latest'}-${activeNotice.title?.slice(0, 10)}`,
       badge: "সর্বশেষ নোটিশ ও ঘোষণা",
       bgGradient: "from-blue-950 via-indigo-950 to-slate-900",
       border: "border-indigo-500/40",
@@ -117,7 +117,7 @@ export function GuardianBannerSlider({
   if (Array.isArray(settings?.custom_slides) && settings.custom_slides.length > 0) {
     settings.custom_slides.filter((cs: any) => cs.active !== false).forEach((cs: any, cIdx: number) => {
       slides.push({
-        id: `custom-slide-${cs.id || cIdx}`,
+        id: `custom-slide-${cs.id || cIdx}-${cs.title?.slice(0, 10) || 'no-title'}`,
         badge: cs.badge || "বিশেষ ঘোষণা",
         bgGradient: cs.bg_gradient || "from-purple-950 via-slate-900 to-indigo-950",
         border: "border-purple-500/40",

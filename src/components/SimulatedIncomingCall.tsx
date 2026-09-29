@@ -17,62 +17,25 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { formatBengaliNameForSpeech, buildAbsenceVoiceCallDialogue } from "../utils/pronunciation";
+import { playIPhoneRingtone } from "../utils/audio";
 
 // Web Audio API Synthesized Ringtone Generator
 class RingtonePlayer {
-  private ctx: AudioContext | null = null;
-  private isPlaying: boolean = false;
   private timer: any = null;
+  private isPlaying: boolean = false;
 
   start() {
     if (this.isPlaying) return;
     this.isPlaying = true;
+    
+    playIPhoneRingtone();
+    this.timer = setInterval(playIPhoneRingtone, 2500);
 
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      this.ctx = new AudioCtx();
-
-      const playRingBurst = () => {
-        if (!this.isPlaying || !this.ctx) return;
-
-        // Standard 440Hz + 480Hz dual-frequency telephone ring tone
-        const osc1 = this.ctx.createOscillator();
-        const osc2 = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-
-        osc1.type = 'sine';
-        osc2.type = 'sine';
-        osc1.frequency.setValueAtTime(440, this.ctx.currentTime);
-        osc2.frequency.setValueAtTime(480, this.ctx.currentTime);
-
-        // Ring pattern: Ring (1.5s) -> Silence (2s)
-        gain.gain.setValueAtTime(0, this.ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.25, this.ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.25, this.ctx.currentTime + 1.4);
-        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.5);
-
-        osc1.connect(gain);
-        osc2.connect(gain);
-        gain.connect(this.ctx.destination);
-
-        osc1.start();
-        osc2.start();
-        osc1.stop(this.ctx.currentTime + 1.5);
-        osc2.stop(this.ctx.currentTime + 1.5);
-
-        // Trigger vibration if supported
-        if ('vibrate' in navigator) {
-          try {
-            navigator.vibrate([500, 200, 500]);
-          } catch (e) {}
-        }
-      };
-
-      playRingBurst();
-      this.timer = setInterval(playRingBurst, 3500);
-    } catch (e) {
-      console.error("Ringtone error:", e);
+    // Trigger vibration if supported
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      } catch (e) {}
     }
   }
 
@@ -81,12 +44,6 @@ class RingtonePlayer {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-    }
-    if (this.ctx) {
-      try {
-        this.ctx.close();
-      } catch (e) {}
-      this.ctx = null;
     }
   }
 }
@@ -192,34 +149,35 @@ export function SimulatedIncomingCall({
 
   const playTTS = () => {
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(voiceMessageText);
-      utterance.lang = 'bn-BD';
-      utterance.rate = 1.0; // Natural human conversational speed
-      utterance.pitch = 1.0;
+      const startSpeech = () => {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(voiceMessageText);
+        utterance.lang = 'bn-BD';
+        utterance.rate = 0.9; // Natural but slightly slower for clarity
+        utterance.pitch = 1.0;
 
-      // Select natural sounding Bengali voice if available
-      const voices = window.speechSynthesis.getVoices();
-      const bnVoice = voices.find(v => 
-        (v.lang.includes('bn') || v.lang.includes('BN') || v.name.toLowerCase().includes('bengali') || v.name.toLowerCase().includes('bangla')) &&
-        (v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('google') || v.name.toLowerCase().includes('male'))
-      ) || voices.find(v => v.lang.includes('bn') || v.lang.includes('BN'));
+        // Select natural sounding Bengali voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const bnVoice = voices.find(v => 
+          (v.lang.includes('bn') || v.lang.includes('BN') || v.name.toLowerCase().includes('bengali') || v.name.toLowerCase().includes('bangla')) &&
+          (v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('google'))
+        ) || voices.find(v => v.lang.includes('bn') || v.lang.includes('BN'));
 
-      if (bnVoice) {
-        utterance.voice = bnVoice;
+        if (bnVoice) {
+          utterance.voice = bnVoice;
+        }
+
+        setIsPlayingAudio(true);
+        utterance.onend = () => setIsPlayingAudio(false);
+        utterance.onerror = () => setIsPlayingAudio(false);
+        window.speechSynthesis.speak(utterance);
+      };
+
+      if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.onvoiceschanged = startSpeech;
+      } else {
+        startSpeech();
       }
-
-      setIsPlayingAudio(true);
-
-      utterance.onend = () => {
-        setIsPlayingAudio(false);
-      };
-
-      utterance.onerror = () => {
-        setIsPlayingAudio(false);
-      };
-
-      window.speechSynthesis.speak(utterance);
     }
   };
 

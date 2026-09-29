@@ -101,14 +101,22 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const isCall = data.type === 'call' || data.title.includes('কল');
+  
   const options = {
     body: data.body,
     icon: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
     badge: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
-    vibrate: [200, 100, 200],
+    vibrate: isCall ? [500, 200, 500, 200, 500, 200, 500] : [200, 100, 200],
+    tag: isCall ? 'incoming-call' : (data.tag || 'general-notification'),
+    renotify: true,
+    requireInteraction: isCall,
     data: {
-      url: data.url || '/'
-    }
+      url: data.url || (isCall ? '/parent?action=call' : '/'),
+      isCall: isCall
+    },
+    // Note: 'sound' property is deprecated in most browsers, but vibrate helps
+    silent: false
   };
 
   event.waitUntil(

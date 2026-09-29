@@ -180,6 +180,61 @@ app.get("/al_hera_madrasah.apk", (req, res) => {
 });
 
 // Consolidated Health check
+  app.post("/api/push/subscribe", async (req, res) => {
+    const { token, phone, studentId } = req.body;
+    if (!token) return res.status(400).json({ error: "Token is required" });
+
+    try {
+      const db = getFirestoreInstance();
+      const subRef = db.collection("push_subscriptions").doc(token);
+      await subRef.set({
+        token,
+        phone: phone || null,
+        student_id: studentId || null,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Push subscription error:", error);
+      res.status(500).json({ error: "Failed to subscribe" });
+    }
+  });
+
+  async function sendPushNotification(studentId: string, title: string, body: string, data: any = {}) {
+    try {
+      const db = getFirestoreInstance();
+      const studentDoc = await db.collection("students").doc(String(studentId)).get();
+      if (!studentDoc.exists) return;
+      const studentData = studentDoc.data();
+      const phone = studentData?.guardian_phone || studentData?.phone;
+
+      if (!phone) return;
+
+      const subsSnapshot = await db.collection("push_subscriptions")
+        .where("phone", "==", phone)
+        .get();
+      
+      const tokens = subsSnapshot.docs.map(doc => doc.data().token);
+      if (tokens.length === 0) return;
+
+      const message = {
+        notification: { title, body },
+        data: {
+          ...data,
+          student_id: String(studentId),
+          click_action: data.url || "/",
+          icon: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
+        },
+        tokens: tokens,
+      };
+
+      await admin.messaging().sendEachForMulticast(message);
+    } catch (error) {
+      console.error("Error sending push notification:", error);
+    }
+  }
+
 app.get("/api/health", async (req, res) => {
   try {
     const db = getFirestoreInstance();
@@ -4386,6 +4441,13 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
           is_active: 1,
           created_at: now.toISOString()
         }).catch(() => {});
+
+        // Send real-time push notification
+        sendPushNotification(String(person.id), actionTitle, actionDesc, {
+          url: "/parent",
+          type: "punch",
+          action: action
+        });
       }
 
       res.json({
@@ -4465,6 +4527,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
 
       // Log to history
       await firestore.collection("attendance_history").add({
+        id: person.id,
         person_id: person.id,
         name: person.name,
         type,
@@ -4535,7 +4598,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       const db = getFirestoreInstance();
       if (!db) return res.json([]);
       const historySnapshot = await db.collection("attendance_history")
-        .where("id", "==", studentId)
+        .where("person_id", "==", studentId)
         .get();
       
       const history = historySnapshot.docs.map(doc => ({
@@ -4557,7 +4620,7 @@ seedDatabase().catch(e => console.error("Initial seeding failed:", e));
       if (!db) return res.json({ punch: null });
 
       const snap = await db.collection("attendance_history")
-        .where("id", "==", String(studentId))
+        .where("person_id", "==", String(studentId))
         .orderBy("timestamp", "desc")
         .limit(1)
         .get();
@@ -4660,6 +4723,13 @@ function formatBengaliNameForSpeech(name: string): string {
         is_active: 1,
         created_at: now.toISOString()
       }).catch(() => {});
+
+      // Send real-time push notification for call
+      sendPushNotification(String(student_id), `📞 ${madrasaName} থেকে কল আসছে`, cleanedMessage, {
+        url: "/parent",
+        type: "call",
+        call_id: callDocRef.id
+      });
 
       res.json({
         success: true,
@@ -4765,7 +4835,7 @@ function formatBengaliNameForSpeech(name: string): string {
         }));
       }
 
-      // Process students in chunks to avoid overwhelming the server or Firestore
+      // Process students in chunks sequentially to avoid server issues/timeouts
       for (let i = 0; i < targetIds.length; i += chunkSize) {
         const currentBatch = targetIds.slice(i, i + chunkSize);
         
@@ -4782,11 +4852,9 @@ function formatBengaliNameForSpeech(name: string): string {
           let itemMessage = (message || defaultText).replace(/^(আসসালামু\s*আলাইকুম|আসসালামুয়ালাইকুম|সালাম)[।,.\s-]*/i, "").trim();
           itemMessage = itemMessage.replace(/\b(মোঃ|মো\.|মো:|মো\s+)/g, "মোহাম্মদ ");
 
-          const operations = [];
-
-          // 1. Add Call if needed
+          // 1. Add Call
           if (action === 'call' && type === 'student') {
-            operations.push(db.collection("active_calls").add({
+            await db.collection("active_calls").add({
               student_id: String(tId),
               student_name: sName,
               student_class: sClass,
@@ -4800,34 +4868,42 @@ function formatBengaliNameForSpeech(name: string): string {
               audio_url: settings.voice_call_audio_url || null,
               timestamp: now.toISOString(),
               expires_at: expiresAt
-            }));
+            }).catch(() => {});
           }
 
           // 2. Record Alert
-          operations.push(db.collection("absence_alerts").add({
-            person_id: tId,
+          await db.collection("absence_alerts").add({
+            person_id: String(tId),
             type,
             action,
             date: date || getDhakaDateTime(now).date,
             message: itemMessage,
             created_at: now.toISOString()
-          }));
+          }).catch(() => {});
 
-          // 3. Add Notice for App visibility
-          operations.push(db.collection("notices").add({
+          // 3. Add Notice
+          await db.collection("notices").add({
             title: `🚨 ${action === 'call' ? 'জরুরি ভয়েস কল সতর্কবার্তা' : 'অনুপস্থিতি নোটিফিকেশন'}`,
             content: itemMessage,
-            target_student_id: tId,
+            target_student_id: String(tId),
             date: date || getDhakaDateTime(now).date,
             allow_poll: false,
             is_active: 1,
             created_at: now.toISOString()
-          }));
+          }).catch(() => {});
 
-          await Promise.all(operations).catch(err => {
-            console.error(`Error in operations for ${tId}:`, err);
+          // Send real-time push notification
+          sendPushNotification(String(tId), `📢 ${action === 'call' ? 'জরুরি ভয়েস কল' : 'অনুপস্থিতি সতর্কবার্তা'}`, itemMessage, {
+            url: "/parent",
+            type: action === 'call' ? "call" : "absent_alert",
+            action: action
           });
         }));
+
+        // Delay between chunks to prevent server overload
+        if (i + chunkSize < targetIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       }
 
       res.json({

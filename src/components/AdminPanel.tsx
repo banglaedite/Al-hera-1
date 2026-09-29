@@ -540,7 +540,14 @@ export default function AdminPanel() {
   const fetchRecentStudents = async () => {
     try {
       const res = await fetch("/api/students/recent");
-      if (res.ok) setRecentStudents(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        // Deduplicate by ID to prevent React key errors
+        if (Array.isArray(data)) {
+          const unique = Array.from(new Map(data.map(s => [s.id, s])).values());
+          setRecentStudents(unique);
+        }
+      }
     } catch (err) {
       console.error(err);
     }
@@ -688,7 +695,9 @@ export default function AdminPanel() {
       }
       const data = await res.json().catch(() => []);
       if (Array.isArray(data)) {
-        const sortedStudents = data.sort((a, b) => {
+        // Deduplicate students by ID to prevent duplicate key errors
+        const uniqueStudents = Array.from(new Map(data.map(s => [s.id, s])).values());
+        const sortedStudents = uniqueStudents.sort((a: any, b: any) => {
           if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
           return parseRoll(a.roll) - parseRoll(b.roll);
         });
@@ -722,7 +731,6 @@ export default function AdminPanel() {
     { id: "teachers", label: "শিক্ষক ও স্টাফ", icon: Users, permission: "teachers" },
     { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "all_teachers" },
     { id: "teacher-attendance", label: "শিক্ষক হাজিরা", icon: UserCheck, permission: "teacher_attendance" },
-    { id: "rfid-terminal", label: "স্মার্ট কার্ড টার্মিনাল", icon: CreditCard, permission: "biometric" },
     { id: "accounting", label: "আয়-ব্যয়", icon: ArrowRightLeft, permission: "accounting" },
     { id: "fees", label: "বেতন ও ফি", icon: CreditCard, permission: "fees" },
     { id: "history", label: "হিস্টোরি", icon: Clock, permission: "history" },
@@ -910,8 +918,8 @@ export default function AdminPanel() {
                           </tr>
                         </thead>
                         <tbody className="text-sm">
-                          {recentStudents.map((s) => (
-                            <tr key={s.id} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50" onClick={() => {
+                          {recentStudents.map((s, idx) => (
+                            <tr key={`${s.id || 'student'}-${idx}`} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50" onClick={() => {
                               setActiveTab("students");
                             }}>
                               <td className="py-4 font-bold text-slate-700">{s.name}</td>
@@ -9784,18 +9792,6 @@ function DeviceAttendanceManager({ settings }: { settings: any }) {
       </div>
 
       <div className="flex flex-wrap gap-3 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => setSubTab('rfid')}
-          className={cn(
-            "px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2",
-            subTab === 'rfid'
-              ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20"
-              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-          )}
-        >
-          <CreditCard className="w-4 h-4" /> USB RFID / কার্ড পাঞ্চ লাইভ টার্মিনাল
-        </button>
         <button
           type="button"
           onClick={() => setSubTab('zkteco')}

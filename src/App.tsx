@@ -32,8 +32,189 @@ import { RFIDTerminal } from "./components/RFIDTerminal";
 import { SecretLogoTrigger } from "./components/SecretLogoTrigger";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { cn } from "./lib/utils";
+import { SimulatedIncomingCall } from "./components/SimulatedIncomingCall";
+import { requestForToken, onMessageListener } from "./firebase";
+import { playIPhoneNotificationSound } from "./utils/audio";
 
 import { useToast } from "./components/ToastContext";
+
+// Component to handle Push Notification Subscriptions
+const PushNotificationManager = () => {
+  useEffect(() => {
+    const setupPush = async () => {
+      // 1. Request Permission
+      if (!("Notification" in window)) return;
+      
+      if (Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+
+      if (Notification.permission === "granted") {
+        // 2. Get Token
+        const token = await requestForToken();
+        if (token) {
+          const phone = localStorage.getItem("guardianPhone");
+          const studentData = localStorage.getItem("studentData");
+          let studentId = null;
+          if (studentData) {
+            try {
+              studentId = JSON.parse(studentData).id;
+            } catch (e) {}
+          }
+
+          // 3. Send to Server
+          if (phone || studentId) {
+            await fetch("/api/push/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token, phone, studentId })
+            }).catch(console.error);
+          }
+        }
+      }
+    };
+
+    setupPush();
+
+    // Listen for foreground messages
+    onMessageListener().then((payload: any) => {
+      console.log("Foreground message received:", payload);
+      playIPhoneNotificationSound();
+    }).catch(err => console.log('failed: ', err));
+  }, []);
+
+  return null;
+};
+
+// Global Component to listen for active calls regardless of the page
+const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
+  const { addToast } = useToast();
+  const [activeCallData, setActiveCallData] = useState<any>(null);
+  const [showIncomingCall, setShowIncomingCall] = useState(false);
+  const [student, setStudent] = useState<any>(null);
+
+  useEffect(() => {
+    const phone = localStorage.getItem("guardianPhone");
+    if (!phone) {
+      setStudent(null);
+      return;
+    }
+
+    // Fetch basic student info for the listener
+    fetch("/api/parent-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: phone })
+    })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => d && setStudent(d))
+    .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!student?.id) return;
+
+    let lastCheckedPunchId = sessionStorage.getItem(`last_notified_punch_${student.id}`) || "";
+
+    const checkActiveCalls = async () => {
+      try {
+        // 1. Check for Active Calls
+        const res = await fetch(`/api/parent/active-call/${student.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.active && data.call && (!activeCallData || activeCallData.id !== data.call.id)) {
+            setActiveCallData(data.call);
+            setShowIncomingCall(true);
+
+            // System Notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+              try {
+                const notif = new Notification(`📞 ${data.call.caller || "মাদরাসা অফিস"} থেকে ভয়েস কল আসছে...`, {
+                  body: `${student.name}-এর জরুরি কল। রিসিভ করতে স্পর্শ করুন।`,
+                  icon: settings?.logo_url || '/favicon.ico',
+                  tag: `call-${data.call.id}`,
+                  requireInteraction: true
+                });
+                notif.onclick = () => {
+                  window.focus();
+                  notif.close();
+                };
+              } catch (e) {}
+            }
+          } else if (!data.active) {
+            setShowIncomingCall(false);
+            setActiveCallData(null);
+          }
+        }
+
+        // 2. Check for Instant Punch Notifications (Added for better real-time experience)
+        const punchRes = await fetch(`/api/parent/latest-punch/${student.id}`);
+        if (punchRes.ok) {
+          const pData = await punchRes.json();
+          if (pData.punch && pData.punch.id !== lastCheckedPunchId) {
+            const punchTime = new Date(pData.punch.timestamp || Date.now()).getTime();
+            const now = Date.now();
+            // Only notify if it happened in last 3 minutes
+            if (now - punchTime < 180000) {
+              lastCheckedPunchId = pData.punch.id;
+              sessionStorage.setItem(`last_notified_punch_${student.id}`, pData.punch.id);
+              
+              const title = pData.punch.action === 'check_in' ? '🟢 সফল প্রবেশ' : '🟠 সফল প্রস্থান';
+              const body = `${student.name} আজ ${pData.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${pData.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
+              
+              addToast(body, "success");
+              playIPhoneNotificationSound();
+
+              if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                  const notif = new Notification(title, {
+                    body,
+                    icon: settings?.logo_url || '/favicon.ico',
+                    tag: `punch-${pData.punch.id}`
+                  });
+                } catch (e) {}
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkActiveCalls();
+    const interval = setInterval(checkActiveCalls, 3000); 
+    return () => clearInterval(interval);
+  }, [student?.id, activeCallData, settings?.logo_url]);
+
+  const handleCallResponse = async (status: string, isTimeout: boolean = false) => {
+    setShowIncomingCall(false);
+    if (activeCallData?.id) {
+      fetch("/api/parent/call/response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ call_id: activeCallData.id, status: isTimeout ? "missed" : status })
+      }).catch(() => {});
+      
+      if (status === 'accepted') {
+        addToast("কল সংযুক্ত হয়েছে", "success");
+      } else {
+        addToast(isTimeout ? "কল টাইমআউট হয়েছে" : "কল কেটে দেওয়া হয়েছে", "info");
+      }
+    }
+    setActiveCallData(null);
+  };
+
+  if (!showIncomingCall) return null;
+
+  return (
+    <SimulatedIncomingCall
+      student={student}
+      settings={settings}
+      onAccept={() => handleCallResponse('accepted')}
+      onDecline={(isTimeout) => handleCallResponse('declined', isTimeout)}
+      onClose={() => setShowIncomingCall(false)}
+    />
+  );
+};
 
 const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
   const { addToast } = useToast();
@@ -88,7 +269,9 @@ const SiteSettingsProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
+      <PushNotificationManager />
       <Navbar settings={settings} />
+      <GlobalGuardianCallListener settings={settings} />
       {children}
       <footer className="bg-emerald-950 text-emerald-100 py-12 mt-20">
         <div className="max-w-7xl mx-auto px-4 text-center">
@@ -117,7 +300,6 @@ const Navbar = ({ settings }: { settings: any }) => {
 
   const navItems = [
     { name: "হোম", path: "/dashboard", icon: Home },
-    { name: "কার্ড পাঞ্চ", path: "/rfid-terminal", icon: CreditCard },
     { name: "ভর্তি", path: "/admission", icon: UserPlus },
     { name: "রেজাল্ট", path: "/parent?tab=results", icon: BookOpen },
     { name: "প্যারেন্ট পোর্টাল", path: "/parent", icon: LayoutDashboard },
