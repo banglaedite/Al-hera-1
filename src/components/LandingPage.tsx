@@ -24,7 +24,8 @@ import {
   Utensils,
   FileText,
   Bell,
-  Download
+  Download,
+  CreditCard
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
@@ -997,7 +998,7 @@ const LandingPage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
               {leaderboard.map((student, index) => (
                 <motion.div
-                  key={student.id}
+                  key={`leaderboard-student-${student.id || index}-${index}`}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}

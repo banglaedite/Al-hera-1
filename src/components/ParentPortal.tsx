@@ -37,7 +37,6 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useToast } from "./ToastContext";
-import { SimulatedIncomingCall } from "./SimulatedIncomingCall";
 import { GuardianBannerSlider } from "./GuardianBannerSlider";
 import { GuardianAppInstallPopup } from "./GuardianAppInstallPopup";
 import { playIPhoneNotificationSound } from "../utils/audio";
@@ -87,7 +86,31 @@ export default function ParentPortal() {
               setLivePunchNotice(data.punch);
               playIPhoneNotificationSound();
 
-              if ('Notification' in window && Notification.permission === 'granted') {
+              if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(reg => {
+                  const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
+                  const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
+                  reg.showNotification(title, {
+                    body,
+                    icon: settings?.logo_url || '/favicon.ico',
+                    badge: settings?.logo_url || '/favicon.ico',
+                    tag: `punch-${data.punch.id}`,
+                    requireInteraction: true,
+                    vibrate: [400, 150, 400],
+                    data: { url: '/parent' }
+                  } as any);
+                }).catch(() => {
+                  if ('Notification' in window && Notification.permission === 'granted') {
+                    const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
+                    const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
+                    new Notification(title, {
+                      body,
+                      icon: settings?.logo_url || '/favicon.ico',
+                      tag: `punch-${data.punch.id}`
+                    });
+                  }
+                });
+              } else if ('Notification' in window && Notification.permission === 'granted') {
                 try {
                   const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
                   const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
@@ -709,20 +732,6 @@ export default function ParentPortal() {
 
         const hifzSettingsData = hifzSettingsRes.ok ? await hifzSettingsRes.json().catch(() => ({})) : {};
         setHifzSettings(hifzSettingsData);
-
-        // Check for Automated Incoming Call for Absent Student
-        const todayStr = new Date().toLocaleDateString('en-CA');
-        const todayAtt = Array.isArray(profileData.attendance) ? profileData.attendance.find((a: any) => a.date === todayStr) : null;
-        const isAbsentToday = !todayAtt || todayAtt.status === 'absent' || (!todayAtt.check_in && todayAtt.status !== 'present');
-
-        const callHandledKey = `voice_call_handled_${data.id}_${todayStr}`;
-        const alreadyHandledToday = sessionStorage.getItem(callHandledKey) || localStorage.getItem(callHandledKey);
-
-        if (settingsData?.voice_call_enabled && isAbsentToday && !alreadyHandledToday) {
-          setTimeout(() => {
-            setShowIncomingCall(true);
-          }, 1500);
-        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -1784,7 +1793,7 @@ export default function ParentPortal() {
 
                       return (
                         <div className="flex flex-wrap gap-3 mb-10">
-                          {publishedExamKeys.sort((a, b) => b.localeCompare(a)).map(examKey => (
+                          {[...(Array.isArray(publishedExamKeys) ? publishedExamKeys : [])].sort((a, b) => b.localeCompare(a)).map(examKey => (
                             <button
                               key={examKey}
                               onClick={() => setSelectedResultExam(examKey)}

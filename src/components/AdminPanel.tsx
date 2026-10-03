@@ -102,6 +102,7 @@ import {
   RefreshCw,
   ArrowRightLeft,
   PhoneCall,
+  Phone,
   Mic,
   MicOff,
   Play,
@@ -109,6 +110,7 @@ import {
   Upload,
   Volume2,
   Radio,
+  Zap,
   Sparkles
 } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -594,7 +596,7 @@ export default function AdminPanel() {
       const res = await fetchWithRetry("/api/classes");
       if (res.ok) {
         const data = await res.json();
-        const sorted = data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        const sorted = Array.isArray(data) ? data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0)) : [];
         setClasses(sorted);
       }
     } catch (error) {
@@ -727,6 +729,7 @@ export default function AdminPanel() {
     { id: "all-students", label: "সকল ছাত্র (আর্কাইভ)", icon: Users, permission: "all_students" },
     { id: "hifz", label: "হিফজ বিভাগ", icon: GraduationCap, permission: "hifz" },
     { id: "attendance", label: "ছাত্র হাজিরা", icon: UserCheck, permission: "student_attendance" },
+    { id: "rfid-terminal", label: "কার্ড হাজিরা টার্মিনাল", icon: CreditCard, permission: "student_attendance" },
     { id: "results", label: "রেজাল্ট", icon: BookOpen, permission: "results" },
     { id: "teachers", label: "শিক্ষক ও স্টাফ", icon: Users, permission: "teachers" },
     { id: "all-teachers", label: "শিক্ষক (আর্কাইভ)", icon: Users, permission: "all_teachers" },
@@ -905,6 +908,134 @@ export default function AdminPanel() {
                     <AdminStat label="মোট ব্যয়" value={`৳ ${stats.expenses}`} icon={TrendingDown} color="bg-rose-500" />
                   </div>
 
+                  {/* Quick Admin Action Options */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900">প্রধান অপশন সমূহ</h3>
+                        <p className="text-xs text-slate-500 font-bold mt-1">প্রয়োজনীয় মেনুতে সরাসরি প্রবেশ করুন</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("students")}
+                        className="p-5 rounded-2xl bg-blue-50 hover:bg-blue-100/80 border border-blue-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <Users className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">ছাত্র তালিকা</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">সকল ছাত্র তথ্য ও প্রোফাইল</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("attendance")}
+                        className="p-5 rounded-2xl bg-amber-50 hover:bg-amber-100/80 border border-amber-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <UserCheck className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">ছাত্র হাজিরা</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">ম্যানুয়াল ও দৈনিক উপস্থিতি</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("rfid-terminal")}
+                        className="p-5 rounded-2xl bg-emerald-50 hover:bg-emerald-100/80 border-2 border-emerald-500/30 text-left transition-all active:scale-95 group shadow-md flex flex-col justify-between relative overflow-hidden"
+                      >
+                        <div className="absolute top-2 right-2 px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-black rounded-full uppercase tracking-wider animate-pulse">
+                          লাইভ
+                        </div>
+                        <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md shadow-emerald-600/30">
+                          <CreditCard className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-emerald-950 text-base flex items-center gap-1.5">
+                            কার্ড হাজিরা টার্মিনাল
+                          </h4>
+                          <p className="text-xs text-emerald-700 font-bold mt-0.5">কার্ড পাঞ্চ ও তাৎক্ষণিক পুশ</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("results")}
+                        className="p-5 rounded-2xl bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">রেজাল্ট</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">মার্কশীট ও পরীক্ষা ফলাফল</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("admissions")}
+                        className="p-5 rounded-2xl bg-rose-50 hover:bg-rose-100/80 border border-rose-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-rose-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <UserPlus className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">ভর্তি আবেদন</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">নতুন ভর্তি ও অনুমোদন</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("hifz")}
+                        className="p-5 rounded-2xl bg-teal-50 hover:bg-teal-100/80 border border-teal-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-teal-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <GraduationCap className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">হিফজ বিভাগ</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">সবক, সবকি ও আমোক্তা</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("teachers")}
+                        className="p-5 rounded-2xl bg-purple-50 hover:bg-purple-100/80 border border-purple-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-purple-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <Users className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">শিক্ষক ও স্টাফ</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">শিক্ষক তালিকা ও হাজিরা</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("fees")}
+                        className="p-5 rounded-2xl bg-cyan-50 hover:bg-cyan-100/80 border border-cyan-100 text-left transition-all active:scale-95 group shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="w-12 h-12 rounded-xl bg-cyan-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <CreditCard className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-base">বেতন ও ফি</h4>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">মাসিক ফি ও রসিদ</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
                     <h3 className="text-xl font-bold text-slate-900 mb-6">সাম্প্রতিক ভর্তি</h3>
                     <div className="overflow-x-auto">
@@ -952,7 +1083,7 @@ export default function AdminPanel() {
                 </motion.div>
               )}
 
-              {(activeTab === "rfid-terminal" || activeTab === "biometric" || activeTab === "device-attendance") && (
+              {(activeTab === "rfid-terminal" || activeTab === "biometric") && (
                 <motion.div key="rfid-terminal" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                   <RFIDTerminal settings={settings} addToast={addToast} />
                 </motion.div>
@@ -1015,13 +1146,7 @@ export default function AdminPanel() {
 
               {activeTab === "attendance" && (
                 <motion.div key="attendance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <AttendanceManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} />
-                </motion.div>
-              )}
-
-              {activeTab === "device-attendance" && (
-                <motion.div key="device-attendance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                  <DeviceAttendanceManager settings={settings} />
+                  <AttendanceManager settings={settings} classesList={classes.filter(c => c.is_active !== false).map(c => c.name)} setActiveTab={setActiveTab} />
                 </motion.div>
               )}
 
@@ -1813,7 +1938,6 @@ function SubAdminManagerModal({ isOpen, onClose }: any) {
     { id: "teachers", label: "শিক্ষক" },
     { id: "all_teachers", label: "শিক্ষক (আর্কাইভ)" },
     { id: "teacher_attendance", label: "শিক্ষক হাজিরা" },
-    { id: "device_attendance", label: "স্মার্ট ডিভাইস হাজিরা" },
     { id: "biometric", label: "বায়োমেট্রিক হাজিরা" },
     { id: "accounting", label: "হিসাব-নিকাশ" },
     { id: "fees", label: "বেতন ও ফি" },
@@ -3416,7 +3540,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
         setStudents(Array.isArray(data) ? data : []);
         setOffset(0);
       } else {
-        setStudents(prev => [...prev, ...data]);
+        setStudents(prev => [...(Array.isArray(prev) ? prev : []), ...(Array.isArray(data) ? data : [])]);
         setOffset(newOffset);
       }
       setHasMoreStudents(Array.isArray(data) && data.length === 20);
@@ -3437,7 +3561,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
 
   const classes = ["All", ...classesList];
 
-  const filteredStudents = students.filter(s => {
+  const filteredStudents = (Array.isArray(students) ? students : []).filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || (s.studentId || s.id).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = selectedClass === "All" || isClassMatch(s.class, selectedClass);
     return matchesSearch && matchesClass;
@@ -4836,9 +4960,9 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
                 <p className="text-slate-400 font-bold">এই শ্রেণীতে কোনো ছাত্র পাওয়া যায়নি</p>
               </div>
             ) : (
-              filteredStudents.map((s) => (
+              filteredStudents.map((s, idx) => (
                 <motion.div 
-                  key={`student-card-${s.id}`}
+                  key={`student-card-${s.id || s.studentId || idx}-${idx}`}
                   layoutId={s.id}
                   onClick={() => handleViewProfile(s)}
                   className="group bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:border-emerald-200 hover:bg-white hover:shadow-xl transition-all cursor-pointer relative overflow-hidden"
@@ -4890,7 +5014,7 @@ function StudentManager({ settings, onUpdate, classesList, setActiveTab, fullPro
   );
 };
 
-function AttendanceManager({ settings, classesList }: { settings: any, classesList: string[] }) {
+function AttendanceManager({ settings, classesList, setActiveTab }: { settings: any, classesList: string[], setActiveTab?: (tab: string) => void }) {
   const { addToast } = useToast();
   const [date, setDate] = useState(() => getDhakaDateString());
   const [selectedClass, setSelectedClass] = useState("");
@@ -5000,7 +5124,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
       });
       const data = await res.json();
       if (data.success) {
-        addToast(`📞 ${s.name}-এর অভিভাবকের অ্যাপে সরাসরি এআই ভয়েস কল পাঠানো হয়েছে (রিং হচ্ছে...)`, "success");
+        addToast(`📞 ${s.name}-এর অভিভাবকের অ্যাপে ভয়েস কল ও পুশ নোটিফিকেশন পাঠানো হয়েছে (রিং হচ্ছে...)`, "success");
       } else {
         addToast(data.error || "কল সংযোগ করতে সমস্যা হয়েছে", "error");
       }
@@ -5039,7 +5163,7 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
       photo_url: s.photo_url
     }));
 
-  const filteredStudents = students.filter(s => {
+  const filteredStudents = (Array.isArray(students) ? students : []).filter(s => {
     if (filter === "all") return true;
     return (attendance as any)[s.id]?.status === filter;
   }).sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
@@ -5062,8 +5186,19 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 print:shadow-none print:border-0 print:p-0">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 print:hidden">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h3 className="text-3xl font-black text-slate-900">স্মার্ট হাজিরা ব্যবস্থাপনা</h3>
+              {setActiveTab && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('rfid-terminal')}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-black text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                  title="ইউএসবি আরএফআইডি / বারকোড কার্ড পাঞ্চ টার্মিনাল ওপেন করুন"
+                >
+                  <CreditCard className="w-4 h-4 text-emerald-200" />
+                  <span>কার্ড পাঞ্চ লাইভ টার্মিনাল</span>
+                </button>
+              )}
               {/* After saving, prominent top Notification and Call buttons */}
               {hasSaved && (
                 <div className="flex flex-wrap items-center gap-2 animate-in fade-in duration-300">
@@ -5189,8 +5324,8 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {filteredStudents.map((s) => (
-                      <tr key={`attendance-row-${s.id}`} className="group hover:bg-slate-50/50 transition-colors">
+                    {filteredStudents.map((s, idx) => (
+                      <tr key={`attendance-row-${s.id || s.studentId || idx}-${idx}`} className="group hover:bg-slate-50/50 transition-colors">
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center font-black text-xs">
@@ -5221,12 +5356,22 @@ function AttendanceManager({ settings, classesList }: { settings: any, classesLi
                             <button
                               type="button"
                               onClick={() => handleStudentCall(s)}
-                              title={`${s.name}-এর অভিভাবককে কল করুন`}
+                              title={`${s.name}-এর অভিভাবককে অ্যাপ ভয়েস কল পাঠান`}
                               className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 transition-all active:scale-90 border border-purple-100 shadow-sm"
                             >
                               <PhoneCall className="w-3.5 h-3.5 text-purple-600" />
                               <span>কল</span>
                             </button>
+                            {(s.guardian_phone || s.phone || s.guardian_mobile) && (
+                              <a
+                                href={`tel:${s.guardian_phone || s.phone || s.guardian_mobile}`}
+                                title={`${s.name}-এর অভিভাবককে সরাসরি ফোনে সিম কল করুন`}
+                                className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-1 transition-all active:scale-90 border border-blue-100 shadow-sm"
+                              >
+                                <Phone className="w-3.5 h-3.5 text-blue-600" />
+                                <span>সিম কল</span>
+                              </a>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleStudentNotify(s)}
@@ -5890,7 +6035,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
   };
 
   const rankedClassResults = React.useMemo(() => {
-    if (!classResults || classResults.length === 0) return [];
+    if (!Array.isArray(classResults) || classResults.length === 0) return [];
     const sorted = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
     let currentRank = 1;
     let prevMarks = -1;
@@ -6532,9 +6677,9 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                           </tr>
                         </thead>
                         <tbody>
-                          {[...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll)).map((student: any, i: number) => {
+                          {[...(Array.isArray(classResults) ? classResults : [])].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll)).map((student: any, i: number) => {
                             return (
-                            <tr key={student.id || i} className="border-b border-slate-50 hover:bg-emerald-50/30 transition-colors group">
+                            <tr key={`class-result-row-${student.id || student.roll || i}-${i}`} className="border-b border-slate-50 hover:bg-emerald-50/30 transition-colors group">
                               <td className="p-4 text-slate-500 font-bold">{student.roll}</td>
                               <td className="p-4">
                                 <span className="font-bold text-slate-800 block">{student.name}</span>
@@ -6869,7 +7014,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                     {(() => {
                       const pageSize = 15;
                       // 1. Calculate Ranks first
-                      const forRanking = [...classResults].sort((a, b) => b.totalMarks - a.totalMarks);
+                      const forRanking = [...(Array.isArray(classResults) ? classResults : [])].sort((a, b) => b.totalMarks - a.totalMarks);
                       const rankMap: Record<string, number> = {};
                       let currentRank = 1;
                       let prevMarks = -1;
@@ -6880,7 +7025,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       });
 
                       // 2. Sort by Roll
-                      const finalSorted = [...classResults].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
+                      const finalSorted = [...(Array.isArray(classResults) ? classResults : [])].sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
                       
                       return (
                         <div className="break-inside-avoid print:pt-4">
@@ -7072,7 +7217,7 @@ function ResultManager({ students, settings, classesList, fullProfile, setFullPr
                       </thead>
                       <tbody>
                         {(() => {
-                           const sortedByRollForPrint = [...printData].sort((a, b) => {
+                           const sortedByRollForPrint = [...(Array.isArray(printData) ? printData : [])].sort((a, b) => {
                              const rA = parseInt(a.roll) || 0;
                              const rB = parseInt(b.roll) || 0;
                              return rA - rB;
@@ -7848,7 +7993,7 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
     return Array.from(map.values());
   }, [students, fetchedClassStudents]);
 
-  const filteredStudents = allAvailableStudents.filter(s => {
+  const filteredStudents = (Array.isArray(allAvailableStudents) ? allAvailableStudents : []).filter(s => {
     if (selectedClass === "All" && !searchTerm) return false;
     const sName = (s.name || "").toLowerCase();
     const sId = (s.id || "").toLowerCase();
@@ -8172,8 +8317,8 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {(statusFilter === 'all' || statusFilter === 'paid' ? selectedSetupStatus.paidStudents : [])
                     .filter((s: any) => statusClassFilter === "All" || s.student_class === statusClassFilter)
-                    .map((student: any) => (
-                    <div key={student.id} className="p-4 bg-white rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
+                    .map((student: any, idx: number) => (
+                    <div key={`paid-setup-${student.fee_id || student.id || idx}-${idx}`} className="p-4 bg-white rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
                       <div>
                         <h4 className="font-bold text-slate-900">{student.student_name}</h4>
                         <p className="text-xs text-slate-500 font-bold mt-1">শ্রেণী: {student.student_class} | রোল: {student.student_roll}</p>
@@ -8187,8 +8332,8 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                   
                   {(statusFilter === 'all' || statusFilter === 'unpaid' ? selectedSetupStatus.unpaidStudents : [])
                     .filter((s: any) => statusClassFilter === "All" || s.student_class === statusClassFilter)
-                    .map((student: any) => (
-                    <div key={student.id} className="p-4 bg-white rounded-2xl border border-rose-100 shadow-sm flex items-center justify-between">
+                    .map((student: any, idx: number) => (
+                    <div key={`unpaid-setup-${student.fee_id || student.id || idx}-${idx}`} className="p-4 bg-white rounded-2xl border border-rose-100 shadow-sm flex items-center justify-between">
                       <div>
                         <h4 className="font-bold text-slate-900">{student.student_name}</h4>
                         <p className="text-xs text-slate-500 font-bold mt-1">শ্রেণী: {student.student_class} | রোল: {student.student_roll}</p>
@@ -8284,9 +8429,9 @@ function FeeManager({ students, settings, onUpdate, initialStudentId, classesLis
                 ) : filteredStudents.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 font-bold">কোন ছাত্র পাওয়া যায়নি</div>
                 ) : (
-                  filteredStudents.map(student => (
+                  filteredStudents.map((student, idx) => (
                     <div 
-                      key={student.id}
+                      key={`fee-collect-${student.id || student.studentId || idx}-${idx}`}
                       onClick={() => { setSelectedStudent(student); fetchStudentFees(student.id); }}
                       className={cn(
                         "p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-4 border",
@@ -9722,214 +9867,3 @@ function NoticeManager({ notices, onUpdate }: any) {
   );
 };
 
-function DeviceAttendanceManager({ settings }: { settings: any }) {
-  const { addToast } = useToast();
-  const [subTab, setSubTab] = useState<'rfid' | 'zkteco'>('rfid');
-  const [deviceId, setDeviceId] = useState("");
-  const [type, setType] = useState<"student" | "teacher" | "guardian">("student");
-  const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [deviceStatus, setDeviceStatus] = useState<"online" | "offline">("online");
-
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch("/api/admin/device-history");
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error("Fetch history failed", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchHistory();
-    // Replaced 10 seconds auto-refresh with 10 minutes to save read quotas.
-    const interval = setInterval(fetchHistory, 600000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handlePushAttendance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deviceId) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/device/attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: deviceId, type })
-      });
-      const result = await res.json();
-      if (result.success) {
-        addToast(`${type === 'student' ? 'ছাত্র' : type === 'teacher' ? 'শিক্ষক' : 'অভিভাবক'} ${result.action === 'check_in' ? 'প্রবেশ' : 'প্রস্থান'} সফলভাবে রেকর্ড হয়েছে (${result.time})`, "success");
-        setDeviceId("");
-        fetchHistory();
-      } else {
-        addToast("রেকর্ড করতে সমস্যা হয়েছে", "error");
-      }
-    } catch (error) {
-      addToast("সার্ভার এরর", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900">স্মার্ট ডিভাইস হাজিরা</h2>
-          <p className="text-slate-500 font-bold mt-1">ZKTeco K40 ও অন্যান্য ডিভাইসের সাথে কানেকশন</p>
-        </div>
-        <div className={cn(
-          "px-6 py-2 rounded-2xl font-black text-sm flex items-center gap-2",
-          deviceStatus === "online" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-        )}>
-          <div className={cn("w-2 h-2 rounded-full", deviceStatus === "online" ? "bg-emerald-500 animate-pulse" : "bg-rose-500")}></div>
-          ডিভাইস স্ট্যাটাস: {deviceStatus === "online" ? "অনলাইন" : "অফলাইন"}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 border-b border-slate-200 pb-4">
-        <button
-          type="button"
-          onClick={() => setSubTab('zkteco')}
-          className={cn(
-            "px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2",
-            subTab === 'zkteco'
-              ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20"
-              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-          )}
-        >
-          <Settings2 className="w-4 h-4" /> ZKTeco ও নেটওয়ার্ক ডিভাইস গাইড
-        </button>
-      </div>
-
-      {subTab === 'rfid' ? (
-        <RFIDTerminal settings={settings} addToast={addToast} />
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-            <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-emerald-600" /> ম্যানুয়াল এন্ট্রি (টেস্ট)
-            </h3>
-            <form onSubmit={handlePushAttendance} className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">আইডি টাইপ</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['student', 'teacher', 'guardian'] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setType(t)}
-                      className={cn(
-                        "py-3 rounded-xl font-bold text-xs transition-all",
-                        type === t ? "bg-emerald-900 text-white" : "bg-slate-50 text-slate-500 border border-slate-100"
-                      )}
-                    >
-                      {t === 'student' ? 'ছাত্র' : t === 'teacher' ? 'শিক্ষক' : 'অভিভাবক'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">ডিভাইস আইডি / কার্ড নাম্বার</label>
-                <input 
-                  type="text" 
-                  value={deviceId}
-                  onChange={(e) => setDeviceId(e.target.value)}
-                  placeholder="যেমন: S101"
-                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
-                  required
-                />
-              </div>
-              <LoadingButton loading={loading} className="w-full py-4 bg-emerald-900 text-white rounded-2xl font-black shadow-lg shadow-emerald-900/20">
-                রেকর্ড পুশ করুন
-              </LoadingButton>
-            </form>
-          </div>
-
-          <div className="bg-emerald-900 p-8 rounded-[2.5rem] text-white shadow-xl">
-            <h3 className="text-xl font-black mb-4">ডিভাইস কানেকশন গাইড</h3>
-            <div className="space-y-4 text-emerald-100 text-sm font-bold">
-              <p>যেহেতু মেশিনের বাটনে ইংরেজি টাইপ করা কষ্টকর, তাই আপনি আপনার মোবাইল ফোন ব্যবহার করে খুব সহজেই মেশিনের সেটিং করতে পারবেন। আপনার ফোনটি অবশ্যই মাদরাসার ওয়াইফাই (যে রাউটারে মেশিন লাগানো) এর সাথে কানেক্ট থাকতে হবে।</p>
-              <ol className="list-decimal list-inside space-y-3 mt-4">
-                <li><strong>মেশিনের IP বের করুন:</strong> মেশিনের Menu &gt; Comm. &gt; Ethernet এ গিয়ে IP Address টি (যেমন: 192.168.1.201) লিখে রাখুন।</li>
-                <li><strong>ফোনে ব্রাউজার ওপেন করুন:</strong> আপনার ফোনের Google Chrome ব্রাউজারে গিয়ে ওই IP Address টি লিখে Enter দিন।</li>
-                <li><strong>লগইন করুন:</strong> মেশিনের একটি ওয়েব পেজ আসবে। সেখানে লগইন করুন (সাধারণত পাসওয়ার্ড লাগে না, লাগলে admin দিয়ে চেষ্টা করুন)।</li>
-                <li><strong>Cloud Server সেটিং:</strong> ওয়েব পেজের মেনু থেকে <strong>Cloud Server Setting</strong> বা <strong>ADMS</strong> অপশনে যান।</li>
-                <li><strong>সার্ভার এড্রেস বসান:</strong> Server Address এর ঘরে <code className="bg-emerald-800 px-2 py-1 rounded select-all">{window.location.hostname}</code> কপি করে বসিয়ে দিন।</li>
-                <li><strong>পোর্ট ও ডোমেইন:</strong> Server Port <code className="bg-emerald-800 px-2 py-1 rounded">80</code> (বা 443) দিন এবং Enable Domain Name অপশনটি ON করে দিন।</li>
-                <li>সবশেষে <strong>Save</strong> করে মেশিনটি একবার বন্ধ করে চালু (Restart) করুন।</li>
-              </ol>
-              <div className="mt-4 p-4 bg-amber-500/25 border border-amber-500/50 rounded-2xl text-xs text-amber-200">
-                নোট: নিশ্চিত করুন যে আপনার সার্ভারটি পাবলিক আইপি বা ডোমেইনে চলতে পারে এবং ডোমেইন বা আইপি পিন্ট করা যাচ্ছে।
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: History & Logs */}
-        <div className="lg:col-span-2">
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-900">সাম্প্রতিক ডিভাইস হাজিরা লগ</h3>
-              <button onClick={fetchHistory} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all">
-                রিফ্রেশ
-              </button>
-            </div>
-            {history.length === 0 ? (
-              <div className="text-center py-16 bg-slate-50 rounded-3xl border border-slate-100 text-slate-400 font-bold">
-                কোনো ডিভাইস হাজিরা রেকর্ড পাওয়া যায়নি
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase font-black">
-                      <th className="pb-3">আইডি</th>
-                      <th className="pb-3">টাইপ</th>
-                      <th className="pb-3">স্ট্যাটাস</th>
-                      <th className="pb-3">সময়</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 text-sm font-bold">
-                    {history.map((item, index) => (
-                      <tr key={index} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 text-slate-900">{item.id || item.studentId || "-"}</td>
-                        <td className="py-3">
-                          <span className={cn(
-                            "px-2.5 py-1 rounded-lg text-xs font-black",
-                            item.type === 'teacher' ? "bg-purple-100 text-purple-700" :
-                            item.type === 'guardian' ? "bg-blue-100 text-blue-700" :
-                            "bg-emerald-100 text-emerald-700"
-                          )}>
-                            {item.type === 'teacher' ? 'শিক্ষক' : item.type === 'guardian' ? 'অভিভাবক' : 'ছাত্র'}
-                          </span>
-                        </td>
-                        <td className="py-3">
-                          <span className={cn(
-                            "px-2.5 py-1 rounded-lg text-xs font-black",
-                            item.action === 'check_in' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                          )}>
-                            {item.action === 'check_in' ? 'প্রবেশ (Check In)' : 'প্রস্থান (Check Out)'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-slate-500 text-xs">
-                          {item.time ? new Date(item.time).toLocaleString() : "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      )}
-    </div>
-  );
-}

@@ -37,7 +37,9 @@ export function AmalManager() {
       const res = await fetch("/api/admin/amal-tasks");
       const data = await res.json();
       if (Array.isArray(data)) {
-        setTasks(data.sort((a, b) => (a.serial || 0) - (b.serial || 0)));
+        setTasks([...data].sort((a, b) => (a.serial || 0) - (b.serial || 0)));
+      } else {
+        setTasks([]);
       }
     } catch (error) {
       console.error(error);

@@ -64,9 +64,9 @@ export function TeacherArchiveManager({ settings }: { settings: any }) {
               ) : filteredTeachers.length === 0 ? (
                 <div className="text-center py-12 text-slate-400 font-bold">কোন শিক্ষক পাওয়া যায়নি</div>
               ) : (
-                filteredTeachers.map(teacher => (
+                filteredTeachers.map((teacher, idx) => (
                   <div 
-                    key={teacher.id}
+                    key={`teacher-archive-${teacher.id || idx}-${idx}`}
                     onClick={() => setSelectedTeacher(teacher)}
                     className={`p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-4 border ${
                       selectedTeacher?.id === teacher.id 

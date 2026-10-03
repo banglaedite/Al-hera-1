@@ -21,7 +21,7 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
       const res = await fetch("/api/admin/archive/students?limit=1000");
       if (!res.ok) throw new Error("Failed to fetch students");
       const data = await res.json();
-      setStudents(data);
+      setStudents(Array.isArray(data) ? data : []);
       
       // Fetch breakdown separately to save reads
       const breakdownRes = await fetch("/api/admin/students/breakdown");
@@ -39,7 +39,7 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
     fetchStudents();
   }, []);
 
-  const filteredStudents = students.filter(s => {
+  const filteredStudents = (Array.isArray(students) ? students : []).filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = selectedClass === "All" || s.class === selectedClass;
     return matchesSearch && matchesClass;
@@ -152,9 +152,9 @@ export function AllStudentsManager({ settings, classesList }: { settings: any, c
                 ) : filteredStudents.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 font-bold">কোন ছাত্র পাওয়া যায়নি</div>
                 ) : (
-                  filteredStudents.map(student => (
+                  filteredStudents.map((student, idx) => (
                     <div 
-                      key={student.id}
+                      key={`archive-student-${student.id || student.studentId || idx}-${idx}`}
                       onClick={() => { setSelectedStudent(student); fetchFullProfile(student.id); }}
                       className={`p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-4 border ${
                         selectedStudent?.id === student.id 

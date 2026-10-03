@@ -90,37 +90,54 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push notification listener
+// Push notification listener (Background notifications when app is closed)
 self.addEventListener('push', (event) => {
-  let data = { title: 'আল-হেরা মাদরাসা', body: 'নতুন বার্তা বা নোটিশ এসেছে।' };
+  let raw = {};
   if (event.data) {
     try {
-      data = event.data.json();
+      raw = event.data.json();
     } catch (e) {
-      data.body = event.data.text();
+      raw = { body: event.data.text() };
     }
   }
 
-  const isCall = data.type === 'call' || data.title.includes('কল');
-  
+  const title = (raw.notification && raw.notification.title) || (raw.data && raw.data.title) || raw.title || 'আল-হেরা মাদরাসা';
+  const body = (raw.notification && raw.notification.body) || (raw.data && raw.data.body) || raw.body || 'নতুন হাজিরা বা নোটিশ আপডেট';
+  const notifData = raw.data || raw;
+  const isCall = notifData.type === 'call' || (title && title.includes('কল'));
+  const isPunch = notifData.type === 'punch' || (title && (title.includes('প্রবেশ') || title.includes('প্রস্থান') || title.includes('হাজিরা')));
+
+  let displayTitle = title;
+  if (isCall && !displayTitle.startsWith('📞')) {
+    displayTitle = `📞 ${displayTitle}`;
+  }
+
   const options = {
-    body: data.body,
-    icon: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
+    body: body,
+    icon: notifData.icon || 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
     badge: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
-    vibrate: isCall ? [500, 200, 500, 200, 500, 200, 500] : [200, 100, 200],
-    tag: isCall ? 'incoming-call' : (data.tag || 'general-notification'),
+    vibrate: isCall 
+      ? [500, 200, 500, 200, 500, 200, 500, 200, 500] 
+      : isPunch 
+        ? [400, 150, 400, 150, 400] 
+        : [250, 100, 250],
+    tag: isCall ? 'incoming-call' : (notifData.tag || `punch-${Date.now()}`),
     renotify: true,
-    requireInteraction: isCall,
+    requireInteraction: true,
+    actions: isCall ? [
+      { action: 'answer', title: '📞 কল রিসিভ করুন' }
+    ] : [],
     data: {
-      url: data.url || (isCall ? '/parent?action=call' : '/'),
-      isCall: isCall
+      url: notifData.url || (isCall ? '/parent?action=call' : '/parent'),
+      isCall: isCall,
+      isPunch: isPunch,
+      ...notifData
     },
-    // Note: 'sound' property is deprecated in most browsers, but vibrate helps
     silent: false
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(displayTitle, options)
   );
 });
 

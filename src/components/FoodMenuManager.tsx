@@ -172,7 +172,7 @@ export function FoodMenuManager() {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
-        {menu.sort((a, b) => {
+        {[...(Array.isArray(menu) ? menu : [])].sort((a, b) => {
           const parseSerial = (val: any) => {
             if (val === undefined || val === null || val === "") return 999999;
             let s = String(val).trim();

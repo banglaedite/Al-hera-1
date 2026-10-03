@@ -42,15 +42,16 @@ import { useToast } from "./components/ToastContext";
 const PushNotificationManager = () => {
   useEffect(() => {
     const setupPush = async () => {
-      // 1. Request Permission
       if (!("Notification" in window)) return;
       
-      if (Notification.permission === "default") {
-        await Notification.requestPermission();
+      let perm = Notification.permission;
+      if (perm === "default") {
+        try {
+          perm = await Notification.requestPermission();
+        } catch (e) {}
       }
 
-      if (Notification.permission === "granted") {
-        // 2. Get Token
+      if (perm === "granted") {
         const token = await requestForToken();
         if (token) {
           const phone = localStorage.getItem("guardianPhone");
@@ -62,25 +63,27 @@ const PushNotificationManager = () => {
             } catch (e) {}
           }
 
-          // 3. Send to Server
-          if (phone || studentId) {
-            await fetch("/api/push/subscribe", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token, phone, studentId })
-            }).catch(console.error);
-          }
+          await fetch("/api/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, phone: phone || null, studentId: studentId || null })
+          }).catch(console.error);
         }
       }
     };
 
     setupPush();
+    window.addEventListener("guardian-auth-changed", setupPush);
 
     // Listen for foreground messages
     onMessageListener().then((payload: any) => {
       console.log("Foreground message received:", payload);
       playIPhoneNotificationSound();
     }).catch(err => console.log('failed: ', err));
+
+    return () => {
+      window.removeEventListener("guardian-auth-changed", setupPush);
+    };
   }, []);
 
   return null;
@@ -94,13 +97,20 @@ const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
   const [student, setStudent] = useState<any>(null);
 
   useEffect(() => {
+    const studentData = localStorage.getItem("studentData");
+    if (studentData) {
+      try {
+        setStudent(JSON.parse(studentData));
+      } catch (e) {}
+    }
+
     const phone = localStorage.getItem("guardianPhone");
     if (!phone) {
-      setStudent(null);
+      if (!studentData) setStudent(null);
       return;
     }
 
-    // Fetch basic student info for the listener
+    // Fetch latest student info for the listener
     fetch("/api/parent-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -116,6 +126,20 @@ const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
 
     let lastCheckedPunchId = sessionStorage.getItem(`last_notified_punch_${student.id}`) || "";
 
+    const showSysNotification = (title: string, options: any) => {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(title, options);
+        }).catch(() => {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title, options);
+          }
+        });
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, options);
+      }
+    };
+
     const checkActiveCalls = async () => {
       try {
         // 1. Check for Active Calls
@@ -126,28 +150,22 @@ const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
             setActiveCallData(data.call);
             setShowIncomingCall(true);
 
-            // System Notification
-            if ('Notification' in window && Notification.permission === 'granted') {
-              try {
-                const notif = new Notification(`📞 ${data.call.caller || "মাদরাসা অফিস"} থেকে ভয়েস কল আসছে...`, {
-                  body: `${student.name}-এর জরুরি কল। রিসিভ করতে স্পর্শ করুন।`,
-                  icon: settings?.logo_url || '/favicon.ico',
-                  tag: `call-${data.call.id}`,
-                  requireInteraction: true
-                });
-                notif.onclick = () => {
-                  window.focus();
-                  notif.close();
-                };
-              } catch (e) {}
-            }
+            // System Notification with sound & vibration
+            showSysNotification(`📞 ${data.call.caller || "মাদরাসা অফিস"} থেকে ভয়েস কল আসছে...`, {
+              body: `${student.name}-এর জরুরি কল। রিসিভ করতে স্পর্শ করুন।`,
+              icon: settings?.logo_url || '/favicon.ico',
+              tag: `call-${data.call.id}`,
+              requireInteraction: true,
+              vibrate: [500, 200, 500, 200, 500],
+              data: { url: '/parent?action=call' }
+            });
           } else if (!data.active) {
             setShowIncomingCall(false);
             setActiveCallData(null);
           }
         }
 
-        // 2. Check for Instant Punch Notifications (Added for better real-time experience)
+        // 2. Check for Instant Punch Notifications
         const punchRes = await fetch(`/api/parent/latest-punch/${student.id}`);
         if (punchRes.ok) {
           const pData = await punchRes.json();
@@ -159,21 +177,21 @@ const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
               lastCheckedPunchId = pData.punch.id;
               sessionStorage.setItem(`last_notified_punch_${student.id}`, pData.punch.id);
               
-              const title = pData.punch.action === 'check_in' ? '🟢 সফল প্রবেশ' : '🟠 সফল প্রস্থান';
+              const title = pData.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
               const body = `${student.name} আজ ${pData.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${pData.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
               
               addToast(body, "success");
               playIPhoneNotificationSound();
 
-              if ('Notification' in window && Notification.permission === 'granted') {
-                try {
-                  const notif = new Notification(title, {
-                    body,
-                    icon: settings?.logo_url || '/favicon.ico',
-                    tag: `punch-${pData.punch.id}`
-                  });
-                } catch (e) {}
-              }
+              showSysNotification(title, {
+                body,
+                icon: settings?.logo_url || '/favicon.ico',
+                badge: settings?.logo_url || '/favicon.ico',
+                tag: `punch-${pData.punch.id}`,
+                requireInteraction: true,
+                vibrate: [400, 150, 400],
+                data: { url: '/parent' }
+              });
             }
           }
         }

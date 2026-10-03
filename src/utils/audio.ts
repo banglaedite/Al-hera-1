@@ -3,6 +3,9 @@ export const playIPhoneNotificationSound = () => {
     const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     
     const playTone = (freq: number, startTime: number, duration: number) => {
       const osc = ctx.createOscillator();
@@ -10,7 +13,7 @@ export const playIPhoneNotificationSound = () => {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
       gain.gain.setValueAtTime(0, ctx.currentTime + startTime);
-      gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + startTime + 0.02);
+      gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + startTime + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -19,9 +22,9 @@ export const playIPhoneNotificationSound = () => {
     };
 
     // iPhone Note sound approx frequencies (Arpeggio)
-    playTone(1046.50, 0, 0.12);    // C6
-    playTone(1318.51, 0.12, 0.15); // E6
-    playTone(1567.98, 0.27, 0.25); // G6
+    playTone(1046.50, 0, 0.14);    // C6
+    playTone(1318.51, 0.14, 0.18); // E6
+    playTone(1567.98, 0.30, 0.30); // G6
   } catch (e) {
     console.error("Audio error:", e);
   }
@@ -32,6 +35,9 @@ export const playIPhoneRingtone = () => {
     const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
 
     const playBurst = (startTime: number) => {
       // Marimba-like tones for iPhone reflection

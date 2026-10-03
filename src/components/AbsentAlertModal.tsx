@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Bell, 
   PhoneCall, 
+  Phone,
   X, 
   CheckSquare, 
   Square, 
@@ -121,7 +122,7 @@ export function AbsentAlertModal({
       const data = await res.json().catch(() => ({ success: true }));
       if (res.ok || data.success) {
         addToast(
-          `${person.name}-এর অভিভাবকের অ্যাপে ${targetAction === 'call' ? 'এআই ভয়েস কল (রিং হচ্ছে...)' : 'নোটিফিকেশন'} পাঠানো হয়েছে`,
+          `${person.name}-এর অভিভাবকের ফোনে ${targetAction === 'call' ? 'এআই ভয়েস কল ও পুশ নোটিফিকেশন' : 'নোটিফিকেশন'} পাঠানো হয়েছে`,
           "success"
         );
       } else {
@@ -286,14 +287,14 @@ export function AbsentAlertModal({
               <p className="font-bold">খোঁজা অনুযায়ী কাউকে পাওয়া যায়নি</p>
             </div>
           ) : (
-            filteredList.map((person) => {
+            filteredList.map((person, idx) => {
               const isChecked = selectedIds.has(person.id);
               const isCallingThis = individualSending === `${person.id}-call`;
               const isNotifyingThis = individualSending === `${person.id}-notification`;
 
               return (
                 <div
-                  key={person.id}
+                  key={`absent-person-${person.id || idx}-${idx}`}
                   className={cn(
                     "py-3 sm:py-3.5 px-3 rounded-2xl flex items-center justify-between gap-3 transition-colors",
                     isChecked ? "bg-slate-50/80" : "hover:bg-slate-50/50"
@@ -337,7 +338,7 @@ export function AbsentAlertModal({
                       type="button"
                       disabled={individualSending !== null}
                       onClick={() => handleSingleAction(person, 'call')}
-                      title="এককভাবে কল করুন"
+                      title="অ্যাপস ভয়েস কল পাঠান"
                       className="p-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
                     >
                       {isCallingThis ? (
@@ -347,6 +348,17 @@ export function AbsentAlertModal({
                       )}
                       <span className="hidden sm:inline">কল</span>
                     </button>
+
+                    {person.phone && (
+                      <a
+                        href={`tel:${person.phone}`}
+                        title="সরাসরি ফোনে সিম কল করুন (ডায়ালার)"
+                        className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-1 transition-colors"
+                      >
+                        <Phone className="w-4 h-4" />
+                        <span className="hidden sm:inline">সিম কল</span>
+                      </a>
+                    )}
 
                     <button
                       type="button"
@@ -401,7 +413,7 @@ export function AbsentAlertModal({
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  {action === 'call' ? `ওকে / কল করুন (${toBn(selectedIds.size)})` : `ওকে / পাঠান (${toBn(selectedIds.size)})`}
+                  {action === 'call' ? `এক ক্লিকে অ্যাপস ভয়েস কল পাঠান (${toBn(selectedIds.size)} জন)` : `এক ক্লিকে নোটিফিকেশন পাঠান (${toBn(selectedIds.size)} জন)`}
                 </>
               )}
             </button>

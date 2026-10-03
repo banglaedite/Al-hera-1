@@ -144,7 +144,8 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
       const res = await fetch("/api/students?className=All&limit=1000");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      const hifzStudents = data
+      const studentList = Array.isArray(data) ? data : [];
+      const hifzStudents = studentList
         .filter((s: any) => {
           const isHifzFlag = s.is_hifz === 1 || s.is_hifz === true || s.is_hifz === "1" || s.is_hifz === "true";
           const className = (s.class || s.className || "").toString();
@@ -619,8 +620,9 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
   };
 
   const getRankingData = () => {
-    const aggregated = students.map(student => {
-      const studentReports = rankingReports.filter(r => r.student_id === student.id);
+    const list = Array.isArray(students) ? students : [];
+    const aggregated = list.map(student => {
+      const studentReports = (Array.isArray(rankingReports) ? rankingReports : []).filter(r => r.student_id === student.id);
       return {
         ...student,
         score: rankingCategory === 'sabok' ? studentReports.reduce((sum, r) => sum + (r.sabok?.length || 0), 0) :
@@ -635,7 +637,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
     return aggregated;
   };
 
-  const filteredStudents = students.filter(s => 
+  const filteredStudents = (Array.isArray(students) ? students : []).filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     (s.studentId && s.studentId.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -714,9 +716,9 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                  {filteredStudents.map(student => (
+                  {filteredStudents.map((student, idx) => (
                     <button
-                      key={student.id}
+                      key={`hifz-select-student-${student.id || idx}-${idx}`}
                       onClick={() => setSelectedStudent(student)}
                       className="group p-6 rounded-[2rem] border-2 border-slate-100 hover:border-emerald-200 bg-white hover:bg-emerald-50 transition-all text-center flex flex-col items-center gap-4 shadow-sm hover:shadow-xl"
                     >
@@ -1340,11 +1342,11 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map(student => {
+                    {students.map((student, idx) => {
                       const report = allReports.find(r => r.student_id === student.id);
                       
                       return (
-                        <tr key={student.id} className="bg-white hover:bg-slate-50 transition-colors group shadow-sm">
+                        <tr key={`hifz-report-row-${student.id || idx}-${idx}`} className="bg-white hover:bg-slate-50 transition-colors group shadow-sm">
                           <td className="px-6 py-5 rounded-l-2xl border-y border-l border-slate-100">
                             <div className="flex items-center gap-4">
                               <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-lg overflow-hidden border-2 border-emerald-50 shadow-inner">
@@ -1486,7 +1488,7 @@ export function HifzManager({ classesList }: { classesList: string[] }) {
                       {getRankingData().slice(0, visibleRankingsCount).map((student, index) => {
                         const isTop3 = index < 3 && student.score > 0;
                         return (
-                          <tr key={student.id} className="bg-white hover:bg-slate-50 transition-colors group shadow-sm">
+                          <tr key={`hifz-rank-${student.id || index}-${index}`} className="bg-white hover:bg-slate-50 transition-colors group shadow-sm">
                             <td className="px-6 py-5 rounded-l-2xl border-y border-l border-slate-100 font-black text-lg">
                               {isTop3 ? (
                                 <div className={cn(

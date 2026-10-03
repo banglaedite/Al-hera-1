@@ -704,8 +704,8 @@ export default function FeeManagement({ students, settings, onUpdate, initialStu
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm font-bold text-slate-700">
-                    {defaulters.map((item) => (
-                      <tr key={item.student_id} className="hover:bg-slate-50/80 transition-colors">
+                    {defaulters.map((item, idx) => (
+                      <tr key={`fee-defaulter-${item.student_id || idx}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-4 pl-6">
                           <p className="font-black text-slate-900">{item.student_name}</p>
                           <span className="text-xs font-mono text-slate-400 font-bold">{item.student_id}</span>

@@ -177,7 +177,7 @@ export default function DashboardHome() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {topStudents.map((student, index) => (
-            <div key={student.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center">
+            <div key={`top-student-${student.id || index}-${index}`} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center">
               <div className="w-20 h-20 mx-auto rounded-full bg-slate-100 mb-4 overflow-hidden">
                 <img src={student.photo_url || `https://picsum.photos/seed/${student.id}/100`} className="w-full h-full object-cover" />
               </div>

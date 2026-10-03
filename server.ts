@@ -186,11 +186,15 @@ app.get("/al_hera_madrasah.apk", (req, res) => {
 
     try {
       const db = getFirestoreInstance();
+      if (!db) return res.status(500).json({ error: "Database not ready" });
+
+      const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, '') : null;
       const subRef = db.collection("push_subscriptions").doc(token);
       await subRef.set({
         token,
         phone: phone || null,
-        student_id: studentId || null,
+        clean_phone: cleanPhone,
+        student_id: studentId ? String(studentId) : null,
         updated_at: new Date().toISOString()
       }, { merge: true });
 
@@ -204,32 +208,132 @@ app.get("/al_hera_madrasah.apk", (req, res) => {
   async function sendPushNotification(studentId: string, title: string, body: string, data: any = {}) {
     try {
       const db = getFirestoreInstance();
+      if (!db) return;
+
       const studentDoc = await db.collection("students").doc(String(studentId)).get();
-      if (!studentDoc.exists) return;
-      const studentData = studentDoc.data();
-      const phone = studentData?.guardian_phone || studentData?.phone;
-
-      if (!phone) return;
-
-      const subsSnapshot = await db.collection("push_subscriptions")
-        .where("phone", "==", phone)
-        .get();
+      const studentData = studentDoc.exists ? studentDoc.data() : null;
       
-      const tokens = subsSnapshot.docs.map(doc => doc.data().token);
-      if (tokens.length === 0) return;
+      const rawPhones: string[] = [];
+      if (studentData?.guardian_phone) rawPhones.push(String(studentData.guardian_phone));
+      if (studentData?.phone) rawPhones.push(String(studentData.phone));
+      if (studentData?.guardian_mobile) rawPhones.push(String(studentData.guardian_mobile));
 
-      const message = {
-        notification: { title, body },
+      const phoneQueries: string[] = [];
+      for (const p of rawPhones) {
+        const clean = p.replace(/[^0-9]/g, '');
+        if (clean.length >= 10) {
+          const last10 = clean.slice(-10);
+          phoneQueries.push(clean);
+          phoneQueries.push(`0${last10}`);
+          phoneQueries.push(`880${last10}`);
+          phoneQueries.push(`+880${last10}`);
+        } else if (p.trim()) {
+          phoneQueries.push(p.trim());
+        }
+      }
+
+      const tokenSet = new Set<string>();
+
+      // 1. Direct query by student_id
+      try {
+        const byStudentSnap = await db.collection("push_subscriptions")
+          .where("student_id", "==", String(studentId))
+          .get();
+        byStudentSnap.docs.forEach(d => {
+          const t = d.data()?.token;
+          if (t) tokenSet.add(t);
+        });
+      } catch (e) {}
+
+      // 2. Query by phone variants
+      const uniquePhones = Array.from(new Set(phoneQueries));
+      for (const ph of uniquePhones) {
+        try {
+          const byPhoneSnap = await db.collection("push_subscriptions")
+            .where("phone", "==", ph)
+            .get();
+          byPhoneSnap.docs.forEach(d => {
+            const t = d.data()?.token;
+            if (t) tokenSet.add(t);
+          });
+        } catch (e) {}
+        try {
+          const cleanVal = ph.replace(/[^0-9]/g, '');
+          if (cleanVal) {
+            const byCleanPhoneSnap = await db.collection("push_subscriptions")
+              .where("clean_phone", "==", cleanVal)
+              .get();
+            byCleanPhoneSnap.docs.forEach(d => {
+              const t = d.data()?.token;
+              if (t) tokenSet.add(t);
+            });
+          }
+        } catch (e) {}
+      }
+
+      const tokens = Array.from(tokenSet);
+      if (tokens.length === 0) {
+        console.log(`[Push Notification] No device tokens found for student ${studentId}`);
+        return;
+      }
+
+      console.log(`[Push Notification] Dispatching to ${tokens.length} token(s) for student ${studentId}: "${title}"`);
+
+      const isCall = data.type === 'call' || title.includes('কল');
+
+      const message: admin.messaging.MulticastMessage = {
+        notification: {
+          title,
+          body,
+        },
         data: {
           ...data,
+          title,
+          body,
           student_id: String(studentId),
-          click_action: data.url || "/",
+          click_action: data.url || "/parent",
           icon: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
         },
-        tokens: tokens,
+        android: {
+          priority: "high",
+          notification: {
+            title,
+            body,
+            icon: "ic_notification",
+            sound: "default",
+            channelId: isCall ? "call_channel" : "attendance_channel",
+            priority: "high",
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            clickAction: data.url || "/parent",
+          }
+        },
+        webpush: {
+          headers: {
+            Urgency: "high"
+          },
+          notification: {
+            title,
+            body,
+            icon: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
+            badge: 'https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png',
+            vibrate: isCall ? [500, 200, 500, 200, 500, 200, 500] : [400, 150, 400],
+            requireInteraction: true,
+            renotify: true,
+            silent: false,
+            tag: isCall ? 'incoming-call' : (data.tag || `punch-${Date.now()}`),
+            data: {
+              url: data.url || "/parent",
+              isCall,
+              ...data
+            }
+          }
+        },
+        tokens,
       };
 
-      await admin.messaging().sendEachForMulticast(message);
+      const sendResponse = await admin.messaging().sendEachForMulticast(message);
+      console.log(`[Push Notification] Result: ${sendResponse.successCount} succeeded, ${sendResponse.failureCount} failed.`);
     } catch (error) {
       console.error("Error sending push notification:", error);
     }
@@ -5101,7 +5205,9 @@ function formatBengaliNameForSpeech(name: string): string {
         };
       });
 
-      data.sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
+      if (Array.isArray(data)) {
+        data.sort((a, b) => parseRoll(a.roll) - parseRoll(b.roll));
+      }
       res.json(data);
     } catch (error) {
       console.error("Fetch class results error:", error);

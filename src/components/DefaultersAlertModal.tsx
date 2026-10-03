@@ -411,14 +411,14 @@ export function DefaultersAlertModal({
               <p className="font-bold">খোঁজা অনুযায়ী কোনো ছাত্র পাওয়া যায়নি</p>
             </div>
           ) : (
-            filteredList.map((student) => {
+            filteredList.map((student, idx) => {
               const isChecked = selectedIds.has(student.id);
               const isCallingThis = individualSending === `${student.id}-call`;
               const isNotifyingThis = individualSending === `${student.id}-notification`;
 
               return (
                 <div
-                  key={`defaulter-item-${student.id}`}
+                  key={`defaulter-item-${student.id || idx}-${idx}`}
                   className={cn(
                     "py-3 sm:py-3.5 px-3 rounded-2xl flex items-center justify-between gap-3 transition-colors",
                     isChecked ? "bg-slate-50/80" : "hover:bg-slate-50/50"

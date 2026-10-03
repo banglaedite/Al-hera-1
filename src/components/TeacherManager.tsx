@@ -225,7 +225,7 @@ export function TeacherManager({
   <div className="absolute inset-2 rounded-full border-l-[3px] border-l-rose-500 border-r-[3px] border-r-emerald-500 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.7s' }}></div>
 </div></div>;
 
-  const filteredTeachers = teachers
+  const filteredTeachers = (Array.isArray(teachers) ? teachers : [])
     .filter(t => t && t.name && t.name.toLowerCase().includes(search.toLowerCase()))
     .filter(t => (t.type || 'teacher') === viewType)
     .sort((a, b) => {
@@ -287,8 +287,8 @@ export function TeacherManager({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTeachers.map(teacher => (
-          <div key={teacher.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+        {filteredTeachers.map((teacher, idx) => (
+          <div key={`teacher-card-${teacher.id || idx}-${idx}`} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center gap-4 mb-6">
               <img src={teacher.photo_url || `https://ui-avatars.com/api/?name=${teacher.name}&background=random`} className="w-16 h-16 rounded-2xl object-cover" />
               <div>

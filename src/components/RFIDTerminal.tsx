@@ -829,16 +829,16 @@ export function RFIDTerminal({ settings, addToast }: RFIDTerminalProps) {
                   >
                     <option value="">-- নাম বেছে নিন --</option>
                     {selectedType === 'teacher' ? (
-                      allTeachers.map(t => (
-                        <option key={t.id} value={t.id}>
+                      allTeachers.map((t, idx) => (
+                        <option key={`rfid-teacher-opt-${t.id || idx}-${idx}`} value={t.id}>
                           {t.name} ({t.qualification || 'শিক্ষক'}) {t.biometric_id ? `[বর্তমান কার্ড: ${t.biometric_id}]` : ''}
                         </option>
                       ))
                     ) : (
                       allStudents
                         .filter(s => selectedClassFilter === 'all' || s.class === selectedClassFilter)
-                        .map(s => (
-                          <option key={s.id} value={s.id}>
+                        .map((s, idx) => (
+                          <option key={`rfid-student-opt-${s.id || idx}-${idx}`} value={s.id}>
                             {s.name} - শ্রেণি: {s.class || '---'} (রোল: {s.roll || '---'}) {s.biometric_id ? `[বর্তমান কার্ড: ${s.biometric_id}]` : ''}
                           </option>
                         ))
