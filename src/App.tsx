@@ -92,9 +92,15 @@ const PushNotificationManager = () => {
 // Global Component to listen for active calls regardless of the page
 const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
   const { addToast } = useToast();
+  const location = useLocation();
   const [activeCallData, setActiveCallData] = useState<any>(null);
   const [showIncomingCall, setShowIncomingCall] = useState(false);
   const [student, setStudent] = useState<any>(null);
+
+  // Do not listen for incoming calls if the device is currently inside Admin Panel or Teacher Portal
+  if (location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher')) {
+    return null;
+  }
 
   useEffect(() => {
     const studentData = localStorage.getItem("studentData");
@@ -142,8 +148,9 @@ const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
 
     const checkActiveCalls = async () => {
       try {
+        const phone = localStorage.getItem("guardianPhone") || "";
         // 1. Check for Active Calls
-        const res = await fetch(`/api/parent/active-call/${student.id}`);
+        const res = await fetch(`/api/parent/active-call/${student.id}?phone=${encodeURIComponent(phone)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.active && data.call && (!activeCallData || activeCallData.id !== data.call.id)) {

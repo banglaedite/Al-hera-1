@@ -4849,12 +4849,12 @@ function formatBengaliNameForSpeech(name: string): string {
 
   app.get("/api/parent/active-call/:studentId", async (req, res) => {
     const { studentId } = req.params;
+    const { phone } = req.query;
     try {
       const db = getFirestoreInstance();
       if (!db) return res.json({ active: false });
 
       const callsSnap = await db.collection("active_calls")
-        .where("student_id", "==", String(studentId))
         .where("status", "==", "ringing")
         .get();
 
@@ -4862,10 +4862,21 @@ function formatBengaliNameForSpeech(name: string): string {
         return res.json({ active: false });
       }
 
-      const now = new Date().toISOString();
+      const nowTime = Date.now();
+      const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, '') : '';
+      const cleanStudentId = String(studentId).trim();
+
       const validCalls = callsSnap.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as any))
-        .filter(c => !c.expires_at || c.expires_at > now)
+        .filter(c => {
+          const callTime = new Date(c.timestamp || c.created_at || nowTime).getTime();
+          // Active for 3 minutes (180 seconds)
+          if (nowTime - callTime > 180000) return false;
+
+          const matchId = String(c.student_id).trim() === cleanStudentId;
+          const matchPhone = cleanPhone && c.guardian_phone && String(c.guardian_phone).replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-10));
+          return matchId || matchPhone;
+        })
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       if (validCalls.length === 0) {
