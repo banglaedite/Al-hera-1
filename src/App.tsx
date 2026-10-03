@@ -127,7 +127,7 @@ const GlobalGuardianCallListener = ({ settings }: { settings: any }) => {
     let lastCheckedPunchId = sessionStorage.getItem(`last_notified_punch_${student.id}`) || "";
 
     const showSysNotification = (title: string, options: any) => {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(reg => {
           reg.showNotification(title, options);
         }).catch(() => {

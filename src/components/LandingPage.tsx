@@ -100,6 +100,14 @@ const LandingPage = () => {
   const [visibleNotices, setVisibleNotices] = useState(6);
 
   useEffect(() => {
+    // If guardian is logged in, automatically open Parent Portal on app launch
+    const savedGuardian = localStorage.getItem("guardianPhone");
+    if (savedGuardian) {
+      navigate("/parent", { replace: true });
+    }
+  }, [navigate]);
+
+  useEffect(() => {
     let isCancelled = false;
 
     const fetchLeaderboard = async () => {

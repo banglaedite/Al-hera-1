@@ -189,7 +189,8 @@ app.get("/al_hera_madrasah.apk", (req, res) => {
       if (!db) return res.status(500).json({ error: "Database not ready" });
 
       const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, '') : null;
-      const subRef = db.collection("push_subscriptions").doc(token);
+      const safeKey = Buffer.from(token).toString('base64url').slice(0, 120);
+      const subRef = db.collection("push_subscriptions").doc(safeKey);
       await subRef.set({
         token,
         phone: phone || null,

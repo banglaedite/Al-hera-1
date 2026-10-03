@@ -45,8 +45,20 @@ export default function ParentPortal() {
   const { addToast } = useToast();
   const [identifier, setIdentifier] = useState(() => localStorage.getItem("guardianPhone") || "");
   const [loading, setLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(!!localStorage.getItem("guardianPhone"));
-  const [student, setStudent] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
+  const [student, setStudent] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem("studentData");
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return null;
+  });
+  const [notifPermission, setNotifPermission] = useState<string>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return "default";
+  });
   const [attendance, setAttendance] = useState<any[]>([]);
   const [deviceHistory, setDeviceHistory] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
@@ -62,13 +74,41 @@ export default function ParentPortal() {
   // Real-time Punch Instant Notification Listener
   const [livePunchNotice, setLivePunchNotice] = useState<any>(null);
 
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      addToast("আপনার ডিভাইসে ব্রাউজার নোটিফিকেশন সমর্থিত নয়", "error");
+      return;
+    }
+    try {
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+      if (perm === 'granted') {
+        playIPhoneNotificationSound();
+        addToast("🔔 মোবাইলের নোটিফিকেশন বার সফলভাবে সক্রিয় হয়েছে!", "success");
+        window.dispatchEvent(new Event("guardian-auth-changed"));
+
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification("🟢 নোটিফিকেশন সক্রিয় হয়েছে", {
+              body: "এখন থেকে আপনার সন্তানের হাজিরা পাঞ্চ ও সকল মাদরাসা কল নোটিফিকেশন বারে চলে আসবে।",
+              icon: settings?.logo_url || "https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png",
+              badge: settings?.logo_url || "https://i.postimg.cc/jSZykhDB/IMG-20260330-WA0001.png",
+              tag: "notif-enabled-test",
+              vibrate: [300, 100, 300],
+              data: { url: "/parent" }
+            } as any);
+          }).catch(() => {});
+        }
+      } else {
+        addToast("নোটিফিকেশন অনুমতি প্রদান করা হয়নি। ব্রাউজার সেটিং থেকে সাইট পারমিশন Allow করুন।", "error");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     if (!student?.id) return;
-
-    // Request notification permission on mount
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
 
     let lastCheckedPunchId = sessionStorage.getItem(`last_notified_punch_${student.id}`) || "";
 
@@ -86,10 +126,11 @@ export default function ParentPortal() {
               setLivePunchNotice(data.punch);
               playIPhoneNotificationSound();
 
-              if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
+              const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
+
+              if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.ready.then(reg => {
-                  const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
-                  const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
                   reg.showNotification(title, {
                     body,
                     icon: settings?.logo_url || '/favicon.ico',
@@ -101,8 +142,6 @@ export default function ParentPortal() {
                   } as any);
                 }).catch(() => {
                   if ('Notification' in window && Notification.permission === 'granted') {
-                    const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
-                    const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
                     new Notification(title, {
                       body,
                       icon: settings?.logo_url || '/favicon.ico',
@@ -112,8 +151,6 @@ export default function ParentPortal() {
                 });
               } else if ('Notification' in window && Notification.permission === 'granted') {
                 try {
-                  const title = data.punch.action === 'check_in' ? '🟢 সফল প্রবেশ (Check-In)' : '🟠 সফল প্রস্থান (Check-Out)';
-                  const body = `${student.name} আজ ${data.punch.time || 'এইমাত্র'} মিনিটে মাদরাসায় ${data.punch.action === 'check_in' ? 'প্রবেশ করেছে' : 'প্রস্থান করেছে'}।`;
                   const notif = new Notification(title, {
                     body,
                     icon: settings?.logo_url || '/favicon.ico',
@@ -645,6 +682,13 @@ export default function ParentPortal() {
     if (e) e.preventDefault();
     if (!loginIdentifier) return;
     
+    if (e && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
+      try {
+        const perm = await Notification.requestPermission();
+        setNotifPermission(perm);
+      } catch (err) {}
+    }
+
     setLoading(true);
     setError("");
 
@@ -682,6 +726,7 @@ export default function ParentPortal() {
       if (!isTeacher) {
         localStorage.setItem("studentData", JSON.stringify(data));
       }
+      window.dispatchEvent(new Event("guardian-auth-changed"));
       fetchFullProfile(data.id);
       
       if (isTeacher) {
@@ -940,6 +985,37 @@ export default function ParentPortal() {
 
         {/* App Install Bottom Popup */}
         <GuardianAppInstallPopup />
+
+        {/* Enable System Notification Banner (if permission not granted) */}
+        {notifPermission !== 'granted' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-5 bg-gradient-to-r from-emerald-800 to-teal-900 text-white rounded-3xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border border-emerald-700/50"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+                <Bell className="w-6 h-6 text-emerald-300 animate-bounce" />
+              </div>
+              <div>
+                <h4 className="font-black text-base flex items-center gap-2">
+                  মোবাইলের নোটিফিকেশন বারে অ্যালার্ট চালু করুন
+                  <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 text-[10px] rounded-full uppercase">প্রয়োজনীয়</span>
+                </h4>
+                <p className="text-xs text-emerald-100 font-bold mt-0.5 leading-relaxed">
+                  অ্যাপ বন্ধ থাকলেও আপনার ফোনের ওপরের নোটিফিকেশন বারে সন্তানের হাজিরা পাঞ্চ ও ভয়েস কল পেতে এক ক্লিকে অনুমতি চালু করুন।
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={requestNotificationPermission}
+              className="w-full sm:w-auto px-6 py-3.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 rounded-2xl font-black text-xs sm:text-sm shadow-lg shadow-emerald-400/20 transition-all active:scale-95 shrink-0 flex items-center justify-center gap-2"
+            >
+              <Bell className="w-4 h-4" /> নোটিফিকেশন চালু করুন
+            </button>
+          </motion.div>
+        )}
 
         {/* Live Punch Instant Notification Banner */}
         <AnimatePresence>

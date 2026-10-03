@@ -23,22 +23,26 @@ export const auth = getAuth(app);
 export const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
 
 export const requestForToken = async () => {
-  if (!messaging) return null;
+  if (!messaging || typeof window === 'undefined') return null;
   try {
-    const currentToken = await getToken(messaging, {
-      vapidKey: 'BM757U8T3n7-59f7q7lR4r_9w_Yq_V-f-z_O_X_E_D_E_F_G_H_I_J_K_L_M_N_O_P' // This is a placeholder, usually not needed for standard FCM if configured in Firebase Console
+    const swReg = await navigator.serviceWorker?.ready;
+    const options: any = {};
+    if (swReg) {
+      options.serviceWorkerRegistration = swReg;
+    }
+    
+    const currentToken = await getToken(messaging, options).catch(async () => {
+      return await getToken(messaging).catch(() => null);
     });
+
     if (currentToken) {
       console.log('FCM Token:', currentToken);
       return currentToken;
-    } else {
-      console.log('No registration token available. Request permission to generate one.');
-      return null;
     }
   } catch (err) {
-    console.log('An error occurred while retrieving token. ', err);
-    return null;
+    console.log('FCM token retrieval notice: ', err);
   }
+  return null;
 };
 
 export const onMessageListener = () =>
